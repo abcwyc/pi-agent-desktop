@@ -16,7 +16,7 @@ const result = {
   pi_web_version: remote["pi-web"].version,
   pi_web_tag: remote["pi-web"].tag,
   pi_web_update: String(piWebUpdate),
-  pi_gui_latest: remote["pi-gui"]?.version ?? "",
+  pi_agent_desktop_latest: remote["pi-agent-desktop"]?.version ?? "",
   needs_update: String(piUpdate || piWebUpdate),
 };
 

@@ -260,7 +260,7 @@ pub fn run() {
             // The updater public key is embedded at compile time by the release
             // workflow. Local development builds intentionally omit it, which
             // keeps unsigned builds from accepting production updates.
-            if let Some(public_key) = option_env!("PI_GUI_UPDATER_PUBLIC_KEY")
+            if let Some(public_key) = option_env!("PI_AGENT_DESKTOP_UPDATER_PUBLIC_KEY")
                 .map(str::trim)
                 .filter(|key| !key.is_empty())
             {

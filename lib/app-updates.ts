@@ -34,9 +34,9 @@ type Fetcher = (input: string, init?: RequestInit) => Promise<Response>;
 
 export const APP_UPDATE_PROJECTS: readonly AppUpdateProject[] = [
   {
-    id: "pi-gui",
+    id: "pi-agent-desktop",
     name: APP_DISTRIBUTION_NAME,
-    repository: "abcwyc/pi-gui",
+    repository: "abcwyc/pi-agent-desktop",
     currentVersion: APP_VERSION,
   },
   {
@@ -183,7 +183,7 @@ export async function getLatestAppRelease(
       headers: {
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": `pi-gui/${APP_VERSION}`,
+        "User-Agent": `pi-agent-desktop/${APP_VERSION}`,
       },
       signal: AbortSignal.timeout(options.timeoutMs ?? 15_000),
     },

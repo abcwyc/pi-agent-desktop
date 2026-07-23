@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 export const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 
 export const componentRepositories = {
-  "pi-gui": "abcwyc/pi-gui",
+  "pi-agent-desktop": "abcwyc/pi-agent-desktop",
   pi: "earendil-works/pi",
   "pi-web": "agegr/pi-web",
 };
@@ -62,19 +62,19 @@ async function readJson(path) {
 
 export async function readLocalComponentVersions() {
   const [desktopPackage, appPackage, piPackage, cargoManifest] = await Promise.all([
-    readJson(join(rootDir, "src-tauri", "pi-gui-package.json")),
+    readJson(join(rootDir, "src-tauri", "pi-agent-desktop-package.json")),
     readJson(join(rootDir, "package.json")),
     readJson(join(rootDir, "node_modules", "@earendil-works", "pi-coding-agent", "package.json")),
     readFile(join(rootDir, "src-tauri", "Cargo.toml"), "utf8"),
   ]);
   const cargoVersion = /^version\s*=\s*"([^"]+)"/m.exec(cargoManifest)?.[1];
   const versions = {
-    "pi-gui": normalizeVersion(desktopPackage.version),
+    "pi-agent-desktop": normalizeVersion(desktopPackage.version),
     pi: normalizeVersion(piPackage.version),
     "pi-web": normalizeVersion(appPackage.version),
   };
-  if (cargoVersion !== versions["pi-gui"]) {
-    throw new Error(`Cargo version ${cargoVersion ?? "missing"} does not match pi-gui ${versions["pi-gui"]}.`);
+  if (cargoVersion !== versions["pi-agent-desktop"]) {
+    throw new Error(`Cargo version ${cargoVersion ?? "missing"} does not match pi-agent-desktop ${versions["pi-agent-desktop"]}.`);
   }
   return versions;
 }
@@ -83,7 +83,7 @@ export async function fetchLatestRelease(repository, options = {}) {
   const headers = {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
-    "User-Agent": "pi-gui-release-automation",
+    "User-Agent": "pi-agent-desktop-release-automation",
   };
   if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   const response = await (options.fetcher ?? fetch)(
@@ -104,19 +104,19 @@ export async function fetchLatestRelease(repository, options = {}) {
 }
 
 export async function readRemoteComponentVersions() {
-  const [piGui, pi, piWeb] = await Promise.all([
-    fetchLatestRelease(componentRepositories["pi-gui"], { allowMissing: true }),
+  const [piAgentDesktop, pi, piWeb] = await Promise.all([
+    fetchLatestRelease(componentRepositories["pi-agent-desktop"], { allowMissing: true }),
     fetchLatestRelease(componentRepositories.pi),
     fetchLatestRelease(componentRepositories["pi-web"]),
   ]);
-  return { "pi-gui": piGui, pi, "pi-web": piWeb };
+  return { "pi-agent-desktop": piAgentDesktop, pi, "pi-web": piWeb };
 }
 
 export function createComponentManifest(versions) {
   return {
     schemaVersion: 1,
-    appVersion: versions["pi-gui"],
-    components: ["pi-gui", "pi", "pi-web"].map((id) => ({
+    appVersion: versions["pi-agent-desktop"],
+    components: ["pi-agent-desktop", "pi", "pi-web"].map((id) => ({
       id,
       repository: componentRepositories[id],
       version: versions[id],

@@ -1,8 +1,8 @@
 # Pi Agent
 
-`pi-gui` 是一个面向 macOS 的本地 AI Agent 桌面应用。它将 [pi](https://github.com/earendil-works/pi) 的 Agent 能力、[pi-web](https://github.com/agegr/pi-web) 的 Web 界面与本仓库的桌面封装、品牌和升级逻辑组合为一个可独立安装的 App，产品界面统一使用 **Pi Agent** 名称。
+`pi-agent-desktop` 是一个面向 macOS 的本地 AI Agent 桌面应用。它将 [pi](https://github.com/earendil-works/pi) 的 Agent 能力、[pi-web](https://github.com/agegr/pi-web) 的 Web 界面与本仓库的桌面封装、品牌和升级逻辑组合为一个可独立安装的 App，产品界面统一使用 **Pi Agent** 名称。
 
-项目仓库：[abcwyc/pi-gui](https://github.com/abcwyc/pi-gui) · [Releases](https://github.com/abcwyc/pi-gui/releases)
+项目仓库：[abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) · [Releases](https://github.com/abcwyc/pi-agent-desktop/releases)
 
 ## 项目组成
 
@@ -10,7 +10,7 @@ Pi Agent 由三个开源项目共同组成：
 
 | 组件 | 仓库 | 在 App 中的职责 |
 | --- | --- | --- |
-| `pi-gui` | [abcwyc/pi-gui](https://github.com/abcwyc/pi-gui) | macOS 桌面封装、Pi Agent 品牌、设置界面、版本管理和整包升级 |
+| `pi-agent-desktop` | [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) | macOS 桌面封装、Pi Agent 品牌、设置界面、版本管理和整包升级 |
 | `pi` | [earendil-works/pi](https://github.com/earendil-works/pi) | AgentSession、模型调用、工具执行、会话与配置能力 |
 | `pi-web` | [agegr/pi-web](https://github.com/agegr/pi-web) | Web UI、会话浏览、聊天交互、模型、Skills、Plugins 和文件预览 |
 
@@ -32,7 +32,7 @@ Pi Agent 由三个开源项目共同组成：
 
 ### 安装 macOS App
 
-发布版本可从 [GitHub Releases](https://github.com/abcwyc/pi-gui/releases) 下载：
+发布版本可从 [GitHub Releases](https://github.com/abcwyc/pi-agent-desktop/releases) 下载：
 
 1. 根据 Mac 架构下载 Apple Silicon 或 Intel 版本的 `.dmg`。
 2. 打开 DMG，将 App 拖入 `Applications`。
@@ -66,21 +66,21 @@ Pi Agent 默认读取 Pi 的本地数据目录：
 
 Pi Agent 最多每七天检查一次以下仓库的最新稳定 Release：
 
-- `abcwyc/pi-gui`
+- `abcwyc/pi-agent-desktop`
 - `earendil-works/pi`
 - `agegr/pi-web`
 
 版本与升级规则如下：
 
-1. `pi-gui` 一旦存在 Release，就以最新稳定 Release 作为可升级版本来源。
+1. `pi-agent-desktop` 一旦存在 Release，就以最新稳定 Release 作为可升级版本来源。
 2. 三个组件中任意一个版本落后，设置中的统一升级按钮都会启用。
-3. 如果多个组件需要更新，发布自动化按 `pi → pi-web → pi-gui` 的顺序同步和验证。
+3. 如果多个组件需要更新，发布自动化按 `pi → pi-web → pi-agent-desktop` 的顺序同步和验证。
 4. 用户侧不会修改已安装 App 内的单个 JavaScript 包，而是下载一个同时包含三个最新版组件的完整签名 App。
 5. 安装完成后 App 自动重启，使三个组件一次性进入同一个经过验证的发布状态。
 
 这种方式可以保持 macOS App 的代码签名和组件一致性，也能避免独立替换 `pi` 或 `pi-web` 导致运行时不兼容。
 
-如果上游新版已经被检测到，但包含该版本的签名 `pi-gui` Release 尚未发布，设置页会提示暂时没有可安装的签名整包；App 不会退回到下载未签名文件或局部覆盖依赖。
+如果上游新版已经被检测到，但包含该版本的签名 `pi-agent-desktop` Release 尚未发布，设置页会提示暂时没有可安装的签名整包；App 不会退回到下载未签名文件或局部覆盖依赖。
 
 更完整的同步、签名和 Release 配置见 [桌面升级与发布说明](./docs/desktop-updates.md)。
 
@@ -189,6 +189,6 @@ src-tauri/
 
 ## 署名与许可证
 
-Pi Agent 的桌面集成由 `pi-gui` 提供，核心能力和 Web 界面分别来自 [earendil-works/pi](https://github.com/earendil-works/pi) 与 [agegr/pi-web](https://github.com/agegr/pi-web)。感谢这些项目及其贡献者。
+Pi Agent 的桌面集成由 `pi-agent-desktop` 提供，核心能力和 Web 界面分别来自 [earendil-works/pi](https://github.com/earendil-works/pi) 与 [agegr/pi-web](https://github.com/agegr/pi-web)。感谢这些项目及其贡献者。
 
 本仓库根目录代码遵循 [`LICENSE`](./LICENSE) 中的 MIT License。三个组成项目的代码和依赖同时受各自仓库许可证约束；复制、修改或重新分发时请保留相应版权与许可声明。

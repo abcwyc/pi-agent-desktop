@@ -17,7 +17,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out pi-gui
+      - name: Check out pi-agent-desktop
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -73,7 +73,7 @@ jobs:
             fi
           fi
 
-          node scripts/bump-pi-gui-version.mjs
+          node scripts/bump-pi-agent-desktop-version.mjs
           npm run release:manifest
           node --test lib/*.test.mjs scripts/*.test.mjs
           node_modules/.bin/tsc --noEmit
@@ -89,9 +89,9 @@ jobs:
               --base "$GITHUB_REF_NAME" \
               --head codex/component-updates \
               --title "chore: sync released pi components" \
-              --body "Automated weekly sync of the latest stable pi and pi-web GitHub Releases. Merge this PR to make the complete signed pi-gui update available."
+              --body "Automated weekly sync of the latest stable pi and pi-web GitHub Releases. Merge this PR to make the complete signed pi-agent-desktop update available."
           else
             gh pr edit "$existing_pr" \
               --title "chore: sync released pi components" \
-              --body "Automated weekly sync of the latest stable pi and pi-web GitHub Releases. Merge this PR to make the complete signed pi-gui update available."
+              --body "Automated weekly sync of the latest stable pi and pi-web GitHub Releases. Merge this PR to make the complete signed pi-agent-desktop update available."
           fi

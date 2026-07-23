@@ -5,14 +5,14 @@ on:
     branches:
       - main
     paths:
-      - src-tauri/pi-gui-package.json
+      - src-tauri/pi-agent-desktop-package.json
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: pi-gui-release
+  group: pi-agent-desktop-release
   cancel-in-progress: false
 
 jobs:
@@ -28,7 +28,7 @@ jobs:
             target: x86_64-apple-darwin
     runs-on: ${{ matrix.runner }}
     steps:
-      - name: Check out pi-gui
+      - name: Check out pi-agent-desktop
         uses: actions/checkout@v4
 
       - name: Require updater signing secrets
@@ -67,14 +67,14 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          PI_GUI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+          PI_AGENT_DESKTOP_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_SIGNING_IDENTITY: "-"
         with:
           tagName: v__VERSION__
-          releaseName: pi-gui v__VERSION__
-          releaseBody: A signed Pi Agent desktop release containing the latest verified pi-gui, pi, and pi-web components.
+          releaseName: pi-agent-desktop v__VERSION__
+          releaseBody: A signed Pi Agent desktop release containing the latest verified pi-agent-desktop, pi, and pi-web components.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
@@ -84,13 +84,13 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Check out pi-gui
+      - name: Check out pi-agent-desktop
         uses: actions/checkout@v4
 
       - name: Upload component manifest to the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="$(node -p "require('./src-tauri/pi-gui-package.json').version")"
+          version="$(node -p "require('./src-tauri/pi-agent-desktop-package.json').version")"
           gh release upload "v$version" src-tauri/resources/component-versions.json --clobber
           gh release edit "v$version" --draft=false --latest

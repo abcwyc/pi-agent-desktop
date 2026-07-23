@@ -63,7 +63,7 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
   }, [onClose, upgradeProgress]);
 
   const appRelease = useMemo(
-    () => components.find((component) => component.project === "pi-gui"),
+    () => components.find((component) => component.project === "pi-agent-desktop"),
     [components],
   );
   const pendingUpdates = useMemo(
@@ -95,7 +95,7 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
       if (!result.installed) {
         setUpgradeProgress(null);
         setUpgradeError(
-          "The component updates are detected, but a signed pi-gui bundle containing them has not been published yet.",
+          "The component updates are detected, but a signed pi-agent-desktop bundle containing them has not been published yet.",
         );
       }
     } catch (error) {
@@ -238,7 +238,7 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
                 <div style={{ minWidth: 74 }}>
                   <div style={{ color: "var(--text-dim)", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em" }}>Bundled</div>
                   <div style={{ marginTop: 3, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                    v{component.project === "pi-gui" ? APP_VERSION_DISPLAY : component.currentVersion}
+                    v{component.project === "pi-agent-desktop" ? APP_VERSION_DISPLAY : component.currentVersion}
                   </div>
                 </div>
                 <div style={{ minWidth: 84 }}>

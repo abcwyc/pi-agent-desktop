@@ -17,8 +17,13 @@ if (compareVersions(local.pi, remote.pi.version) !== 0) {
 if (compareVersions(local["pi-web"], remote["pi-web"].version) !== 0) {
   problems.push(`pi-web is ${local["pi-web"]}; latest Release is ${remote["pi-web"].version}`);
 }
-if (remote["pi-gui"] && compareVersions(local["pi-gui"], remote["pi-gui"].version) < 0) {
-  problems.push(`pi-gui is ${local["pi-gui"]}; latest Release is ${remote["pi-gui"].version}`);
+if (
+  remote["pi-agent-desktop"]
+  && compareVersions(local["pi-agent-desktop"], remote["pi-agent-desktop"].version) < 0
+) {
+  problems.push(
+    `pi-agent-desktop is ${local["pi-agent-desktop"]}; latest Release is ${remote["pi-agent-desktop"].version}`,
+  );
 }
 
 const expectedManifest = createComponentManifest(local);
@@ -33,4 +38,6 @@ if (JSON.stringify(actualManifest) !== JSON.stringify(expectedManifest)) {
 if (problems.length > 0) {
   throw new Error(`Release verification failed:\n- ${problems.join("\n- ")}`);
 }
-console.log(`Verified pi-gui ${local["pi-gui"]}, pi ${local.pi}, pi-web ${local["pi-web"]}.`);
+console.log(
+  `Verified pi-agent-desktop ${local["pi-agent-desktop"]}, pi ${local.pi}, pi-web ${local["pi-web"]}.`,
+);

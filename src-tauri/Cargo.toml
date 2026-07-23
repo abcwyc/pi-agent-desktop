@@ -1,14 +1,14 @@
 [package]
-name = "pi-web-desktop"
+name = "pi-agent-desktop"
 version = "0.1.0"
 description = "macOS desktop shell for Pi Agent"
-authors = ["pi-gui contributors"]
+authors = ["pi-agent-desktop contributors"]
 license = "MIT"
 edition = "2021"
 rust-version = "1.85.0"
 
 [lib]
-name = "pi_web_desktop_lib"
+name = "pi_agent_desktop_lib"
 crate-type = ["staticlib", "cdylib", "lib"]
 
 [build-dependencies]

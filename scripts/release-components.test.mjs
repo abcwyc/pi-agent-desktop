@@ -27,12 +27,12 @@ test("bumps the patch version", () => {
 
 test("writes an auditable three-component manifest", () => {
   assert.deepEqual(
-    createComponentManifest({ "pi-gui": "0.1.0", pi: "0.81.1", "pi-web": "0.7.17" }),
+    createComponentManifest({ "pi-agent-desktop": "0.1.0", pi: "0.81.1", "pi-web": "0.7.17" }),
     {
       schemaVersion: 1,
       appVersion: "0.1.0",
       components: [
-        { id: "pi-gui", repository: "abcwyc/pi-gui", version: "0.1.0" },
+        { id: "pi-agent-desktop", repository: "abcwyc/pi-agent-desktop", version: "0.1.0" },
         { id: "pi", repository: "earendil-works/pi", version: "0.81.1" },
         { id: "pi-web", repository: "agegr/pi-web", version: "0.7.17" },
       ],

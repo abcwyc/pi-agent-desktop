@@ -3,8 +3,8 @@
   "appVersion": "0.1.0",
   "components": [
     {
-      "id": "pi-gui",
-      "repository": "abcwyc/pi-gui",
+      "id": "pi-agent-desktop",
+      "repository": "abcwyc/pi-agent-desktop",
       "version": "0.1.0"
     },
     {

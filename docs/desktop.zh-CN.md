@@ -40,7 +40,7 @@ src-tauri/target/release/bundle/dmg/Pi Agent_<version>_<arch>.dmg
 
 构建结果是当前机器架构的原生应用：Apple Silicon 构建 `aarch64`，Intel Mac 构建 `x86_64`。发布给其他用户前，应使用 Apple Developer ID 签名并公证；本地开发和测试不要求签名。
 
-桌面版会检查 `pi-gui`、Pi 与 Pi Web 的官方 GitHub Release。每个项目最多每 7 天检查一次；发现任一组件有新版后，用户可以从设置中安装包含全部最新组件的完整签名 App 并重启。详细机制见 [桌面升级与发布说明](./desktop-updates.md)。
+桌面版会检查 `pi-agent-desktop`、Pi 与 Pi Web 的官方 GitHub Release。每个项目最多每 7 天检查一次；发现任一组件有新版后，用户可以从设置中安装包含全部最新组件的完整签名 App 并重启。详细机制见 [桌面升级与发布说明](./desktop-updates.md)。
 
 ## 运行日志
 

@@ -90,7 +90,7 @@ export interface PluginsResponse {
   diagnostics: PluginDiagnostic[];
 }
 
-export type AppUpdateProjectId = "pi-gui" | "pi" | "pi-web";
+export type AppUpdateProjectId = "pi-agent-desktop" | "pi" | "pi-web";
 
 export type AppReleaseStatus = "available" | "unpublished" | "unknown";
 
