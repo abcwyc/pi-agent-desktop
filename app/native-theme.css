@@ -27,7 +27,11 @@
   --surface-elevated: #ffffff;
   --text: #1d1d1f;
   --text-muted: #68686d;
-  --text-dim: #94949a;
+  /* #7a7a7a rather than the visually lighter #94949a: text-dim carries real
+     labels (timestamps, code-block language tags), and #94949a only cleared
+     ~2.8:1 contrast against --bg — under the 3:1 floor for UI text. This
+     hits ~4:1 while staying visibly de-emphasized next to --text-muted. */
+  --text-dim: #7a7a7a;
   --text-meta: #85858b;
   --accent: #1d1d1f;
   --accent-hover: #3a3a3c;
@@ -44,11 +48,15 @@
   --bg-subtle: rgba(60, 60, 67, 0.055);
   --scroll-thumb: rgba(60, 60, 67, 0.25);
 
-  /* Typography */
+  /* Typography. "Noto Sans SC" backstops CJK on Linux builds (deb target in
+     release.yml), which this stack otherwise has no CJK fallback for once it
+     falls past the macOS/Windows-only names above it. */
   --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
-    "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", sans-serif;
+    "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", "Noto Sans SC",
+    sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display",
-    "PingFang SC", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+    "PingFang SC", "Segoe UI Variable Display", "Segoe UI", "Noto Sans SC",
+    sans-serif;
 
   /* Shape, spacing and elevation */
   --radius-sm: 6px;
@@ -80,7 +88,9 @@ html.dark {
   --surface-elevated: #2c2c2e;
   --text: #f5f5f7;
   --text-muted: rgba(235, 235, 245, 0.64);
-  --text-dim: rgba(235, 235, 245, 0.38);
+  /* 0.46 rather than 0.38: matches the light-theme text-dim bump above so
+     both themes land at roughly the same ~4:1 contrast against --bg. */
+  --text-dim: rgba(235, 235, 245, 0.46);
   --text-meta: rgba(235, 235, 245, 0.44);
   --accent: #f5f5f7;
   --accent-hover: #ffffff;
@@ -277,7 +287,7 @@ html, body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.5;
   font-synthesis: none;
   -webkit-font-smoothing: antialiased;
@@ -1830,11 +1840,14 @@ html.dark .sidebar-view-switcher-thumb {
 }
 
 .chat-input-shell {
-  /* Stop short of the scroll container's right-edge scrollbar gutter (see
+  /* Stop short of the scroll container's scrollbar gutter on both edges (see
      scrollbarGutter: "stable both-edges" on .chat-window's scroll container)
-     so this full-width overlay doesn't paint over the scrollbar and fade it
-     out before it reaches the bottom. */
-  width: calc(100% - 8px);
+     so this overlay doesn't paint over the scrollbar and fade it out before
+     it reaches the bottom. Insetting symmetrically (rather than only from
+     the right) keeps this centered on the same axis as the message column,
+     which also loses 8px of width on each side to that gutter. */
+  width: calc(100% - 16px);
+  margin: 0 auto;
   background:
     linear-gradient(to bottom, transparent, color-mix(in srgb, var(--bg) 94%, transparent) 18%) !important;
 }
@@ -1966,8 +1979,8 @@ html.dark .sidebar-view-switcher-thumb {
 
 /* react-markdown output styles */
 .markdown-body {
-  font-size: 15px;
-  line-height: 1.67;
+  font-size: 14px;
+  line-height: 1.6;
   color: var(--text);
   word-break: break-word;
 }
@@ -2223,16 +2236,16 @@ html.dark .sidebar-view-switcher-thumb {
 .markdown-code-block {
   position: relative;
   margin: 6px 0;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
   border-radius: 7px;
   overflow: hidden;
   background: var(--bg);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 42%, transparent);
+  box-shadow: none;
 }
 .markdown-code-header {
   padding: 5px 10px;
   background: var(--bg-panel);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
   color: var(--text-dim);
   font-size: 11px;
   display: flex;

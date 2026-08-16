@@ -266,6 +266,7 @@ export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction }: C
           padding: "11px 13px",
           fontSize: 12.5,
           lineHeight: 1.62,
+          border: "none",
           borderRadius: 0,
           background: "color-mix(in srgb, var(--bg) 92%, var(--bg-panel))",
         }}
