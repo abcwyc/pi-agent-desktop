@@ -65,6 +65,10 @@ export default function RootLayout({
     <html lang="en" translate="no" className={`${notoSansMono.variable} notranslate`} suppressHydrationWarning>
       <head>
         <meta name="google" content="notranslate" />
+        {/* Optional user stylesheet: <agentDir>/desktop/custom.css served by
+            /api/custom-css. Empty when the file is absent; no-store so edits
+            apply on reload. Loaded last so user rules win the cascade. */}
+        <link rel="stylesheet" href="/api/custom-css" />
         <script
           dangerouslySetInnerHTML={{
             // Pin color-scheme + .dark before first paint so a light preference

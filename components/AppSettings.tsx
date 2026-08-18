@@ -18,7 +18,7 @@ import {
   isTauriDesktop,
   type DesktopUpgradeProgress,
 } from "@/lib/desktop-updater";
-import { handleExternalLinkClick, quitAppNative, setCloseQuitsNative } from "@/lib/desktop-native";
+import { handleExternalLinkClick, openPathNative, quitAppNative, setCloseQuitsNative } from "@/lib/desktop-native";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 
@@ -217,6 +217,25 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const [closeQuits, setCloseQuits] = useState(() => getPrefBool(APP_PREF_KEYS.closeQuits, false));
   const [notifyOnComplete, setNotifyOnComplete] = useState(() => getPrefBool(APP_PREF_KEYS.notifyOnComplete, true));
+  const [customCssBusy, setCustomCssBusy] = useState(false);
+  const [customCssError, setCustomCssError] = useState<string | null>(null);
+
+  const openCustomCss = async () => {
+    setCustomCssBusy(true);
+    setCustomCssError(null);
+    try {
+      const response = await fetch("/api/custom-css", { method: "POST" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = (await response.json()) as { path?: string };
+      if (!data.path) throw new Error("Missing path in response");
+      await openPathNative(data.path);
+    } catch (error) {
+      console.error("Failed to open custom.css:", error);
+      setCustomCssError(t("appSettings.customCssOpenError"));
+    } finally {
+      setCustomCssBusy(false);
+    }
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -440,6 +459,28 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
               <ChoiceButton active={theme === "dark"} onClick={() => setTheme("dark")}>
                 {t("appSettings.themeDark")}
               </ChoiceButton>
+            </div>
+            <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ fontSize: 12, fontWeight: 600 }}>{t("appSettings.customCss")}</div>
+              <div style={{ color: "var(--text-dim)", fontSize: 11, lineHeight: 1.45 }}>
+                {t("appSettings.customCssHint")}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {desktop ? (
+                  <button
+                    type="button"
+                    className="native-button"
+                    disabled={customCssBusy}
+                    onClick={() => void openCustomCss()}
+                    style={{ alignSelf: "flex-start", marginTop: 2 }}
+                  >
+                    {customCssBusy ? t("appSettings.customCssOpening") : t("appSettings.customCssOpen")}
+                  </button>
+                ) : null}
+                {customCssError ? (
+                  <span style={{ color: "var(--danger)", fontSize: 11 }}>{customCssError}</span>
+                ) : null}
+              </div>
             </div>
           </div>
 
