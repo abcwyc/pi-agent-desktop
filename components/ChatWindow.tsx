@@ -848,6 +848,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       cwd={session?.cwd ?? newSessionCwd}
       autoFocus={isNew}
       extensionStatuses={extensionStatuses}
+      contextUsage={contextUsage}
+      onSessionStatsPanelOpen={onSessionStatsPanelOpen}
     />
   );
 
