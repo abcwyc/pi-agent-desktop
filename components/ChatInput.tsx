@@ -23,7 +23,9 @@ import {
   selectFilesNative,
 } from "@/lib/desktop-native";
 import type { ExtensionStatusItem } from "@/lib/types";
+import type { ContextUsage } from "@/lib/pi-types";
 import { ExtensionStatusBar } from "./ExtensionStatusBar";
+import { ContextUsageRing } from "./ContextUsageRing";
 
 export interface AttachedImage {
   data: string;   // base64, no prefix
@@ -81,6 +83,10 @@ interface Props {
   autoFocus?: boolean;
   /** Extension footer statuses (tools/err/last, etc.) shown next to the model selector */
   extensionStatuses?: ExtensionStatusItem[];
+  /** Live context-window usage (numerator) for the usage ring next to the model selector */
+  contextUsage?: ContextUsage | null;
+  /** Open the top-bar session-stats panel when the usage ring is clicked */
+  onSessionStatsPanelOpen?: () => void;
 }
 
 export interface ChatInputHandle {
@@ -371,6 +377,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   cwd,
   autoFocus = false,
   extensionStatuses = [],
+  contextUsage,
+  onSessionStatsPanelOpen,
 }: Props, ref) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
@@ -2096,6 +2104,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   })()}
                 </div>
             )}
+            <ContextUsageRing contextUsage={contextUsage} onOpenStats={onSessionStatsPanelOpen} />
             <ExtensionStatusBar statuses={extensionStatuses} />
           </div>
 
