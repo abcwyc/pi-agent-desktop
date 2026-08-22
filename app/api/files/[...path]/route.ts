@@ -733,7 +733,13 @@ export async function GET(
             scheduleChange();
           };
           try {
-            watcher = fs.watch(filePath, { recursive: true }, handleEvent);
+            // Non-recursive on purpose: on Linux, recursive fs.watch walks the
+            // whole tree synchronously and stalls the event loop for seconds on
+            // large directories (breaks unrelated requests, e.g. the desktop
+            // health probe). The list endpoint renders a single level and file
+            // content changes are covered by the per-file `watch` above, so
+            // top-level entry events are enough; navigation re-lists as needed.
+            watcher = fs.watch(filePath, handleEvent);
           } catch {
             // Recursive watching may be unavailable on some platforms; fall
             // back to watching only the top-level directory.
