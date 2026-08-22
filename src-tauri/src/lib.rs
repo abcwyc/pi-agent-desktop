@@ -698,7 +698,14 @@ fn bundled_node_path(resource_dir: &Path) -> PathBuf {
 
 #[cfg(all(feature = "custom-protocol", target_os = "linux"))]
 fn bundled_node_path(resource_dir: &Path) -> PathBuf {
-    resource_dir.join("resources/node/node")
+    let bundled = resource_dir.join("resources/node/node");
+    if bundled.is_file() {
+        bundled
+    } else {
+        // Linux packages may unbundle the runtime (e.g. the AUR package depends
+        // on system nodejs); fall back to it. Next.js requires Node >= 20.9.
+        PathBuf::from("/usr/bin/node")
+    }
 }
 
 #[cfg(feature = "custom-protocol")]
@@ -856,7 +863,10 @@ fn start_packaged_server(
     if !node_path.is_file() {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
-            format!("Bundled Node runtime is missing: {}", node_path.display()),
+            format!(
+                "Node.js runtime is missing: {} (Linux falls back to system 'nodejs')",
+                node_path.display()
+            ),
         )
         .into());
     }
