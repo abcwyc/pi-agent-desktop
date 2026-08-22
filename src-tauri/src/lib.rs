@@ -698,12 +698,19 @@ fn bundled_node_path(resource_dir: &Path) -> PathBuf {
 
 #[cfg(all(feature = "custom-protocol", target_os = "linux"))]
 fn bundled_node_path(resource_dir: &Path) -> PathBuf {
+    // Resolution order: explicit override (distro packs point this at their
+    // own node, e.g. Nix store or /opt prefixes) > bundled runtime > the FHS
+    // default. Next.js requires Node >= 20.9.
+    if let Ok(p) = env::var("PI_DESKTOP_NODE") {
+        let path = PathBuf::from(&p);
+        if !p.is_empty() && path.is_file() {
+            return path;
+        }
+    }
     let bundled = resource_dir.join("resources/node/node");
     if bundled.is_file() {
         bundled
     } else {
-        // Linux packages may unbundle the runtime (e.g. the AUR package depends
-        // on system nodejs); fall back to it. Next.js requires Node >= 20.9.
         PathBuf::from("/usr/bin/node")
     }
 }
@@ -864,7 +871,7 @@ fn start_packaged_server(
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
             format!(
-                "Node.js runtime is missing: {} (Linux falls back to system 'nodejs')",
+                "Node.js runtime is missing: {} (Linux: set PI_DESKTOP_NODE or install 'nodejs')",
                 node_path.display()
             ),
         )
