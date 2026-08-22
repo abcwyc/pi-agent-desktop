@@ -254,37 +254,47 @@ impl DesktopServer {
         let Ok(mut guard) = self.child.lock() else {
             return;
         };
-        let Some(mut child) = guard.take() else {
+        let Some(child) = guard.take() else {
             return;
         };
 
-        terminate_process_tree(&mut child);
+        terminate_process_tree(child);
     }
 }
 
-fn terminate_process_tree(child: &mut Child) {
+fn terminate_process_tree(mut child: Child) {
     #[cfg(unix)]
     {
+        let pid = child.id();
         unsafe {
             // The Node server owns its process group, so this also stops any
             // agent/tool subprocesses that are active when the App quits.
-            libc::kill(-(child.id() as i32), libc::SIGTERM);
+            libc::kill(-(pid as i32), libc::SIGTERM);
         }
 
-        let deadline = Instant::now() + Duration::from_secs(2);
-        while Instant::now() < deadline {
-            match child.try_wait() {
-                Ok(Some(_)) => return,
-                Ok(None) => thread::sleep(Duration::from_millis(50)),
-                Err(_) => break,
+        // Reap on a detached thread so the quit/exit path never blocks on the
+        // Node server's shutdown. The packaged server installs no SIGTERM
+        // handler, so it normally dies immediately, but any child that ignores
+        // SIGTERM must not stall the UI for the full grace window. If the main
+        // process exits before this thread finishes, the server's own parent
+        // watchdog (desktop/server-launcher.cjs) exits it within ~1 s, so no
+        // orphan is left behind either way.
+        thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(2);
+            while Instant::now() < deadline {
+                match child.try_wait() {
+                    Ok(Some(_)) => return,
+                    Ok(None) => thread::sleep(Duration::from_millis(50)),
+                    Err(_) => return,
+                }
             }
-        }
 
-        unsafe {
-            libc::kill(-(child.id() as i32), libc::SIGKILL);
-        }
-        let _ = child.kill();
-        let _ = child.wait();
+            unsafe {
+                libc::kill(-(pid as i32), libc::SIGKILL);
+            }
+            let _ = child.kill();
+            let _ = child.wait();
+        });
     }
 
     #[cfg(windows)]
@@ -541,10 +551,25 @@ fn theme_background_color(theme: &str) -> Color {
 
 fn theme_bootstrap_script(theme: &str) -> String {
     // Runs before page scripts so localStorage/class match the persisted
-    // preference even on a fresh webview origin (new localhost port).
+    // preference even on a fresh webview origin (new localhost port). The
+    // native pref is only seeded into localStorage when the origin has no
+    // choice recorded yet: the renderer writes "pi-theme" before it invokes
+    // `set_ui_theme`, so localStorage is always the freshest user intent and
+    // must never be clobbered by a (possibly stale) native pref — e.g. after
+    // a crash interrupted the toggle before the IPC round-trip landed.
     format!(
-        r#"(function(){{try{{localStorage.setItem("pi-theme","{theme}");var d="{theme}"==="dark";document.documentElement.classList.toggle("dark",d);document.documentElement.style.colorScheme=d?"dark":"light";}}catch(e){{}}}})();"#
+        r#"(function(){{try{{var t=localStorage.getItem("pi-theme");if(!t){{t="{theme}";localStorage.setItem("pi-theme",t);}}var d=t==="dark";document.documentElement.classList.toggle("dark",d);document.documentElement.style.colorScheme=d?"dark":"light";}}catch(e){{}}}})();"#
     )
+}
+
+/// True when running under a Wayland compositor. `set_background_color` and a
+/// few other native chrome APIs dereference a null GdkSurface there and crash,
+/// so callers consult this to avoid them.
+fn is_wayland() -> bool {
+    env::var("WAYLAND_DISPLAY").is_ok()
+        || env::var("GDK_BACKEND")
+            .map(|value| value.contains("wayland"))
+            .unwrap_or(false)
 }
 
 fn apply_window_theme(app: &AppHandle, theme: &str) {
@@ -557,7 +582,13 @@ fn apply_window_theme(app: &AppHandle, theme: &str) {
         Theme::Light
     };
     let _ = window.set_theme(Some(tauri_theme));
-    let _ = window.set_background_color(Some(theme_background_color(theme)));
+    // `set_background_color` dereferences a possibly-null GdkSurface under
+    // Wayland and segfaults the whole process (frameless WebKitGTK window).
+    // The page paints its own opaque background via CSS, so the native chrome
+    // color is cosmetic only and is safe to skip on Wayland.
+    if !is_wayland() {
+        let _ = window.set_background_color(Some(theme_background_color(theme)));
+    }
 }
 
 fn same_origin(candidate: &Url, app_url: &Url) -> bool {
@@ -604,8 +635,12 @@ fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWi
         };
         builder = builder
             .theme(Some(tauri_theme))
-            .background_color(theme_background_color(theme))
             .initialization_script(theme_bootstrap_script(theme));
+        // Skip the native background color on Wayland: it can NULL-deref the
+        // GdkSurface during window creation and crash the process.
+        if !is_wayland() {
+            builder = builder.background_color(theme_background_color(theme));
+        }
     }
 
     // Hide the native title bar. macOS keeps the traffic-light controls
@@ -890,9 +925,7 @@ fn start_packaged_server(
 mod tests {
     use super::{child_process_compatible_path, response_has_instance_id};
     #[cfg(target_os = "linux")]
-    use super::{
-        visible_linux_tray_item, LinuxTray, LINUX_TRAY_QUIT_LABEL, LINUX_TRAY_SHOW_LABEL,
-    };
+    use super::{visible_linux_tray_item, LinuxTray, LINUX_TRAY_QUIT_LABEL, LINUX_TRAY_SHOW_LABEL};
     use std::path::{Path, PathBuf};
 
     #[cfg(windows)]
@@ -952,8 +985,175 @@ fn start_development_server(
     Ok((DEV_SERVER_URL.parse()?, DesktopServer::empty()))
 }
 
+/// Single-instance guard (Linux only). Launching the app binary again starts a
+/// brand-new process instead of focusing the running one, which left multiple
+/// server/window copies in the background. We claim a PID lock file; a later
+/// launch asks the live instance to raise its window via a request file and
+/// exits without starting another server. macOS already gets that behavior
+/// from the OS (LaunchServices + the `Reopen` handler below), and Windows has
+/// its own semantics, so this mechanism is intentionally Linux-scoped and
+/// keeps its `/proc`-based liveness probe off the other platforms.
+///
+/// Focus signalling deliberately uses a polled request file instead of a
+/// signal: JavaScriptCore owns SIGUSR1 on Linux (its GC suspension signal),
+/// and raising it from a second launch would land in JSC's GC handler and
+/// corrupt the process (SEGV).
+#[cfg(target_os = "linux")]
+const FOCUS_REQUEST_FILE: &str = "focus.request";
+
+#[cfg(target_os = "linux")]
+fn instance_lock_path() -> Option<PathBuf> {
+    let base = env::var("XDG_RUNTIME_DIR")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| {
+            env::var("XDG_CONFIG_HOME")
+                .ok()
+                .filter(|value| !value.is_empty())
+                .map(PathBuf::from)
+        })
+        .or_else(|| {
+            env::var("HOME")
+                .ok()
+                .filter(|value| !value.is_empty())
+                .map(|value| PathBuf::from(value).join(".config"))
+        });
+    base.map(|value| value.join("com.abcwyc.pi-agent").join("pi-agent.lock"))
+}
+
+#[cfg(target_os = "linux")]
+fn process_is_our_app(pid: i32) -> bool {
+    fs::read_to_string(format!("/proc/{pid}/cmdline"))
+        .map(|content| {
+            let lowered = content.to_lowercase();
+            lowered.contains("pi-agent") || lowered.contains("pi agent")
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(target_os = "linux")]
+fn read_lock_pid(path: &Path) -> Option<i32> {
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|raw| raw.trim().parse::<i32>().ok())
+        .filter(|pid| *pid > 0)
+}
+
+/// Ask a live instance recorded in the lock file to raise its window, if any.
+#[cfg(target_os = "linux")]
+fn focus_existing_instance(path: &Path) -> bool {
+    if let Some(pid) = read_lock_pid(path) {
+        if process_is_our_app(pid) && unsafe { libc::kill(pid, 0) } == 0 {
+            // The primary's focus monitor polls this file (see
+            // `spawn_focus_monitor`); the secondary never signals it.
+            if let Some(request) = focus_request_path() {
+                let _ = fs::write(&request, b"1");
+            }
+            return true;
+        }
+    }
+    false
+}
+
+#[cfg(target_os = "linux")]
+fn focus_request_path() -> Option<PathBuf> {
+    instance_lock_path().map(|lock| match lock.parent() {
+        Some(parent) => parent.join(FOCUS_REQUEST_FILE),
+        None => lock,
+    })
+}
+
+/// Returns true when this process should become the primary instance. When
+/// another live instance already owns the lock, this asks it to show its
+/// window and returns false so the caller can exit.
+#[cfg(target_os = "linux")]
+fn ensure_single_instance() -> bool {
+    let Some(path) = instance_lock_path() else {
+        return true;
+    };
+
+    // An existing live instance owns the lock: focus it and stay secondary.
+    if focus_existing_instance(&path) {
+        return false;
+    }
+
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+
+    // The lock file can outlive its owner: a crashed, killed, or panicked
+    // instance never removes it, and a launch interrupted between open() and
+    // write() leaves an empty file. Reclaim it only when the recorded PID is
+    // no longer a live copy of this app, so a genuinely running instance is
+    // never displaced by a mistaken cleanup.
+    if path.exists() {
+        let owner_live = read_lock_pid(&path)
+            .map(|pid| process_is_our_app(pid) && unsafe { libc::kill(pid, 0) } == 0)
+            .unwrap_or(false);
+        if !owner_live {
+            let _ = fs::remove_file(&path);
+        }
+    }
+
+    // Claim the lock atomically so two near-simultaneous launches cannot both
+    // become primary. `create_new` (O_CREAT | O_EXCL) fails if the file exists.
+    match OpenOptions::new().write(true).create_new(true).open(&path) {
+        Ok(mut file) => {
+            let _ = file.write_all(std::process::id().to_string().as_bytes());
+            let _ = file.sync_all();
+            // Clear a focus request left behind by a crashed previous primary.
+            if let Some(request) = focus_request_path() {
+                let _ = fs::remove_file(request);
+            }
+            true
+        }
+        Err(_) => {
+            // Lost the race: defer to the instance that won the lock.
+            focus_existing_instance(&path);
+            false
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn remove_instance_lock() {
+    if let Some(path) = instance_lock_path() {
+        // Only remove a lock this process owns; never delete a lock that a
+        // racing launch reclaimed after our shutdown began.
+        if read_lock_pid(&path) == Some(std::process::id() as i32) {
+            let _ = fs::remove_file(path);
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn spawn_focus_monitor(app: AppHandle) {
+    thread::spawn(move || loop {
+        if let Some(request) = focus_request_path() {
+            if request.exists() {
+                // Consume the request before dispatching so a repeat request
+                // while the window cannot be raised still triggers a retry.
+                let _ = fs::remove_file(&request);
+                let value = app.clone();
+                let _ = app.run_on_main_thread(move || show_main_window(&value));
+            }
+        }
+        thread::sleep(Duration::from_millis(120));
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Become the single instance (Linux). If another live instance owns the
+    // lock, focus it and exit without starting a second server/window.
+    #[cfg(target_os = "linux")]
+    {
+        if !ensure_single_instance() {
+            std::process::exit(0);
+        }
+    }
+
     let desktop_api_token = load_or_generate_desktop_api_token()
         .expect("failed to create desktop API authorization token");
     let desktop_instance_id =
@@ -1008,6 +1208,9 @@ pub fn run() {
             #[cfg(not(target_os = "linux"))]
             build_platform_tray(app)?;
 
+            #[cfg(target_os = "linux")]
+            spawn_focus_monitor(app.handle().clone());
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -1032,6 +1235,8 @@ pub fn run() {
 
     app.run(|app_handle, event| match event {
         RunEvent::Exit => {
+            #[cfg(target_os = "linux")]
+            remove_instance_lock();
             if let Some(server) = app_handle.try_state::<DesktopServer>() {
                 server.stop();
             }

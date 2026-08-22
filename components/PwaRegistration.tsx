@@ -1,9 +1,24 @@
 "use client";
 
 import { useEffect } from "react";
+import { isTauriDesktop } from "@/lib/desktop-updater";
 
 export function PwaRegistration() {
   useEffect(() => {
+    // The desktop shell has no offline requirement, and a registered worker
+    // persists in the webview's origin-scoped cache across installs and can
+    // serve stale bundles. Skip registration and drop any previous worker.
+    if (isTauriDesktop()) {
+      if ("serviceWorker" in navigator) {
+        void navigator.serviceWorker
+          .getRegistrations()
+          .then((registrations) =>
+            registrations.forEach((registration) => void registration.unregister())
+          )
+          .catch(() => {});
+      }
+      return;
+    }
     if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) {
       return;
     }

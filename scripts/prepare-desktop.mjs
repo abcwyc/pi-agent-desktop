@@ -20,11 +20,18 @@ async function runNextBuild() {
 
   await rm(desktopBuildDir, { recursive: true, force: true });
 
+  // The packaged server leaks its runtime config into spawned process trees
+  // via __NEXT_PRIVATE_STANDALONE_CONFIG; JSON drops function values, so an
+  // inherited build dies on `generateBuildId`. Always load config fresh.
+  const buildEnv = { ...process.env };
+  delete buildEnv.__NEXT_PRIVATE_STANDALONE_CONFIG;
+  delete buildEnv.__NEXT_PRIVATE_ORIGIN;
+
   await new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [nextBin, "build", "--webpack"], {
       cwd: rootDir,
       env: {
-        ...process.env,
+        ...buildEnv,
         NEXT_TELEMETRY_DISABLED: "1",
         PI_WEB_DESKTOP_BUILD: "1",
       },
