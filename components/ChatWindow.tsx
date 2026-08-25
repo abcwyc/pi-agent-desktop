@@ -2,6 +2,7 @@
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecutionMessage, CustomMessage, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage, UserMessage } from "@/lib/types";
+import type { TodoState } from "@/lib/todo-state";
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
@@ -40,6 +41,8 @@ interface Props {
   onOpenFile?: (filePath: string) => void;
   /** Fired after non-image drops are copied into the session cwd (so the explorer can refresh). */
   onProjectFilesImported?: () => void;
+  /** Fired whenever the active session's pi-todo plan changes (or clears). */
+  onTodoStateChange?: (state: TodoState | null) => void;
 }
 
 function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, string | number>) => string): string | null {
@@ -113,7 +116,9 @@ function hasDisplayableProcessMessage(message: AgentMessage): boolean {
   if (message.role === "assistant") {
     return getDisplayableAssistantBlocks(message as AssistantMessage).length > 0;
   }
-  return message.role === "custom";
+  // Respect display:false (hidden extension messages) — they render nothing
+  // (MessageView returns null), so they must not inflate group counts either.
+  return message.role === "custom" && (message as CustomMessage).display !== false;
 }
 
 // A user message normally anchors a turn (user prompt → process → final
@@ -216,7 +221,7 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
   );
 }
 
-export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onProjectFilesImported }: Props) {
+export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onProjectFilesImported, onTodoStateChange }: Props) {
   const { t } = useI18n();
   const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio } = useAudio();
 
@@ -248,6 +253,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     isCompacting, compactError, compactResult, displayModel: displayModelValue, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,
     notices, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
+    todoState,
     isAutoModelSelection,
     agentPhase,
     addNotice,
@@ -264,6 +270,13 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
   });
   const sessionBusy = agentRunning || bashRunning;
+
+  // Lift the active session's todo plan to the shell (left-nav Todo panel).
+  // Fires when the plan appears, updates, or clears — including while streaming,
+  // since toolResult details arrive on message_end and recompute todoState.
+  useEffect(() => {
+    onTodoStateChange?.(todoState);
+  }, [todoState, onTodoStateChange]);
 
   const conversationTurns = useMemo<ConversationTurnLocation[]>(() => {
     const turns: ConversationTurnLocation[] = [];

@@ -130,10 +130,15 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     return null;
   }
   if (message.role === "custom") {
-    if ((message as CustomMessage).customType === "compaction") {
-      return <CompactionMessageView message={message as CustomMessage} />;
+    const customMessage = message as CustomMessage;
+    // Respect the extension's display:false intent (the TUI hides these too).
+    // They stay in `messages` for state extraction (e.g. the todo protocol),
+    // but are never rendered as a card in the history.
+    if (customMessage.display === false) return null;
+    if (customMessage.customType === "compaction") {
+      return <CompactionMessageView message={customMessage} />;
     }
-    return <CustomMessageView message={message as CustomMessage} cwd={cwd} onOpenFile={onOpenFile} />;
+    return <CustomMessageView message={customMessage} cwd={cwd} onOpenFile={onOpenFile} />;
   }
   if (message.role === "bashExecution") {
     return <BashExecutionView message={message as BashExecutionMessage} sessionId={sessionId} />;

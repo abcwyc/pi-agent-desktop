@@ -9,7 +9,7 @@ const jiti = createJiti(import.meta.url, {
   tsconfigPaths: true,
 });
 const { MessageView, replaceUserMessageText } = await jiti.import("./MessageView.tsx");
-const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
+const { I18nProvider } = await jiti.import("@/hooks/useI18n");
 
 function renderMessage(message) {
   return renderToStaticMarkup(
@@ -94,4 +94,29 @@ test("keeps attached images when restoring a compact command for editing", () =>
     { type: "text", text: "/skill:review src/main.ts" },
     image,
   ]);
+});
+
+test("does not render display:false custom messages (hidden extension messages)", () => {
+  const html = renderMessage({
+    role: "custom",
+    customType: "todo-mini-state",
+    content: "Todo plan version 2:\n[in_progress] install-todo-ext: ...",
+    display: false,
+    details: { version: 2, tasks: [{ key: "install-todo-ext" }] },
+  });
+
+  // Hidden extension messages must not produce any markup in the history.
+  assert.equal(html, "");
+});
+
+test("still renders display:true custom messages as a card", () => {
+  const html = renderMessage({
+    role: "custom",
+    customType: "my-extension",
+    content: "Visible message",
+    display: true,
+  });
+
+  assert.match(html, /my-extension/);
+  assert.match(html, /Visible message/);
 });

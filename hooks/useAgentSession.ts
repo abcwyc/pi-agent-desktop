@@ -11,6 +11,7 @@ import type {
   UserMessage,
 } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
+import { extractTodoState, type TodoState } from "@/lib/todo-state";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { fetchWithRetry } from "@/lib/fetch-timeout";
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
@@ -2168,9 +2169,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setSessionStatsOverride(null);
   }, [messages.length, contextUsage?.tokens, contextUsage?.percent, contextUsage?.contextWindow]);
 
+  // Latest pi-todo plan carried by the session's messages (tool results and
+  // pi-todo-state custom messages). Recomputed whenever the message list
+  // changes, so the sidebar panel tracks the agent's plan live while streaming.
+  const todoState: TodoState | null = useMemo(() => extractTodoState(messages), [messages]);
+
   return {
     // State
-    data, loading, error, activeLeafId, messages, entryIds, streamState,
+    data, loading, error, activeLeafId, messages, entryIds, streamState, todoState,
     agentRunning, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, thinkingLevel,
     retryInfo, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, compactResult, currentModel, displayModel, sessionStats,

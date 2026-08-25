@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar } from "./SessionSidebar";
 import { ChatWindow } from "./ChatWindow";
+import { TodoPanel } from "./TodoPanel";
+import type { TodoState } from "@/lib/todo-state";
 import { clearDraft } from "@/lib/draft-store";
 import { TabBar, type Tab } from "./TabBar";
 
@@ -85,6 +87,11 @@ export function AppShell() {
   const [initialCwdError, setInitialCwdError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sessionKey, setSessionKey] = useState(0);
+  // Latest pi-todo plan of the active chat, lifted up for the left-nav panel.
+  const [activeTodoState, setActiveTodoState] = useState<TodoState | null>(null);
+  // Reset when the selected session changes; the chat reloads the new session's
+  // messages and re-emits its todo plan (or null) via onTodoStateChange.
+  useEffect(() => { setActiveTodoState(null); }, [selectedSession?.id]);
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
   const [modelsConfigOpen, setModelsConfigOpen] = useState(false);
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
@@ -850,6 +857,7 @@ export function AppShell() {
         onAtMentions={handleAtMentions}
         headerControls={sidebarHeaderControls}
       />
+      <TodoPanel state={activeTodoState} />
       <div className="sidebar-footer" style={{ padding: "8px", flexShrink: 0, display: "flex", justifyContent: "space-between", gap: 4 }}>
         {([
           {
@@ -1592,6 +1600,7 @@ export function AppShell() {
               onContextUsageChange={handleContextUsageChange}
               onOpenFile={handleOpenLinkedFile}
               onProjectFilesImported={handleProjectFilesImported}
+              onTodoStateChange={setActiveTodoState}
             />
           ) : initialCwdStatus === "validating" ? (
             <div
