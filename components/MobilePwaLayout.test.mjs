@@ -4,6 +4,7 @@ import test from "node:test";
 
 const layoutSource = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
 const cssSource = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+const nativeThemeSource = await readFile(new URL("../app/native-theme.css", import.meta.url), "utf8");
 const appShellSource = await readFile(new URL("./AppShell.tsx", import.meta.url), "utf8");
 const chatWindowSource = await readFile(new URL("./ChatWindow.tsx", import.meta.url), "utf8");
 const chatInputSource = await readFile(new URL("./ChatInput.tsx", import.meta.url), "utf8");
@@ -22,7 +23,8 @@ test("tracks the visual viewport while the software keyboard is open", () => {
   assert.match(appShellSource, /paddingLeft: "env\(safe-area-inset-left\)"/);
   assert.match(appShellSource, /paddingRight: "env\(safe-area-inset-right\)"/);
   assert.match(appShellSource, /height: "calc\(36px \+ env\(safe-area-inset-top\)\)"/);
-  assert.match(appShellSource, /\/\* Right panel tab bar \*\/[\s\S]*?height: "calc\(36px \+ env\(safe-area-inset-top\)\)"/);
+  assert.match(appShellSource, /className="right-panel-tab-strip"/);
+  assert.match(nativeThemeSource, /\.right-panel-tab-strip \{[\s\S]*?height: 48px/);
   assert.match(appShellSource, /height: "var\(--app-viewport-height, 100dvh\)"/);
   // The desktop fork keeps the file-panel opener inside the padded shell
   // instead of positioning it against the viewport edge.

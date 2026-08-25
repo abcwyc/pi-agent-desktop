@@ -11,10 +11,28 @@ export interface AtQueryMatch {
   quoted: boolean;
 }
 
+export interface HashQueryMatch {
+  /** Index of the "#" character in the text */
+  start: number;
+  /** Text typed after the "#" (quotes stripped); may be empty */
+  query: string;
+  /** True when the token uses the #"..." quoted form */
+  quoted: boolean;
+}
+
 export interface FileIndexEntry {
   /** Path relative to the session cwd, "/"-separated, no trailing slash */
   path: string;
   isDir: boolean;
+}
+
+export interface SessionMentionEntry {
+  kind: "session";
+  id: string;
+  name?: string;
+  firstMessage: string;
+  modified: string;
+  messageCount: number;
 }
 
 /**
@@ -33,6 +51,27 @@ export function extractAtQuery(textBeforeCursor: string): AtQueryMatch | null {
     };
   }
   const plain = /(?:^|\s)@([^\s"]*)$/.exec(textBeforeCursor);
+  if (plain) {
+    return {
+      start: textBeforeCursor.length - (plain[1].length + 1),
+      query: plain[1],
+      quoted: false,
+    };
+  }
+  return null;
+}
+
+/** Detect a session token immediately before the cursor. */
+export function extractHashQuery(textBeforeCursor: string): HashQueryMatch | null {
+  const quoted = /(?:^|\s)#"([^"\n]*)$/.exec(textBeforeCursor);
+  if (quoted) {
+    return {
+      start: textBeforeCursor.length - (quoted[1].length + 2),
+      query: quoted[1],
+      quoted: true,
+    };
+  }
+  const plain = /(?:^|\s)#([^\s"]*)$/.exec(textBeforeCursor);
   if (plain) {
     return {
       start: textBeforeCursor.length - (plain[1].length + 1),
@@ -137,6 +176,28 @@ export function filterFileEntries(
   return scored.slice(0, limit).map((s) => s.entry);
 }
 
+/** Rank sessions by title, first prompt, and id for the # palette. */
+export function filterSessionEntries(
+  entries: SessionMentionEntry[],
+  query: string,
+  limit: number = AT_RESULT_LIMIT,
+): SessionMentionEntry[] {
+  const lowerQuery = query.trim().toLowerCase();
+  if (!lowerQuery) return entries.slice(0, limit);
+  const scored = entries.flatMap((entry) => {
+    const fields = [entry.name ?? "", entry.firstMessage, entry.id].map((value) => value.toLowerCase());
+    const score = fields.reduce((best, field) => {
+      if (field === lowerQuery) return Math.max(best, 100);
+      if (field.startsWith(lowerQuery)) return Math.max(best, 80);
+      if (field.includes(lowerQuery)) return Math.max(best, 50);
+      return best;
+    }, 0);
+    return score > 0 ? [{ entry, score }] : [];
+  });
+  scored.sort((a, b) => b.score - a.score || b.entry.modified.localeCompare(a.entry.modified));
+  return scored.slice(0, limit).map(({ entry }) => entry);
+}
+
 export interface AtInsertion {
   /** Text that replaces the @token */
   text: string;
@@ -173,6 +234,14 @@ export function buildAtInsertText(entryPath: string, isDir: boolean, forceQuotes
 export function buildAtMentionText(entryPath: string, isDir: boolean): string {
   const p = isDir ? `${entryPath}/` : entryPath;
   return p.includes(" ") ? `@"${p}" ` : `@${p} `;
+}
+
+/** Closed # mention for a session. The id is resolved to content at send time. */
+export function buildSessionMentionText(sessionName: string): string {
+  const name = sessionName.trim() || "Untitled session";
+  return /[\s"\n]/.test(name)
+    ? `#"${name.replace(/"/g, "'").replace(/\n/g, " ")}" `
+    : `#${name} `;
 }
 
 /** Closed file @mention scoped to one logical line or an inclusive line range. */

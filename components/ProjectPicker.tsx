@@ -55,6 +55,23 @@ export function shouldShowProjectFilter(recentProjects: string[]): boolean {
   return recentProjects.length > MAX_VISIBLE_PROJECTS;
 }
 
+/** Open the desktop folder dialog and return the server-validated project path. */
+export async function selectProjectDirectoryNative(selectedCwd: string | null, homeDir: string): Promise<string | null> {
+  const path = await selectDirectoryNative(selectedCwd ?? (homeDir || undefined));
+  if (path === null) return null;
+
+  const res = await fetch("/api/cwd/validate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd: path }),
+  });
+  const data = await res.json().catch(() => ({})) as { cwd?: string; error?: string };
+  if (!res.ok || data.error) {
+    throw new Error(data.error ?? `HTTP ${res.status}`);
+  }
+  return data.cwd ?? path;
+}
+
 export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, homeDir, onSelectCwd, variant = "block", disabled }: ProjectPickerProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -123,18 +140,15 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
     // path browser (users should retry the native picker or see the error).
     try {
       setCustomPathError(null);
-      const path = await selectDirectoryNative(selectedCwd ?? homeDir);
+      const path = await selectProjectDirectoryNative(selectedCwd, homeDir);
       if (path === null) return;
-      const ok = await commitCustomPath(path);
-      if (!ok) {
-        // Keep the dropdown open so the inline error under Open Folder is visible.
-        setDropdownOpen(true);
-      }
+      onSelectCwd(path);
+      closeDropdown();
     } catch (e) {
       setCustomPathError(e instanceof Error ? e.message : String(e));
       setDropdownOpen(true);
     }
-  }, [commitCustomPath, selectedCwd, homeDir]);
+  }, [selectedCwd, homeDir, onSelectCwd, closeDropdown]);
 
   const handleDefaultCwd = useCallback(async () => {
     try {

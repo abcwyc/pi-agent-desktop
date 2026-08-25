@@ -41,7 +41,7 @@ const IGNORED_NAMES = new Set([
 
 const IGNORED_SUFFIXES = [".pyc"];
 
-const FILE_REQUEST_TYPES = ["list", "read", "download", "meta", "preview", "watch", "watch-dir"] as const;
+const FILE_REQUEST_TYPES = ["list", "read", "download", "meta", "preview", "serve", "watch", "watch-dir"] as const;
 type FileRequestType = typeof FILE_REQUEST_TYPES[number];
 const FILE_REQUEST_TYPE_SET = new Set<string>(FILE_REQUEST_TYPES);
 const MAX_UPLOAD_FILE_BYTES = 25 * 1024 * 1024;
@@ -50,6 +50,25 @@ const MAX_UPLOAD_TOTAL_BYTES = 100 * 1024 * 1024;
 const MAX_UPLOAD_REQUEST_BYTES = MAX_UPLOAD_TOTAL_BYTES + 1024 * 1024;
 const MAX_IMPORT_JSON_BYTES = 256 * 1024;
 const MAX_IMPORT_FILES = 100;
+const HTML_PREVIEW_MAX_BYTES = 10 * 1024 * 1024;
+
+// MIME types needed when a local HTML document loads its own stylesheets and
+// scripts. The regular `read` endpoint returns JSON for text files, while the
+// preview iframe needs the actual bytes with a browser-readable content type.
+const SERVE_EXT_TO_MIME: Record<string, string> = {
+  html: "text/html; charset=utf-8",
+  htm: "text/html; charset=utf-8",
+  css: "text/css; charset=utf-8",
+  js: "text/javascript; charset=utf-8",
+  mjs: "text/javascript; charset=utf-8",
+  cjs: "text/javascript; charset=utf-8",
+  json: "application/json; charset=utf-8",
+  map: "application/json; charset=utf-8",
+  xml: "application/xml; charset=utf-8",
+  txt: "text/plain; charset=utf-8",
+  svg: "image/svg+xml",
+  wasm: "application/wasm",
+};
 
 const EXT_TO_LANGUAGE: Record<string, string> = {
   ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
@@ -74,6 +93,15 @@ function getLanguage(filePath: string): string {
   if (base === "makefile" || base === "gnumakefile") return "makefile";
   const ext = base.split(".").pop() ?? "";
   return EXT_TO_LANGUAGE[ext] ?? "text";
+}
+
+function getServeMime(filePath: string): string {
+  const ext = getFileExt(filePath);
+  return getImageMime(filePath)
+    || getAudioMime(filePath)
+    || getDocumentMime(filePath)
+    || SERVE_EXT_TO_MIME[ext]
+    || "application/octet-stream";
 }
 
 function filePathFromSegments(segments: string[]): string {
@@ -532,7 +560,8 @@ export async function GET(
   try {
     const { path: segments } = await params;
     const filePath = filePathFromSegments(segments);
-    const rawType = request.nextUrl.searchParams.get("type") ?? "list";
+    const requestedType = request.nextUrl.searchParams.get("type");
+    const rawType = requestedType ?? "list";
     const type = parseFileRequestType(rawType);
     if (!type) {
       return NextResponse.json({ error: "Invalid file request type" }, { status: 400 });
@@ -579,8 +608,14 @@ export async function GET(
       if (documentMime) {
         return streamFile(filePath, stat, documentMime, request.headers.get("range"));
       }
-      if (stat.size > TEXT_PREVIEW_MAX_BYTES) {
-        return NextResponse.json({ error: "File too large for preview (>256KB)" }, { status: 413 });
+      const isHtmlFile = getFileExt(filePath) === "html" || getFileExt(filePath) === "htm";
+      const textPreviewMaxBytes = isHtmlFile ? HTML_PREVIEW_MAX_BYTES : TEXT_PREVIEW_MAX_BYTES;
+      if (stat.size > textPreviewMaxBytes) {
+        return NextResponse.json({
+          error: isHtmlFile
+            ? "File too large for preview (>10MB)"
+            : "File too large for preview (>256KB)",
+        }, { status: 413 });
       }
       const content = fs.readFileSync(filePath, "utf-8");
       const language = getLanguage(filePath);
@@ -593,6 +628,13 @@ export async function GET(
       }
       const mime = getImageMime(filePath) || getAudioMime(filePath) || getDocumentMime(filePath) || "application/octet-stream";
       return streamFile(filePath, stat, mime, request.headers.get("range"), true);
+    }
+
+    if (type === "serve") {
+      if (!stat.isFile()) {
+        return NextResponse.json({ error: "Not a file" }, { status: 400 });
+      }
+      return streamFile(filePath, stat, getServeMime(filePath), request.headers.get("range"));
     }
 
     if (type === "meta") {
@@ -733,7 +775,13 @@ export async function GET(
             scheduleChange();
           };
           try {
-            watcher = fs.watch(filePath, { recursive: true }, handleEvent);
+            // Non-recursive on purpose: on Linux, recursive fs.watch walks the
+            // whole tree synchronously and stalls the event loop for seconds on
+            // large directories (breaks unrelated requests, e.g. the desktop
+            // health probe). The list endpoint renders a single level and file
+            // content changes are covered by the per-file `watch` above, so
+            // top-level entry events are enough; navigation re-lists as needed.
+            watcher = fs.watch(filePath, handleEvent);
           } catch {
             // Recursive watching may be unavailable on some platforms; fall
             // back to watching only the top-level directory.
@@ -762,6 +810,14 @@ export async function GET(
           "X-Accel-Buffering": "no",
         },
       });
+    }
+
+    // A browser resolves relative resources from an HTML document to sibling
+    // paths without preserving the document's query string. Treat an
+    // untyped file request as an inline file response so relative CSS, JS,
+    // images, and other assets loaded by the HTML preview keep working.
+    if (type === "list" && requestedType === null && stat.isFile()) {
+      return streamFile(filePath, stat, getServeMime(filePath), request.headers.get("range"));
     }
 
     // type === "list"

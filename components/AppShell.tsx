@@ -8,6 +8,7 @@ import { SessionSidebar } from "./SessionSidebar";
 import { ChatWindow } from "./ChatWindow";
 import { TodoPanel } from "./TodoPanel";
 import type { TodoState } from "@/lib/todo-state";
+import { selectProjectDirectoryNative } from "./ProjectPicker";
 import { clearDraft } from "@/lib/draft-store";
 import { TabBar, type Tab } from "./TabBar";
 
@@ -15,10 +16,12 @@ import { TabBar, type Tab } from "./TabBar";
 // config modals may never be opened at all; FileViewer drags in markdown +
 // syntax highlighting a second time and only matters once a file tab opens.
 const FileViewer = dynamic(() => import("./FileViewer").then((m) => m.FileViewer), { ssr: false });
+const FileExplorer = dynamic(() => import("./FileExplorer").then((m) => m.FileExplorer), { ssr: false });
 const ModelsConfig = dynamic(() => import("./ModelsConfig").then((m) => m.ModelsConfig), { ssr: false });
 const SkillsConfig = dynamic(() => import("./SkillsConfig").then((m) => m.SkillsConfig), { ssr: false });
 const PluginsConfig = dynamic(() => import("./PluginsConfig").then((m) => m.PluginsConfig), { ssr: false });
 const AppSettings = dynamic(() => import("./AppSettings").then((m) => m.AppSettings), { ssr: false });
+import { SessionStatsPanel } from "./SessionStatsPanel";
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
 import { BranchNavigator } from "./BranchNavigator";
 import { UpdateReminder } from "./UpdateReminder";
@@ -28,10 +31,9 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { APP_PREF_KEYS, getPrefBool, getPrefJson, setPrefJson } from "@/lib/app-prefs";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
-import { copyText } from "@/lib/clipboard";
 import { useDesktopConnection } from "@/lib/desktop-connection";
 import { isTauriDesktop, setCloseQuitsNative } from "@/lib/desktop-native";
-import { getFileName } from "@/lib/file-paths";
+import { encodeFilePathForApi, getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import { PRODUCT_NAME } from "@/lib/branding";
 import {
@@ -44,6 +46,7 @@ import {
   getDefaultRightPanelWidth,
   getRightPanelMaxWidth,
   getSidebarMaxWidth,
+  MOBILE_MAX_WIDTH,
   RIGHT_PANEL_FALLBACK_WIDTH,
   RIGHT_PANEL_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
@@ -55,16 +58,19 @@ import {
 import type { SessionInfo, SessionTreeNode } from "@/lib/types";
 import type { ProjectTrustStatus } from "@/lib/api-types";
 import type { ChatInputHandle } from "./ChatInput";
+import type { FileExplorerHandle } from "./FileExplorer";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 
-type SessionCopyField = "file" | "id";
 type AutoNameStatus =
   | { kind: "idle" }
   | { kind: "naming" }
   | { kind: "success" }
   | { kind: "error"; message: string };
-
 const TOP_BAR_ICON_BUTTON_SIZE = 36;
+const FILE_TREE_DEFAULT_WIDTH = 300;
+const FILE_TREE_MIN_WIDTH = 220;
+const FILE_TREE_MAX_WIDTH = 520;
+const FILE_TREE_PREVIEW_MIN_WIDTH = 240;
 export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -75,7 +81,7 @@ export function AppShell() {
   const [initialNavigation] = useState(() => resolveInitialNavigation(searchParams, persistedWorkspace));
   const [workspaceHydrated, setWorkspaceHydrated] = useState(() => !desktopMode);
   const { isDark, toggleTheme } = useTheme();
-  const { locale, t: translate } = useI18n();
+  const { t: translate } = useI18n();
   const isMobile = useIsMobile();
   useViewportHeight();
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null);
@@ -92,6 +98,7 @@ export function AppShell() {
   // Reset when the selected session changes; the chat reloads the new session's
   // messages and re-emits its todo plan (or null) via onTodoStateChange.
   useEffect(() => { setActiveTodoState(null); }, [selectedSession?.id]);
+  const [availableProjectRoots, setAvailableProjectRoots] = useState<string[]>([]);
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
   const [modelsConfigOpen, setModelsConfigOpen] = useState(false);
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
@@ -112,6 +119,7 @@ export function AppShell() {
   const windowDrag = useWindowDrag();
   const sidebarWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH);
   const rightPanelWidthRef = useRef(RIGHT_PANEL_FALLBACK_WIDTH);
+  const fileTreeWidthRef = useRef(FILE_TREE_DEFAULT_WIDTH);
   const getResponsiveRightPanelWidth = useCallback(
     () => typeof window === "undefined"
       ? RIGHT_PANEL_FALLBACK_WIDTH
@@ -161,8 +169,40 @@ export function AppShell() {
     storageKey: "pi-right-panel-width",
     widthRef: rightPanelWidthRef,
   });
+  const getFileTreeMaxWidth = useCallback(
+    () => {
+      const availablePanelWidth = typeof window === "undefined"
+        ? rightPanelWidthRef.current
+        : window.innerWidth < MOBILE_MAX_WIDTH
+          ? window.innerWidth
+          : window.innerWidth < SPLIT_PANEL_MIN_WIDTH
+            ? Math.min(560, window.innerWidth - 48)
+            : rightPanelWidthRef.current;
+      return Math.max(
+        FILE_TREE_MIN_WIDTH,
+        Math.min(
+          FILE_TREE_MAX_WIDTH,
+          availablePanelWidth - FILE_TREE_PREVIEW_MIN_WIDTH,
+        ),
+      );
+    },
+    [],
+  );
+  const fileTreeResizer = useResizablePanel({
+    ariaLabel: translate("layout.resizeFileTree"),
+    cssVariable: "--file-tree-width",
+    defaultWidth: FILE_TREE_DEFAULT_WIDTH,
+    getMaxWidth: getFileTreeMaxWidth,
+    growthDirection: "left",
+    maxWidth: FILE_TREE_MAX_WIDTH,
+    minWidth: FILE_TREE_MIN_WIDTH,
+    storageKey: "pi-file-tree-width",
+    widthRef: fileTreeWidthRef,
+  });
   const reclampSidebarWidth = sidebarResizer.reclampWidth;
   const reclampRightPanelWidth = rightPanelResizer.reclampWidth;
+  const reclampFileTreeWidth = fileTreeResizer.reclampWidth;
+  const rightPanelWidth = rightPanelResizer.width;
   // On mobile the sidebar is an overlay drawer; hide it by default so the chat
   // is visible on load. Runs once the breakpoint resolves after hydration.
   useEffect(() => {
@@ -189,7 +229,8 @@ export function AppShell() {
     if (!rightPanelOpen) return;
     reclampSidebarWidth();
     reclampRightPanelWidth();
-  }, [reclampRightPanelWidth, reclampSidebarWidth, rightPanelOpen]);
+    reclampFileTreeWidth();
+  }, [reclampFileTreeWidth, reclampRightPanelWidth, reclampSidebarWidth, rightPanelOpen, rightPanelWidth]);
   const chatInputRef = useRef<ChatInputHandle | null>(null);
   const topBarRef = useRef<HTMLDivElement>(null);
   // Branch navigator state — populated by ChatWindow via onBranchDataChange
@@ -213,7 +254,7 @@ export function AppShell() {
     setSystemPrompt(prompt);
   }, []);
 
-  // Session stats (tokens + cost) — populated by ChatWindow, displayed in top bar
+  // Session stats (tokens + cost) — populated by ChatWindow, used by the stats panel and ring hover summary
   const [sessionStats, setSessionStats] = useState<SessionStatsInfo | null>(null);
   const [autoNameStatus, setAutoNameStatus] = useState<AutoNameStatus>({ kind: "idle" });
   const autoNameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -222,24 +263,14 @@ export function AppShell() {
   const handleSessionStatsChange = useCallback((stats: SessionStatsInfo | null) => {
     setSessionStats(stats);
   }, []);
-  const [copiedSessionField, setCopiedSessionField] = useState<SessionCopyField | null>(null);
-  const sessionCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleCopySessionField = useCallback((field: SessionCopyField, value: string) => {
-    void copyText(value).then(() => {
-      if (sessionCopyTimerRef.current) clearTimeout(sessionCopyTimerRef.current);
-      setCopiedSessionField(field);
-      sessionCopyTimerRef.current = setTimeout(() => setCopiedSessionField(null), 1400);
-    });
-  }, []);
 
   useEffect(() => {
-    return () => {
-      if (sessionCopyTimerRef.current) clearTimeout(sessionCopyTimerRef.current);
-      if (autoNameTimerRef.current) clearTimeout(autoNameTimerRef.current);
-    };
-  }, []);
+    if (desktopMode) {
+      void setCloseQuitsNative(getPrefBool(APP_PREF_KEYS.closeQuits, false));
+    }
+  }, [desktopMode]);
 
-  // Context usage — populated by ChatWindow, displayed in top bar
+  // Context usage — populated by ChatWindow, used by the stats panel and ring
   const [contextUsage, setContextUsage] = useState<{ percent: number | null; contextWindow: number; tokens: number | null } | null>(null);
   const handleContextUsageChange = useCallback((usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => {
     setContextUsage(usage);
@@ -266,6 +297,12 @@ export function AppShell() {
     if (isMobile) setActiveTopPanel(null);
     setSidebarOpen((open) => !open);
   }, [isMobile]);
+
+  const handleRightPanelToggle = useCallback(() => {
+    setActiveTopPanel(null);
+    setTopMoreOpen(false);
+    setRightPanelOpen(!rightPanelOpen);
+  }, [rightPanelOpen]);
 
   useEffect(() => {
     if (!topMoreOpen) return;
@@ -321,10 +358,39 @@ export function AppShell() {
     return () => ro.disconnect();
   }, [activeTopPanel, isMobile]);
 
-  // Right panel — file tabs only
+  // Right panel — local files, browser, and diff are the three primary tools.
   const [fileTabs, setFileTabs] = useState<Tab[]>([]);
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
+  // FileExplorer state — moved out of SessionSidebar so the right panel
+  // can host the same explorer the sidebar used to.
+  const [explorerKey] = useState(0);
+  const [explorerUploadBusy, setExplorerUploadBusy] = useState(false);
+  const [changesCount, setChangesCount] = useState(0);
+  const [changesCollapsed, setChangesCollapsed] = useState(true);
+  const [fileExplorerQuery, setFileExplorerQuery] = useState("");
+  const fileExplorerRef = useRef<FileExplorerHandle>(null);
+  const [fileTreeOpen, setFileTreeOpen] = useState(true);
+  const [fileActionsMenuOpen, setFileActionsMenuOpen] = useState(false);
+  const fileActionsMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!fileActionsMenuOpen) return;
 
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!fileActionsMenuRef.current?.contains(target)) setFileActionsMenuOpen(false);
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setFileActionsMenuOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [fileActionsMenuOpen]);
   useEffect(() => {
     if (desktopMode) {
       void setCloseQuitsNative(getPrefBool(APP_PREF_KEYS.closeQuits, false));
@@ -332,17 +398,6 @@ export function AppShell() {
   }, [desktopMode]);
 
   const { state: connectionState, retry: retryConnection } = useDesktopConnection(desktopMode);
-
-  // Same @mention format as the chat input's @ autocomplete, so the agent's
-  // read tool resolves it the same way (it strips the @ prefix).
-  const handleAtMention = useCallback((relativePath: string, isDir: boolean) => {
-    chatInputRef.current?.insertText(buildAtMentionText(relativePath, isDir));
-  }, []);
-
-  const handleAtMentions = useCallback((relativePaths: string[]) => {
-    const mentions = buildFileAtMentionsText(relativePaths);
-    if (mentions) chatInputRef.current?.insertText(mentions);
-  }, []);
 
   const handleFileLineMention = useCallback((relativePath: string, startLine: number, endLine: number) => {
     chatInputRef.current?.insertText(buildFileLineMentionText(relativePath, startLine, endLine));
@@ -482,6 +537,32 @@ export function AppShell() {
     router.replace("/", { scroll: false });
   }, [router, isMobile]);
 
+  const handleProjectsChange = useCallback((projectRoots: string[]) => {
+    setAvailableProjectRoots((previous) => (
+      previous.length === projectRoots.length && previous.every((root, index) => root === projectRoots[index])
+        ? previous
+        : projectRoots
+    ));
+  }, []);
+
+  const handleProjectChangeFromComposer = useCallback((projectRoot: string) => {
+    if (selectedSession) return;
+    handleNewSession(`project-${Date.now()}`, projectRoot);
+  }, [handleNewSession, selectedSession]);
+
+  const handleSelectProjectFromComposer = useCallback(async () => {
+    if (!desktopMode) return;
+    try {
+      const cwd = await selectProjectDirectoryNative(
+        selectedSession?.cwd ?? newSessionCwd ?? activeCwd,
+        "",
+      );
+      if (cwd) handleNewSession(`project-${Date.now()}`, cwd);
+    } catch (error) {
+      console.error("Failed to switch project:", error);
+    }
+  }, [desktopMode, selectedSession?.cwd, newSessionCwd, activeCwd, handleNewSession]);
+
   // Global keyboard shortcuts (handles Esc, Ctrl+Alt+N etc.)
   useGlobalKeyboardShortcuts({
     onNewSession: (cwd: string) => handleNewSession(`kb-${Date.now()}`, cwd),
@@ -511,21 +592,14 @@ export function AppShell() {
     hydrateSelectedSession(session.id);
     router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
   }, [router, hydrateSelectedSession]);
-
   const handleAgentEnd = useCallback(() => {
     setRefreshKey((k) => k + 1);
-    setExplorerRefreshKey((k) => k + 1);
-  }, []);
-
-  const handleProjectFilesImported = useCallback(() => {
     setExplorerRefreshKey((k) => k + 1);
   }, []);
 
   const handleAutoName = useCallback(async () => {
     const sessionId = selectedSession?.id;
     if (!sessionId || autoNameStatus.kind === "naming") return;
-    if (autoNameTimerRef.current) clearTimeout(autoNameTimerRef.current);
-    setActiveTopPanel(null);
     setAutoNameStatus({ kind: "naming" });
 
     try {
@@ -621,10 +695,6 @@ export function AppShell() {
     // On mobile the file panel is full-screen; close the drawer so it shows.
     if (isMobile) setSidebarOpen(false);
   }, [isMobile]);
-
-  const handleOpenLinkedFile = useCallback((filePath: string) => {
-    handleOpenFile(filePath, getFileName(filePath), { sourceSessionId: selectedSession?.id ?? null });
-  }, [handleOpenFile, selectedSession?.id]);
 
   const handleCloseFileTab = useCallback((tabId: string) => {
     setFileTabs((prev) => {
@@ -779,6 +849,25 @@ export function AppShell() {
   }, [projectTrustBusy, projectTrustCwd]);
 
   const activeFileTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
+
+  const copyActiveFilePath = useCallback(async () => {
+    if (!activeFileTab?.filePath) return;
+    await navigator.clipboard?.writeText(activeFileTab.filePath);
+    setFileActionsMenuOpen(false);
+  }, [activeFileTab?.filePath]);
+
+  const copyActiveFileContent = useCallback(async () => {
+    if (!activeFileTab?.filePath) return;
+    try {
+      const response = await fetch(`/api/files/${encodeFilePathForApi(activeFileTab.filePath)}?type=read`);
+      const data = await response.json() as { content?: string; error?: string };
+      if (!response.ok || typeof data.content !== "string") throw new Error(data.error ?? `HTTP ${response.status}`);
+      await navigator.clipboard?.writeText(data.content);
+      setFileActionsMenuOpen(false);
+    } catch (error) {
+      console.error("Failed to copy file content:", error);
+    }
+  }, [activeFileTab?.filePath]);
   const activeCwdName = activeCwd ? getFileName(activeCwd) || activeCwd : null;
   const windowTitle = activeCwdName ? `${activeCwdName} - ${PRODUCT_NAME}` : PRODUCT_NAME;
   const topBarTitle = selectedSession
@@ -850,11 +939,7 @@ export function AppShell() {
         onSessionDeleted={handleSessionDeleted}
         selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
         onCwdChange={handleCwdChange}
-        onOpenFile={handleOpenFile}
-        selectedFilePath={activeFileTab?.filePath ?? null}
-        explorerRefreshKey={explorerRefreshKey}
-        onAtMention={handleAtMention}
-        onAtMentions={handleAtMentions}
+        onProjectsChange={handleProjectsChange}
         headerControls={sidebarHeaderControls}
       />
       <TodoPanel state={activeTodoState} />
@@ -1076,13 +1161,13 @@ export function AppShell() {
         {/* Top bar with sidebar toggle */}
         <div
           ref={topBarRef}
-          className={`app-topbar${desktopChrome.isMacOS && (!sidebarOpen || isMobile) ? " app-topbar--mac-inset" : ""}`}
+          className={`app-topbar${desktopChrome.isMacOS && (!sidebarOpen || isMobile) ? " app-topbar--mac-inset" : ""}${!rightPanelOpen ? " app-topbar--panel-closed" : ""}`}
           {...desktopChrome.dragRegionProps}
           {...windowDrag}
           style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: "calc(36px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)", background: "var(--bg-panel)" }}
         >
           {/* Sidebar reopen — only while the sidebar (and its own toggle) is hidden */}
-          {!sidebarOpen && (
+          {!sidebarOpen && !rightPanelOpen && (
             <button
               className="native-icon-button"
               onClick={handleSidebarToggle}
@@ -1346,7 +1431,7 @@ export function AppShell() {
                           if (t && t.output > 0) parts.push(`↓${fmt(t.output)}`);
                           if (c > 0) parts.push(c >= 0.01 ? `$${c.toFixed(2)}` : "<$0.01");
                           if (contextUsage?.contextWindow && contextUsage.percent !== null) {
-                            parts.push(`${contextUsage.percent.toFixed(0)}% ctx`);
+                            parts.push(`${contextUsage.percent.toFixed(1)}% ctx`);
                           }
                           const summary = parts.length > 0 ? parts.join(" · ") : translate("appshell.statsHint");
                           return (
@@ -1422,158 +1507,11 @@ export function AppShell() {
                 </div>
               )}
               {activeTopPanel === "session" && (
-                <div className="session-info-popover" style={{
-                  background: "var(--surface-elevated)",
-                  borderBottom: "1px solid var(--border)",
-                  boxShadow: "var(--shadow-popover)",
-                  padding: "12px 16px",
-                }}>
-                  {sessionStats ? (() => {
-                    const sessionRows = [
-                       ...(sessionStats.sessionName ? [{ label: translate("session.name"), value: sessionStats.sessionName, copyField: null }] : []),
-                       { label: translate("session.file"), value: sessionStats.sessionFile ?? translate("session.inMemory"), copyField: "file" as const },
-                       { label: translate("session.id"), value: sessionStats.sessionId, copyField: "id" as const },
-                    ];
-                    const messageRows = [
-                       [translate("session.user"), sessionStats.userMessages.toLocaleString(locale)],
-                       [translate("session.assistant"), sessionStats.assistantMessages.toLocaleString(locale)],
-                       [translate("session.toolCalls"), sessionStats.toolCalls.toLocaleString(locale)],
-                       [translate("session.toolResults"), sessionStats.toolResults.toLocaleString(locale)],
-                       [translate("session.total"), sessionStats.totalMessages.toLocaleString(locale)],
-                    ];
-                    const tokenRows = [
-                       [translate("session.input"), sessionStats.tokens.input.toLocaleString(locale)],
-                       [translate("session.output"), sessionStats.tokens.output.toLocaleString(locale)],
-                       ...(sessionStats.tokens.cacheRead > 0 ? [[translate("session.cacheRead"), sessionStats.tokens.cacheRead.toLocaleString(locale)]] : []),
-                       ...(sessionStats.tokens.cacheWrite > 0 ? [[translate("session.cacheWrite"), sessionStats.tokens.cacheWrite.toLocaleString(locale)]] : []),
-                       [translate("session.total"), sessionStats.tokens.total.toLocaleString(locale)],
-                    ];
-                    const ctx = contextUsage ?? sessionStats.contextUsage;
-                    const formatCompact = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(n);
-                    const extraTokenRows = [
-                       ...(sessionStats.cost > 0 ? [[translate("session.cost"), `$${sessionStats.cost.toFixed(4)}`]] : []),
-                       ...(ctx?.contextWindow ? [[translate("session.context"), `${ctx.percent !== null ? `${ctx.percent.toFixed(1)}%` : "?"} / ${formatCompact(ctx.contextWindow)}`]] : []),
-                    ];
-                    const section = (
-                      title: string,
-                      sectionRows: string[][],
-                      valueAlign: "left" | "right" = "left",
-                      compact = false,
-                    ) => (
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{title}</div>
-                          <div style={{
-                            display: "grid",
-                            gridTemplateColumns: compact ? "max-content max-content" : "auto minmax(0, 1fr)",
-                            columnGap: compact ? 14 : 12,
-                            rowGap: 4,
-                            justifyContent: compact ? "start" : undefined,
-                          }}>
-                            {sectionRows.map(([label, value]) => (
-                              <div key={`${title}:${label}`} style={{ display: "contents" }}>
-                                <div style={{ color: "var(--text-dim)", whiteSpace: "nowrap" }}>{label}</div>
-                                <div style={{
-                                  color: "var(--text-muted)",
-                                  minWidth: 0,
-                                  overflowWrap: compact ? "normal" : "anywhere",
-                                  textAlign: valueAlign,
-                                  whiteSpace: valueAlign === "right" ? "nowrap" : "normal",
-                                }}>{value}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    const copyButton = (field: SessionCopyField, value: string) => {
-                      const copied = copiedSessionField === field;
-                      return (
-                        <button
-                          type="button"
-                           title={copied ? translate("session.copied") : translate(field === "file" ? "session.copyFile" : "session.copyId")}
-                          onClick={() => handleCopySessionField(field, value)}
-                          style={{
-                            alignSelf: "start",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: 22,
-                            height: 22,
-                            marginTop: -2,
-                            color: copied ? "var(--accent)" : "var(--text-dim)",
-                            background: "transparent",
-                            border: "1px solid var(--border)",
-                            borderRadius: 4,
-                            cursor: "pointer",
-                            flex: "0 0 auto",
-                            transition: "color 0.12s, border-color 0.12s, background 0.12s",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.color = "var(--accent)";
-                            e.currentTarget.style.borderColor = "var(--accent)";
-                            e.currentTarget.style.background = "var(--bg-hover)";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.color = copied ? "var(--accent)" : "var(--text-dim)";
-                            e.currentTarget.style.borderColor = "var(--border)";
-                            e.currentTarget.style.background = "transparent";
-                          }}
-                        >
-                          {copied ? (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          ) : (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                            </svg>
-                          )}
-                        </button>
-                      );
-                    };
-                    const sessionInfoSection = (
-                      <div style={{ minWidth: 0 }}>
-                         <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{translate("session.infoSection")}</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", columnGap: 12, rowGap: 8, alignItems: "start" }}>
-                          {sessionRows.map((row) => (
-                            <div key={`session-info:${row.label}`} style={{ display: "contents" }}>
-                              <div style={{ color: "var(--text-dim)", whiteSpace: "nowrap" }}>{row.label}</div>
-                              <div style={{
-                                color: "var(--text-muted)",
-                                minWidth: 0,
-                                overflowWrap: "anywhere",
-                                wordBreak: "break-word",
-                                whiteSpace: "normal",
-                              }}>{row.value}</div>
-                              <div>{row.copyField ? copyButton(row.copyField, row.value) : null}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-
-                    return (
-                      <div style={{
-                        display: "grid",
-                        gridTemplateColumns: isMobile
-                          ? "1fr"
-                          : "minmax(360px, 1.7fr) minmax(140px, 0.55fr) minmax(190px, 0.75fr)",
-                        gap: isMobile ? 16 : 24,
-                        fontSize: 12,
-                        lineHeight: 1.5,
-                        fontFamily: "var(--font-mono)",
-                      }}>
-                        {sessionInfoSection}
-                         {section(translate("session.messages"), messageRows)}
-                         {section(translate("session.tokens"), [...tokenRows, ...extraTokenRows], "right", true)}
-                      </div>
-                    );
-                  })() : (
-                    <div style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
-                       {translate("session.load")}
-                    </div>
-                  )}
-                </div>
+                <SessionStatsPanel
+                  sessionStats={sessionStats}
+                  contextUsage={contextUsage}
+                  isMobile={isMobile}
+                />
               )}
             </div>
           )}
@@ -1598,9 +1536,10 @@ export function AppShell() {
               onSessionStatsChange={handleSessionStatsChange}
               onSessionStatsPanelOpen={openSessionStatsPanel}
               onContextUsageChange={handleContextUsageChange}
-              onOpenFile={handleOpenLinkedFile}
-              onProjectFilesImported={handleProjectFilesImported}
               onTodoStateChange={setActiveTodoState}
+              onSelectProject={desktopMode ? () => void handleSelectProjectFromComposer() : undefined}
+              projectOptions={selectedSession ? [] : availableProjectRoots}
+              onProjectChange={selectedSession ? undefined : handleProjectChangeFromComposer}
             />
           ) : initialCwdStatus === "validating" ? (
             <div
@@ -1646,6 +1585,20 @@ export function AppShell() {
         </div>
       </div>
 
+      <button
+        type="button"
+        className={`right-panel-toggle-button${rightPanelOpen ? " is-open" : ""}`}
+        onClick={handleRightPanelToggle}
+        title={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
+        aria-label={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
+        aria-pressed={rightPanelOpen}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <line x1="15" y1="3" x2="15" y2="21" />
+        </svg>
+      </button>
+
       <div
         aria-hidden="true"
         className={`right-panel-overlay-backdrop${rightPanelOpen ? " is-open" : ""}`}
@@ -1661,7 +1614,7 @@ export function AppShell() {
         />
       )}
 
-      {/* Right panel: file viewer — always mounted, width animated via CSS */}
+      {/* Right panel: local files, browser, or diff — width animated via CSS */}
       <div
         ref={rightPanelResizer.panelRef}
         id="file-panel"
@@ -1674,9 +1627,53 @@ export function AppShell() {
           background: "var(--bg)",
         } as React.CSSProperties}
       >
-        {/* Right panel tab bar */}
-        <div className="right-panel-tab-strip" style={{ height: "calc(36px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)" }}>
-          <div style={{ flex: 1, overflow: "hidden" }}>
+        {/* The panel is intentionally focused on local files. */}
+        {/*
+          <button
+            type="button"
+            role="tab"
+            aria-selected={contextPanelTab === "files"}
+            className={`context-panel-mode-tab${contextPanelTab === "files" ? " is-active" : ""}`}
+            onClick={() => setContextPanelTab("files")}
+            title={translate("contextPanel.tabFiles")}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+            </svg>
+            <span>{translate("contextPanel.tabFiles")}</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={contextPanelTab === "browser"}
+            className={`context-panel-mode-tab${contextPanelTab === "browser" ? " is-active" : ""}`}
+            onClick={() => setContextPanelTab("browser")}
+            title={translate("contextPanel.tabBrowser")}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M3 12h18M12 3c2.2 2.4 3.3 5.4 3.3 9s-1.1 6.6-3.3 9c-2.2-2.4-3.3-5.4-3.3-9S9.8 5.4 12 3Z" />
+            </svg>
+            <span>{translate("contextPanel.tabBrowser")}</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={contextPanelTab === "diff"}
+            className={`context-panel-mode-tab${contextPanelTab === "diff" ? " is-active" : ""}`}
+            onClick={() => setContextPanelTab("diff")}
+            title={translate("contextPanel.tabDiff")}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="6" r="2.5" />
+              <circle cx="12" cy="18" r="2.5" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            <span>{translate("contextPanel.tabDiff")}</span>
+          </button>
+        */}
+        <div className="right-panel-tab-strip">
+          <div className="file-tab-bar-slot">
             <TabBar
               tabs={fileTabs}
               activeTabId={activeFileTabId ?? ""}
@@ -1684,45 +1681,197 @@ export function AppShell() {
               onCloseTab={handleCloseFileTab}
             />
           </div>
-          {/* Panel close — only shown while the file panel is open */}
-          <button
-            className="right-panel-close"
-            onClick={() => setRightPanelOpen(false)}
-            title={translate("files.hidePanel")}
-            aria-label={translate("files.hidePanel")}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" />
-            </svg>
-          </button>
-        </div>
-
-        {/* File content */}
-        <div style={{ flex: 1, overflow: "hidden", paddingBottom: "env(safe-area-inset-bottom)" }}>
-          {activeFileTab?.filePath ? (
-            <FileViewer
-              filePath={activeFileTab.filePath}
-              cwd={activeCwd ?? undefined}
-              sourceSessionId={activeFileTab.sourceSessionId}
-              gitRefreshKey={explorerRefreshKey}
-              initialDisplayMode={activeFileTab.initialDisplayMode}
-              onMentionLines={rightPanelOpen ? handleFileLineMention : undefined}
-              onOpenFile={(filePath) => handleOpenFile(
-                filePath,
-                getFileName(filePath),
-                { sourceSessionId: activeFileTab.sourceSessionId },
-              )}
-            />
-          ) : (
-            <div className="file-panel-empty-state">
-              <span className="file-panel-empty-icon" aria-hidden="true">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2h6.5A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5Z" />
-                </svg>
-              </span>
-              <strong>{translate("files.noneOpen")}</strong>
-              <span>{translate("files.choosePreview")}</span>
+          <div className="file-workbench-actions">
+              <div className="file-actions-menu-anchor" ref={fileActionsMenuRef}>
+                <button
+                  type="button"
+                  className="file-workbench-icon-button"
+                  onClick={() => {
+                    setFileActionsMenuOpen((open) => !open);
+                  }}
+                  title={translate("contextPanel.fileActions")}
+                  aria-label={translate("contextPanel.fileActions")}
+                  aria-haspopup="menu"
+                  aria-expanded={fileActionsMenuOpen}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
+                </button>
+                {fileActionsMenuOpen && (
+                  <div className="native-popover file-actions-menu" role="menu" aria-label={translate("contextPanel.fileActions")}>
+                    <button type="button" role="menuitem" disabled={!activeFileTab} onClick={() => void copyActiveFilePath()}>
+                      <span className="file-action-menu-icon" aria-hidden="true">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="8" y="8" width="11" height="11" rx="2" />
+                          <path d="M16 8V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h1" />
+                        </svg>
+                      </span>
+                      <span>{translate("contextPanel.copyPath")}</span>
+                    </button>
+                    <button type="button" role="menuitem" disabled={!activeFileTab} onClick={() => void copyActiveFileContent()}>
+                      <span className="file-action-menu-icon" aria-hidden="true">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="8" y="8" width="11" height="11" rx="2" />
+                          <path d="M16 8V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h1" />
+                        </svg>
+                      </span>
+                      <span>{translate("contextPanel.copyContents")}</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={!activeFileTab}
+                      onClick={() => {
+                        window.dispatchEvent(new Event("pi:file-toggle-wrap"));
+                        setFileActionsMenuOpen(false);
+                      }}
+                    >
+                      <span className="file-action-menu-icon" aria-hidden="true">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M4 7h11a4 4 0 0 1 4 4v1" />
+                          <path d="m16 9 3 3-3 3" />
+                          <path d="M4 17h8" />
+                        </svg>
+                      </span>
+                      <span>{translate("contextPanel.wordWrap")}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                className={`file-workbench-icon-button${fileTreeOpen ? " is-active" : ""}`}
+                onClick={() => setFileTreeOpen((open) => !open)}
+                title={fileTreeOpen ? translate("contextPanel.hideFileList") : translate("contextPanel.showFileList")}
+                aria-label={fileTreeOpen ? translate("contextPanel.hideFileList") : translate("contextPanel.showFileList")}
+                aria-pressed={fileTreeOpen}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /><path d="M15 7v10" /></svg>
+              </button>
             </div>
+          </div>
+        {/* Local files: preview on the left, project tree on the right. */}
+        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+          {/* Preview column */}
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ flex: 1, overflow: "hidden", paddingBottom: "env(safe-area-inset-bottom)" }}>
+              {activeFileTab?.filePath ? (
+                <FileViewer
+                  filePath={activeFileTab.filePath}
+                  cwd={activeCwd ?? undefined}
+                  sourceSessionId={activeFileTab.sourceSessionId}
+                  gitRefreshKey={explorerRefreshKey}
+                  initialDisplayMode={activeFileTab.initialDisplayMode}
+                  onMentionLines={rightPanelOpen ? handleFileLineMention : undefined}
+                  onOpenFile={(filePath) => handleOpenFile(
+                    filePath,
+                    getFileName(filePath),
+                    { sourceSessionId: activeFileTab.sourceSessionId },
+                  )}
+                />
+              ) : (
+                <div className="file-panel-empty-state">
+                  <span className="file-panel-empty-icon" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2h6.5A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5Z" />
+                    </svg>
+                  </span>
+                  <strong>{translate("files.noneOpen")}</strong>
+                  <span>{translate("files.choosePreview")}</span>
+                </div>
+              )}
+            </div>
+          </div>
+          {/* Explorer column — always-on project file tree */}
+          {activeCwd && fileTreeOpen && (
+            <>
+              <div
+                {...fileTreeResizer.separatorProps}
+                aria-controls="file-tree-panel"
+                className={`panel-resize-handle file-tree-resize-handle${fileTreeResizer.isResizing ? " is-resizing" : ""}`}
+                data-resize-handle="file-tree"
+                title={`${translate("layout.resizeFileTree")}: ${translate("layout.resizeHint")}`}
+              />
+              <div
+                ref={fileTreeResizer.panelRef}
+                id="file-tree-panel"
+                className="file-tree-panel"
+                style={{ "--file-tree-width": `${fileTreeResizer.width}px` } as React.CSSProperties}
+              >
+              <div className="context-panel-files-toolbar">
+                <div className="context-panel-file-filter-wrap">
+                  <input
+                    className="context-panel-file-filter"
+                    value={fileExplorerQuery}
+                    onChange={(event) => setFileExplorerQuery(event.target.value)}
+                    placeholder={translate("sidebar.filterFiles")}
+                    aria-label={translate("sidebar.filterFiles")}
+                    spellCheck={false}
+                  />
+                </div>
+                {changesCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setChangesCollapsed((v) => !v)}
+                    title={translate("sidebar.changedFiles", { count: changesCount })}
+                    aria-pressed={!changesCollapsed}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      width: 26, height: 26, padding: 0,
+                      background: changesCollapsed ? "none" : "var(--bg-selected)",
+                      border: "none",
+                      color: changesCollapsed ? "var(--text-dim)" : "var(--accent)",
+                      cursor: "pointer", borderRadius: 5,
+                    }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M3 12h6" />
+                      <path d="M15 12h6" />
+                    </svg>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => fileExplorerRef.current?.openUploadPicker()}
+                  disabled={explorerUploadBusy}
+                  title={translate("sidebar.uploadFilesTitle")}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 26, height: 26, padding: 0,
+                    background: "none", border: "none",
+                    color: "var(--text-dim)", cursor: "pointer", borderRadius: 5,
+                    opacity: explorerUploadBusy ? 0.6 : 1,
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <path d="m17 8-5-5-5 5" />
+                    <path d="M12 3v12" />
+                  </svg>
+                </button>
+              </div>
+              <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
+                <FileExplorer
+                  ref={fileExplorerRef}
+                  cwd={activeCwd}
+                  onOpenFile={handleOpenFile}
+                  selectedFilePath={activeFileTab?.filePath ?? null}
+                  refreshKey={explorerKey}
+                  searchQuery={fileExplorerQuery}
+                  onAtMention={(rel, isDir) => {
+                    chatInputRef.current?.insertText(buildAtMentionText(rel, isDir));
+                  }}
+                  onAtMentions={(rels) => {
+                    const mentions = buildFileAtMentionsText(rels);
+                    if (mentions) chatInputRef.current?.insertText(mentions);
+                  }}
+                  onUploadBusyChange={setExplorerUploadBusy}
+                  changesCollapsed={changesCollapsed}
+                  onChangesCountChange={setChangesCount}
+                />
+              </div>
+              </div>
+            </>
           )}
         </div>
       </div>

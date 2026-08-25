@@ -20,7 +20,7 @@ async function liveSessionRows(scanned: SessionInfo[]): Promise<SessionInfo[]> {
       ...snapshot,
       ...(parentSessionPath ? { parentSessionId: pathToId.get(sessionPathKey(parentSessionPath)) } : {}),
       projectRoot: project?.projectRoot ?? snapshot.cwd,
-      ...(project?.isWorktree && project.branch ? { worktreeBranch: project.branch } : {}),
+      ...(project?.branch ? { worktreeBranch: project.branch } : {}),
     };
   }));
 }

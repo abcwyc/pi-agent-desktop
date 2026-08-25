@@ -48,6 +48,17 @@ const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
   diff: "Diff",
 };
 
+function getDefaultDisplayMode(filePath: string, initialDisplayMode?: DisplayMode): DisplayMode {
+  if (initialDisplayMode === "diff") return "diff";
+
+  const extension = getFileExt(filePath);
+  if (extension === "md" || extension === "mdx" || extension === "html" || extension === "htm") {
+    return "preview";
+  }
+
+  return initialDisplayMode ?? "source";
+}
+
 const FILE_CODE_STYLE: CSSProperties = {
   fontFamily: "var(--font-mono)",
   fontSize: 13,
@@ -193,7 +204,7 @@ function SourceCodeRenderer({ rows, stylesheet, useInlineStyles, wrapLines }: So
 
 function getFileApiUrl(
   filePath: string,
-  type: "read" | "download" | "meta" | "preview" | "watch",
+  type: "read" | "download" | "meta" | "preview" | "serve" | "watch",
   sourceSessionId?: string | null,
   params: Record<string, string | number | undefined> = {},
 ): string {
@@ -870,18 +881,39 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
   const { isDark } = useTheme();
   const { t } = useI18n();
   const [data, setData] = useState<FileData | null>(null);
+  const [loadedFilePath, setLoadedFilePath] = useState<string | null>(null);
   const [gitDiff, setGitDiff] = useState<GitFileDiffResponse | null>(null);
   const [gitDiffLoading, setGitDiffLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [displayMode, setDisplayMode] = useState<DisplayMode>("source");
+  const displayModeKey = `${filePath}\u0000${initialDisplayMode ?? ""}`;
+  const defaultDisplayMode = getDefaultDisplayMode(filePath, initialDisplayMode);
+  const [displayModeState, setDisplayModeState] = useState<{ key: string; mode: DisplayMode }>(() => ({
+    key: displayModeKey,
+    mode: defaultDisplayMode,
+  }));
+  // Derive the mode synchronously from the current file. This prevents the
+  // previous file's mode from rendering for one frame while a new file loads.
+  const displayMode = displayModeState.key === displayModeKey
+    ? displayModeState.mode
+    : defaultDisplayMode;
+  const setDisplayMode = useCallback((mode: DisplayMode) => {
+    setDisplayModeState({ key: displayModeKey, mode });
+  }, [displayModeKey]);
   const [wrapLines, setWrapLines] = useState(false);
   const [watching, setWatching] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [previewReloadKey, setPreviewReloadKey] = useState(0);
   const esRef = useRef<EventSource | null>(null);
   const gitDiffRequestRef = useRef(0);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [selectedLineRange, setSelectedLineRange] = useState<SelectedLineRange | null>(null);
+
+  useEffect(() => {
+    const toggleWrap = () => setWrapLines((value) => !value);
+    window.addEventListener("pi:file-toggle-wrap", toggleWrap);
+    return () => window.removeEventListener("pi:file-toggle-wrap", toggleWrap);
+  }, []);
 
   const fetchContent = useCallback((filePath: string) => {
     return fetch(getFileApiUrl(filePath, "read", sourceSessionId))
@@ -889,14 +921,17 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
       .then((d: FileData & { error?: string }) => {
         if (d.error) {
           setError(d.error);
+          setLoadedFilePath(filePath);
           return null;
         }
         setError(null);
         setData(d);
+        setLoadedFilePath(filePath);
         return d;
       })
       .catch((e) => {
         setError(String(e));
+        setLoadedFilePath(filePath);
         return null;
       });
   }, [sourceSessionId]);
@@ -929,7 +964,6 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
     setError(null);
     setData(null);
     setGitDiff(null);
-    setDisplayMode("source");
     setWrapLines(false);
     setWatching(false);
 
@@ -951,6 +985,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
     es.addEventListener("change", () => {
       void fetchContent(filePath);
       void fetchGitDiff(filePath);
+      setPreviewReloadKey((value) => value + 1);
     });
 
     es.addEventListener("error", () => {
@@ -971,18 +1006,14 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
     void fetchGitDiff(filePath);
   }, [fetchGitDiff, filePath, gitRefreshKey]);
 
-  useEffect(() => {
-    if (data?.language === "markdown" && initialDisplayMode !== "diff") {
-      setDisplayMode("preview");
-    }
-  }, [data?.language, initialDisplayMode]);
-
   const hasGitDiff = gitDiff?.supported === true && typeof gitDiff.patch === "string";
   const isDeletedDiff = hasGitDiff && gitDiff.status === "deleted";
 
   useEffect(() => {
-    if (!hasGitDiff && displayMode === "diff") setDisplayMode("source");
-  }, [displayMode, hasGitDiff]);
+    if (!hasGitDiff && displayMode === "diff") {
+      setDisplayMode(defaultDisplayMode === "diff" ? "source" : defaultDisplayMode);
+    }
+  }, [defaultDisplayMode, displayMode, hasGitDiff, setDisplayMode]);
 
   useEffect(() => {
     if (!isDeletedDiff || !esRef.current) return;
@@ -1003,7 +1034,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
       autoDiffAppliedRef.current = true;
       setDisplayMode("diff");
     }
-  }, [initialDisplayMode, hasGitDiff]);
+  }, [hasGitDiff, initialDisplayMode, setDisplayMode]);
 
   const markdownPreview = useMemo(
     () => (data?.language === "markdown" ? normalizeDisplayMath(data.content) : ""),
@@ -1061,7 +1092,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [displayMode, mentionLineRange, onMentionLines]);
 
-  if (loading || (initialDisplayMode === "diff" && gitDiffLoading && !data)) {
+  if (loading || loadedFilePath !== filePath || (initialDisplayMode === "diff" && gitDiffLoading && !data)) {
     return <FileViewerStatus kind="loading" message={getFileName(filePath)} />;
   }
 
@@ -1085,6 +1116,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
   const markdownDirectory = getFileDirectory(filePath);
   const lines = content.split("\n");
   const effectiveDisplayMode = isDeletedDiff ? "diff" : displayMode;
+  const htmlPreviewUrl = getFileApiUrl(filePath, "serve", sourceSessionId, { v: previewReloadKey });
   const displayModes: DisplayMode[] = isDeletedDiff
     ? ["diff"]
     : [
@@ -1168,10 +1200,10 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
           <DiffView patch={gitDiff.patch!} />
         ) : isHtml && effectiveDisplayMode === "preview" ? (
           <iframe
-            srcDoc={content}
-            sandbox=""
+            key={htmlPreviewUrl}
+            src={htmlPreviewUrl}
             style={{ width: "100%", height: "100%", border: "none", background: "var(--bg)" }}
-             title={t("i18n.htmlPreview")}
+            title={t("i18n.htmlPreview")}
           />
         ) : isMarkdown && effectiveDisplayMode === "preview" ? (
           <div

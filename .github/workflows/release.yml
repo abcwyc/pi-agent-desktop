@@ -103,33 +103,31 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.3.3
+            ## Pi Agent Desktop 0.4.0
 
-            This release adds a user stylesheet so the UI can be customized without rebuilding the app.
+            This release includes the latest desktop UI improvements and layout refinements.
 
-            ### New features
+            ### Improvements
 
-            - Added `custom.css` support: fonts, colors, and sizes can now be overridden by editing `~/.pi/agent/desktop/custom.css`. The stylesheet is loaded last so user rules win the cascade, and edits apply after reloading the window (Ctrl+R / Cmd+R).
-            - Settings → Appearance gains an "Open custom.css" button (desktop app) that creates a commented starter file on first use and reveals it in your editor. Web users can create the file at the same path manually.
-            - Kept the bundled Pi engine at 0.84.2 and pi-web at 0.8.7.
-            - Verified the full test suite, TypeScript checks, and lint before packaging.
+            - Refined the file-tree panel and resizing behavior.
+            - Improved panel alignment, borders, and responsive layout behavior.
+            - Bundles the Pi engine at 0.84.3 and pi-web at 0.8.7.
 
-            Bundled components: pi 0.84.2, pi-web 0.8.7.
+            Bundled components: pi 0.84.3, pi-web 0.8.7.
 
             ---
 
-            ## Pi Agent Desktop 0.3.3
+            ## Pi Agent Desktop 0.4.0
 
-            本次发布新增用户自定义样式表，无需重新构建应用即可定制界面。
+            本次发布包含最新的桌面端界面改进与布局优化。
 
-            ### 新功能
+            ### 改进
 
-            - 新增 `custom.css` 支持：编辑 `~/.pi/agent/desktop/custom.css` 即可自定义字体、颜色与尺寸。该样式表最后加载，用户规则优先级最高；保存后刷新窗口（Ctrl+R / Cmd+R）即可生效。
-            - 设置 → 外观新增“打开 custom.css”按钮（桌面端），首次使用会创建带注释的模板文件并在编辑器中打开。网页端用户可按相同路径手动创建该文件。
-            - 内置 Pi 引擎保持在 0.84.2，pi-web 保持在 0.8.7。
-            - 打包前已完成完整测试、TypeScript 检查和 lint 验证。
+            - 优化文件树面板及其宽度调整交互。
+            - 改进面板对齐、边框和响应式布局表现。
+            - 内置 Pi 引擎升级至 0.84.3，pi-web 保持在 0.8.7。
 
-            内置组件版本：pi 0.84.2、pi-web 0.8.7。
+            内置组件版本：pi 0.84.3、pi-web 0.8.7。
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

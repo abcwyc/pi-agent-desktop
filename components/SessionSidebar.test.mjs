@@ -27,3 +27,10 @@ test("streams running sessions and reconnects after visibility or network change
   assert.match(source, /window\.addEventListener\("online", connect\)/);
   assert.match(source, /source\?\.close\(\)/);
 });
+
+test("re-adding a removed project clears only its sidebar marker", () => {
+  assert.match(source, /const activateProject = useCallback\(\(cwd: string\) =>/);
+  assert.match(source, /if \(!previous\.has\(projectRoot\)\) return previous;/);
+  assert.match(source, /next\.delete\(projectRoot\);/);
+  assert.match(source, /onSelectCwd=\{activateProject\}/);
+});
