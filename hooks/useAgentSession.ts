@@ -1695,7 +1695,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     try {
       const result = await sendAgentCommand<CompactCommandResult>(sid, { type: "compact" });
       setCompactResult(readCompactResult(result, "manual"));
-      await loadSession(sid, true);
+      // includeState so the live contextUsage (which pi nulls right after a
+      // compaction until the next LLM response) is refreshed too — otherwise
+      // the context-usage ring and stats panel keep showing the pre-compact %.
+      await loadSession(sid, true, true);
     } catch (e) {
       setCompactError(e instanceof Error ? e.message : String(e));
       setCompactResult(null);
@@ -1762,7 +1765,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             ...(args ? { customInstructions: args } : {}),
           });
           setCompactResult(readCompactResult(result, "manual"));
-          if (await loadSession(sid, true)) promoteNewSession();
+          // includeState to refresh the live contextUsage after compaction.
+          if (await loadSession(sid, true, true)) promoteNewSession();
           return complete({ handled: true, message: "Compacted context" });
         }
 
