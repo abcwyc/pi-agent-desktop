@@ -11,7 +11,11 @@ import type {
   UserMessage,
 } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
-import { extractTodoPanelState, type TodoPanelState } from "@/lib/todo-state";
+import {
+  parseTodoWidgetLines,
+  TODO_WIDGET_KEY,
+  type TodoPanelState,
+} from "@/lib/todo-state";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { fetchWithRetry } from "@/lib/fetch-timeout";
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
@@ -451,6 +455,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [extensionCustomUi, setExtensionCustomUi] = useState<ExtensionUiCustomRequest | null>(null);
   const [extensionStatuses, setExtensionStatuses] = useState<ExtensionStatusItem[]>([]);
   const [extensionWidgets, setExtensionWidgets] = useState<ExtensionWidgetItem[]>([]);
+  // Live todo plan pushed over the desktop-owned todo widget protocol
+  // (`setWidget` with `TODO_WIDGET_KEY`). Preferred over the message-derived
+  // plan when present; cleared when the widget is cleared.
+  const [todoWidgetState, setTodoWidgetState] = useState<TodoPanelState | null>(null);
   const [queuedMessages, setQueuedMessages] = useState<QueuedMessages>({ steering: [], followUp: [] });
 
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -996,6 +1004,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         });
         break;
       case "setWidget":
+        if (request.widgetKey === TODO_WIDGET_KEY) {
+          // Desktop-owned todo widget protocol: parse the structured lines and
+          // feed the todo panel directly instead of the generic widget list.
+          const parsed = parseTodoWidgetLines(request.widgetLines);
+          setTodoWidgetState(parsed ? { tasks: parsed.tasks } : null);
+          break;
+        }
         setExtensionWidgets((prev) => {
           const rest = prev.filter((item) => item.key !== request.widgetKey);
           return request.widgetLines
@@ -1439,6 +1454,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setIsCompacting(true);
         setCompactError(null);
         setCompactResult(null);
+        // Compaction-reset for the widget-only todo panel: the extension does
+        // not re-emit setWidget on compact (no session_start/session_tree
+        // fires), so without this the panel keeps the pre-compact snapshot
+        // forever. Clearing here mirrors the old message-derived
+        // extractTodoPanelState reset (customType:"compaction"); the extension
+        // re-emits the live plan on the next todo write / before_agent_start.
+        setTodoWidgetState(null);
         break;
       case "auto_compaction_end":
       case "compaction_end":
@@ -2173,13 +2195,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setSessionStatsOverride(null);
   }, [messages.length, contextUsage?.tokens, contextUsage?.percent, contextUsage?.contextWindow]);
 
-  // Latest pi-todo plan carried by the session's messages (tool results and
-  // pi-todo-state custom messages). Recomputed whenever the message list
-  // changes, so the sidebar panel tracks the agent's plan live while streaming.
-  const todoState: TodoPanelState | null = useMemo(
-    () => extractTodoPanelState(messages),
-    [messages],
-  );
+  // Latest pi-todo plan for the sidebar panel, fed exclusively by the
+  // desktop-owned todo widget protocol (`setWidget` with `TODO_WIDGET_KEY`).
+  // Recomputed whenever the live widget changes, so the sidebar panel tracks
+  // the agent's plan live. `null` when no todo widget has been pushed.
+  const todoState: TodoPanelState | null = todoWidgetState;
 
   return {
     // State

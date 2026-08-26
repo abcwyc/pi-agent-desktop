@@ -1605,9 +1605,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         </div>
       ) : (
         <div className="sidebar-project-tree" onScroll={handleListScroll}>
-          <div className="sidebar-project-tree-header">
-            <span className="sidebar-project-tree-title">{t("sidebar.projects")}</span>
-            <div className="sidebar-project-tree-tools">
+          <div className="sidebar-section-header">
+            <span className="sidebar-section-title">{t("sidebar.projects")}</span>
+            <div className="sidebar-section-tools">
               <button
                 className="sidebar-project-tree-menu"
                 title={t("sidebar.moreActions")}

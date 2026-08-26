@@ -1,4 +1,4 @@
-# Todo Protocol
+# Todo Widget Protocol
 
 A public, desktop-owned contract for showing a todo plan in pi-agent-desktop's
 left-nav panel. Extensions **opt in**: if your extension emits this protocol, its
@@ -6,31 +6,30 @@ todo state renders in the desktop panel for free. If it doesn't, the desktop
 ignores it entirely.
 
 pi provides no todo protocol and extension schemas differ, so this is
-pi-agent-desktop's own declaration (ADR 0002). The desktop only reads this
-protocol — it never parses a specific extension's schema, uses no LLM, and has
-no hand-written adapters.
+pi-agent-desktop's own declaration. The desktop only reads this protocol — it
+never parses a specific extension's schema, uses no LLM, and has no hand-written
+adapters.
 
 ## Contract
 
-Emit a **custom message** (not a tool result, not an entry) with:
+Emit an **extension UI `setWidget` request** (the `extension_ui_request` RPC
+channel — the only channel the panel reads) with:
 
 | Field | Value |
 |---|---|
-| `customType` | `"todo"` |
-| `details` | a `TodoState` object (below) |
-| `content` | `""` or a minimal marker (it becomes a `user` message in LLM context, so keep it empty — the data lives in `details`, which never enters context) |
-| `display` | `false` |
-| `options` | `{ triggerTurn: false }` (or omit the options — avoid `triggerTurn: true` / `deliverAs: "steer"` / `deliverAs: "followUp"`, which force it into the agent's active turn or start a new one; `nextTurn` only attaches to the next user prompt) |
+| `widgetKey` | `"todo"` (`TODO_WIDGET_KEY`) |
+| `widgetLines` | one JSON `TodoTask` per line (`serializeTodoWidgetLines`) |
+| `widgetLines` = `undefined` | clears the live widget / hides the panel |
+| `placement` | `"aboveEditor"` (default) or `"belowEditor"` |
 
 Use the extension API:
 
 ```ts
-pi.sendMessage({
-  customType: "todo",
-  content: "",
-  display: false,
-  details: todoState,      // { tasks: TodoTask[] }
-}, { triggerTurn: false });
+ctx.ui.setWidget(
+  TODO_WIDGET_KEY,   // "todo" — desktop-reserved
+  state.tasks.map((task) => JSON.stringify(task)),   // [{ key, subject?, status? }]
+  { placement: "aboveEditor" },
+);
 ```
 
 ### TodoState shape (minimal)
@@ -51,30 +50,34 @@ The contract is intentionally minimal: the desktop is a read-only renderer, so i
 only needs a task list to draw. Any extra fields an extension carries (`revision`,
 `version`, `schemaVersion`, `protocolVersion`, `description`, `dependsOn`, ...)
 are **tolerated and ignored** — never validated, never required. Emit your
-native state as-is; no mapping needed.
+native tasks as-is; no mapping needed.
 
 ### Rules (mirror the desktop's validation)
 
-- `tasks` must be an array.
+- `widgetLines` is a `string[]`; each line is one JSON `TodoTask`.
+- Non-JSON / blank / invalid-task lines are skipped (`parseTodoWidgetLines`).
+- An empty or all-invalid payload hides the panel.
 - Every task needs a string `key`; `status`, when present, must be one of the three values.
-- Messages are in branch order, so the desktop picks the **last conforming** plan as current; earlier ones are history.
-- The panel hides only when the session has no plan. The extension drops completed tasks at the next turn's `before_agent_start` (to keep the LLM's context lean); the desktop's reader re-inserts them at their original position struck-through (`extractTodoPanelState`), so the list stays one ordered T1→T5 plan and progress survives across turns. A **compaction summary resets the accumulated history** (pre-compaction tasks are never re-inserted as ghosts); a natural empty plan (all tasks finished, no compaction) still keeps the struck-through done list.
+- **Not durable.** `setWidget` is fire-and-forget — it is never written to the
+  session file and carries no progress history. The panel shows the latest
+  snapshot only. On session open the extension's `session_start` restore re-emits
+  the current plan, so the latest snapshot reappears.
 
-## Why `sendMessage` + `details` and not the alternatives
+## Why `setWidget` and not the alternatives
 
-- **`details` carries the data** — `convertToLlm` only reads `content`, so the
-  canonical state never enters the LLM context. `content` stays empty so the
-  model sees at most a harmless empty `user` message.
-- **`custom_message` entries reach the desktop** — the desktop's
-  `entryToUiMessage` maps them into `messages` with `details` intact, so the
-  panel reads them live with zero desktop changes.
-- Not `appendEntry` (`custom` entries are excluded from the desktop's message
-  list) and not a tool result (tool results carry the extension's own schema,
-  which the desktop refuses to parse).
+- **`setWidget` (extension_ui_request) reaches the panel live** — the desktop's
+  `handleExtensionUiRequest` routes `widgetKey === "todo"` straight into the
+  sidebar panel, no session round-trip.
+- **Custom messages / tool results are not parsed.** The desktop deliberately
+  reads no extension schema; tool results "carry the extension's own schema,
+  which the desktop refuses to parse." There is no durable message channel for
+  the todo panel anymore — the panel is widget-only.
+- `ctx.ui.custom()` is a **no-op in RPC mode** (pi's `RpcExtensionUIRequest` has
+  no `custom` variant), and `setWidget` accepts only `string[]` (component
+  factories are silently dropped in RPC).
 
 ## Reference
 
-- Reader: `lib/todo-state.ts` — `extractTodoPanelState()` (single ordered list, completed re-inserted; resets at compaction summaries), `extractTodoState()` (raw current plan), `TODO_PROTOCOL_TYPE`.
-- UI: `components/TodoPanel.tsx`.
+- Protocol: `lib/todo-state.ts` — `TODO_WIDGET_KEY`, `serializeTodoWidgetLines()`, `parseTodoWidgetLines()`.
+- UI: `components/TodoPanel.tsx`; routing: `hooks/useAgentSession.ts` (`setWidget` case + `todoState`).
 - Working example: `examples/todo-extension.ts` — copy to `~/.pi/agent/extensions/`.
-- Decision history: `docs/adr/0002-todo-protocol.md`.

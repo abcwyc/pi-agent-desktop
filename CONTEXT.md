@@ -21,16 +21,17 @@ returns early when `content` is not an array. So rich interactive TUI widgets ar
 invisible in the desktop; only text-line widgets reach it, rendered as static text.
 _Avoid_: todo panel, todo list, "the todo widget"
 
-**Todo protocol**:
-The desktop-owned public contract that shows a todo plan in the panel: a custom
-message with `customType: "todo"` (a message type, not a tool name — no collision
-with the `todo` tool) carrying a minimal task list in `details`, emitted via
-`sendMessage` with `display: false` and `{ triggerTurn: false }`. The contract is
-minimal by design — only `tasks: { key, subject?, status? }[]` is enforced; every
-other field an extension carries (`revision`, `version`, `schemaVersion`,
-`dependsOn`, ...) is ignored. Data lives in `details` because `convertToLlm`
-reads only `content`, so the state never enters the LLM context. Extensions opt
-in by conforming; the desktop parses nothing else (ADR 0002, docs/todo-protocol.md).
+**Todo widget protocol**:
+The desktop-owned public contract that shows a todo plan in the panel: a
+`setWidget` extension UI request (extension_ui_request) whose `widgetKey` is the
+desktop-reserved `"todo"` (`TODO_WIDGET_KEY`), with the plan encoded in
+`widgetLines` as one JSON `TodoTask` per line. The contract is minimal by design
+— only `tasks: { key, subject?, status? }[]` is enforced; every other field an
+extension carries (`revision`, `version`, `schemaVersion`, `dependsOn`, ...) is
+ignored. The panel is **widget-only**: it reads no custom message, tool result,
+or any other extension schema (docs/todo-protocol.md). It is fire-and-forget and
+not durable — the panel shows the latest snapshot; on session open the
+extension's `session_start` restore re-emits it.
 _Avoid_: "the pi-todo state", "the extension's schema"
 
 **Todo panel**:

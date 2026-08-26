@@ -1,20 +1,24 @@
-// Todo protocol reference extension.
+// Todo widget protocol reference extension.
 //
 // A self-contained example: registers a `todo` tool the agent uses to maintain
-// a plan, and emits the pi-agent-desktop todo protocol after every write so the
-// desktop's left-nav panel shows it live.
+// a plan, and emits the pi-agent-desktop todo widget protocol after every write
+// so the desktop's left-nav panel shows it live.
 //
 // Install: copy to ~/.pi/agent/extensions/todo-protocol.ts
 //
 // If you already have a todo tool (e.g. @99percentpeople/pi-todo), you don't
-// need this whole file — just add the emit step to it (see emitTodo() below).
-// The protocol name "todo" is a customMessage customType, NOT a tool name, so
-// it does not collide with a `todo` tool.
+// need this whole file — just add the emit step to it (see emitTodoWidget()
+// below). The protocol key "todo" is a setWidget widgetKey (an
+// extension_ui_request), NOT a tool name, so it does not collide with a `todo`
+// tool.
+//
+// The desktop reads ONLY the extension_ui_request (setWidget) channel — the
+// widgetKey must match TODO_WIDGET_KEY in lib/todo-state.ts.
 
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 
-const CUSTOM_TYPE = "todo"; // must match TODO_PROTOCOL_TYPE in lib/todo-state.ts
+const WIDGET_KEY = "todo"; // must match TODO_WIDGET_KEY in lib/todo-state.ts
 const MAX_TASKS = 50;
 
 // The minimal shape the desktop validates (see docs/todo-protocol.md): only
@@ -24,17 +28,16 @@ function todoState(tasks) {
   return { tasks };
 }
 
-// Emit the protocol. Data goes in `details` (never enters LLM context);
-// `content` stays empty so the model sees nothing.
-function emitTodo(pi, state) {
-  pi.sendMessage(
-    {
-      customType: CUSTOM_TYPE,
-      content: "",
-      display: false,
-      details: state,
-    },
-    { triggerTurn: false },
+// Emit the protocol over the extension UI `setWidget` RPC channel: one JSON
+// `TodoTask` per line under the desktop-reserved key. Fire-and-forget; the
+// desktop parses the lines into the sidebar panel. Pass `undefined` to clear.
+function emitTodoWidget(ctx, state) {
+  ctx.ui.setWidget(
+    WIDGET_KEY,
+    state.tasks.length > 0
+      ? state.tasks.map((task) => JSON.stringify(task))
+      : undefined,
+    { placement: "aboveEditor" },
   );
 }
 
@@ -45,9 +48,9 @@ function statusOf(v) {
 export default function (pi) {
   let state = todoState([]);
 
-  function setState(next) {
+  function setState(ctx, next) {
     state = next;
-    emitTodo(pi, state);
+    emitTodoWidget(ctx, state);
   }
 
   pi.registerTool({
@@ -74,7 +77,7 @@ export default function (pi) {
       ),
     }),
     executionMode: "sequential",
-    async execute(_toolCallId, params) {
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const next = params.tasks.slice(0, MAX_TASKS).map((t) => ({
         key: t.key,
         ...(t.subject !== undefined ? { subject: t.subject } : {}),
@@ -82,7 +85,7 @@ export default function (pi) {
         ...(t.status !== undefined ? { status: statusOf(t.status) } : {}),
         ...(t.dependsOn !== undefined ? { dependsOn: t.dependsOn } : {}),
       }));
-      setState(todoState(next));
+      setState(ctx, todoState(next));
       return { content: [{ type: "text", text: `Todo plan updated (${next.length} tasks).` }] };
     },
   });

@@ -255,20 +255,20 @@ body {
   border-radius: 8px;
 }
 .sidebar-project-tree.is-scrolling::-webkit-scrollbar-thumb { background: var(--border); }
- .sidebar-project-tree-header {
+ .sidebar-section-header {
   display: flex;
   align-items: center;
   min-height: 34px;
   padding: 4px 12px 4px 16px;
 }
-.sidebar-project-tree-title {
+.sidebar-section-title {
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 650;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-.sidebar-project-tree-tools {
+.sidebar-section-tools {
   display: flex;
   align-items: center;
   gap: 4px;

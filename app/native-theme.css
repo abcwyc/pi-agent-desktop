@@ -1057,7 +1057,7 @@ html.dark .sidebar-view-switcher-thumb {
   min-height: 0;
 }
 
-.sidebar-project-tree-header {
+.sidebar-section-header {
   display: flex;
   align-items: center;
   height: 26px;
@@ -1065,7 +1065,7 @@ html.dark .sidebar-view-switcher-thumb {
   flex: 0 0 auto;
 }
 
-.sidebar-project-tree-title {
+.sidebar-section-title {
   flex: 1 1 auto;
   font-size: 10.5px;
   font-weight: 600;
@@ -1074,7 +1074,7 @@ html.dark .sidebar-view-switcher-thumb {
   color: var(--text-dim);
 }
 
-.sidebar-project-tree-tools {
+.sidebar-section-tools {
   display: flex;
   align-items: center;
   gap: 2px;
