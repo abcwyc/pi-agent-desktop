@@ -36,8 +36,14 @@ _Avoid_: "the pi-todo state", "the extension's schema"
 **Todo panel**:
 The desktop-specific left-nav surface that renders the active session's canonical
 **Todo protocol** object (read-only). It is a renderer for protocol-conformant data
-only — never a writer, never tied to a specific extension. Hidden when the session
-has no plan.
+only — never a writer, never tied to a specific extension. Shows one ordered
+T1→T5 list: the extension drops completed tasks from its lean live plan at the
+next turn's `before_agent_start`, and the panel's reader (`extractTodoPanelState`)
+re-inserts them at their original position struck-through, so progress stays
+visible and the list never silently shrinks. A compaction summary resets the
+accumulated history (pre-compaction tasks are never re-inserted as ghosts); a
+natural empty plan still keeps the struck-through done list. Hidden when the
+session has no plan.
 
 **Extension UI request**:
 The RPC event type (`extension_ui_request`) that carries extension UI operations from

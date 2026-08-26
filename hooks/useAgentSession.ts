@@ -11,7 +11,7 @@ import type {
   UserMessage,
 } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
-import { extractTodoState, type TodoState } from "@/lib/todo-state";
+import { extractTodoPanelState, type TodoPanelState } from "@/lib/todo-state";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { fetchWithRetry } from "@/lib/fetch-timeout";
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
@@ -2176,7 +2176,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // Latest pi-todo plan carried by the session's messages (tool results and
   // pi-todo-state custom messages). Recomputed whenever the message list
   // changes, so the sidebar panel tracks the agent's plan live while streaming.
-  const todoState: TodoState | null = useMemo(() => extractTodoState(messages), [messages]);
+  const todoState: TodoPanelState | null = useMemo(
+    () => extractTodoPanelState(messages),
+    [messages],
+  );
 
   return {
     // State

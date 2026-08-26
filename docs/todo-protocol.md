@@ -58,7 +58,7 @@ native state as-is; no mapping needed.
 - `tasks` must be an array.
 - Every task needs a string `key`; `status`, when present, must be one of the three values.
 - Messages are in branch order, so the desktop picks the **last conforming** plan as current; earlier ones are history.
-- The panel hides when the plan is empty (`tasks: []`) or absent.
+- The panel hides only when the session has no plan. The extension drops completed tasks at the next turn's `before_agent_start` (to keep the LLM's context lean); the desktop's reader re-inserts them at their original position struck-through (`extractTodoPanelState`), so the list stays one ordered T1→T5 plan and progress survives across turns. A **compaction summary resets the accumulated history** (pre-compaction tasks are never re-inserted as ghosts); a natural empty plan (all tasks finished, no compaction) still keeps the struck-through done list.
 
 ## Why `sendMessage` + `details` and not the alternatives
 
@@ -74,7 +74,7 @@ native state as-is; no mapping needed.
 
 ## Reference
 
-- Reader: `lib/todo-state.ts` — `extractTodoState()`, `TODO_PROTOCOL_TYPE`.
+- Reader: `lib/todo-state.ts` — `extractTodoPanelState()` (single ordered list, completed re-inserted; resets at compaction summaries), `extractTodoState()` (raw current plan), `TODO_PROTOCOL_TYPE`.
 - UI: `components/TodoPanel.tsx`.
 - Working example: `examples/todo-extension.ts` — copy to `~/.pi/agent/extensions/`.
 - Decision history: `docs/adr/0002-todo-protocol.md`.

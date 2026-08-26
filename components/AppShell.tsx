@@ -7,7 +7,7 @@ import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar } from "./SessionSidebar";
 import { ChatWindow } from "./ChatWindow";
 import { TodoPanel } from "./TodoPanel";
-import type { TodoState } from "@/lib/todo-state";
+import type { TodoPanelState } from "@/lib/todo-state";
 import { selectProjectDirectoryNative } from "./ProjectPicker";
 import { clearDraft } from "@/lib/draft-store";
 import { TabBar, type Tab } from "./TabBar";
@@ -94,7 +94,7 @@ export function AppShell() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [sessionKey, setSessionKey] = useState(0);
   // Latest pi-todo plan of the active chat, lifted up for the left-nav panel.
-  const [activeTodoState, setActiveTodoState] = useState<TodoState | null>(null);
+  const [activeTodoState, setActiveTodoState] = useState<TodoPanelState | null>(null);
   // Reset when the selected session changes; the chat reloads the new session's
   // messages and re-emits its todo plan (or null) via onTodoStateChange.
   useEffect(() => { setActiveTodoState(null); }, [selectedSession?.id]);

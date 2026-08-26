@@ -1,4 +1,4 @@
-import type { TodoState, TodoStatus } from "@/lib/todo-state";
+import type { TodoPanelState, TodoStatus } from "@/lib/todo-state";
 
 const STATUS_GLYPH: Record<TodoStatus, string> = {
   pending: "○",
@@ -15,10 +15,12 @@ const STATUS_COLOR: Record<TodoStatus, string> = {
 /**
  * Left-nav panel showing the active session's todo plan (the state the
  * `@99percentpeople/pi-todo` extension persists in the session file). Renders
- * the same ○ / ◐ / ✓ status glyphs as the TUI widget. Hidden when the session
- * has no plan.
+ * the same ○ / ◐ / ✓ status glyphs as the TUI widget. Completed tasks the
+ * extension already dropped from its lean live plan are re-inserted at their
+ * original position by the reader, so the list stays one ordered T1→T5 plan
+ * with finished items struck through. Hidden when the session has no plan.
  */
-export function TodoPanel({ state }: { state: TodoState | null }) {
+export function TodoPanel({ state }: { state: TodoPanelState | null }) {
   const tasks = state?.tasks ?? [];
   if (tasks.length === 0) return null;
 
@@ -94,7 +96,17 @@ export function TodoPanel({ state }: { state: TodoState | null }) {
                 {task.subject ?? task.key}
               </span>
               {task.dependsOn && task.dependsOn.length > 0 && (
-                <span style={{ color: "var(--text-dim)", flexShrink: 0, fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 110 }}>
+                <span
+                  style={{
+                    color: "var(--text-dim)",
+                    flexShrink: 0,
+                    fontSize: 10,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    maxWidth: 110,
+                  }}
+                >
                   ← {task.dependsOn.join(", ")}
                 </span>
               )}
