@@ -151,8 +151,6 @@ export const enLocale: LocalePlugin = {
     "sidebar.moreActions": "Project actions",
     "sidebar.newChat": "New Session",
     "sidebar.archiveProject": "Remove project",
-    "sidebar.restoreProject": "Add project back",
-    "sidebar.archivedProjects": "Removed",
     "contextPanel.tabOpen": "Open",
     "contextPanel.tabFiles": "Files",
     "contextPanel.tabSearch": "Search",

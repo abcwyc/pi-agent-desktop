@@ -1202,6 +1202,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
           <iframe
             key={htmlPreviewUrl}
             src={htmlPreviewUrl}
+            sandbox="allow-same-origin"
             style={{ width: "100%", height: "100%", border: "none", background: "var(--bg)" }}
             title={t("i18n.htmlPreview")}
           />

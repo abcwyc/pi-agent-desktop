@@ -15,7 +15,7 @@ import {
   filterFileEntries, filterSessionEntries,
   type AtQueryMatch, type FileIndexEntry, type HashQueryMatch, type SessionMentionEntry,
 } from "@/lib/file-fuzzy";
-import { extractSessionReferenceLabels, SESSION_REFERENCE_PATTERN } from "@/lib/session-reference";
+import { resolveSessionReferences } from "@/lib/session-reference";
 import type { SessionInfo } from "@/lib/types";
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -139,52 +139,6 @@ function getProjectLabel(projectPath: string | null | undefined): string | null 
   const normalized = projectPath?.replace(/[\\/]+$/, "");
   if (!normalized) return null;
   return normalized.split(/[\\/]/).pop() ?? normalized;
-}
-
-async function resolveSessionReferences(message: string, selectedTargets: ReadonlyMap<string, string>): Promise<string> {
-  const labels = extractSessionReferenceLabels(message);
-  if (labels.length === 0) return message;
-
-  const fallbackTargets = new Map<string, string>();
-  const missingLabels = labels.filter((label) => !selectedTargets.has(label));
-  if (missingLabels.length > 0) {
-    try {
-      const response = await fetch("/api/sessions");
-      if (response.ok) {
-        const data = await response.json() as { sessions?: SessionInfo[] };
-        for (const session of data.sessions ?? []) {
-          const name = session.name?.trim();
-          if (name && missingLabels.includes(name) && !fallbackTargets.has(name)) fallbackTargets.set(name, session.id);
-          if (!name && missingLabels.includes(session.firstMessage.trim()) && !fallbackTargets.has(session.firstMessage.trim())) {
-            fallbackTargets.set(session.firstMessage.trim(), session.id);
-          }
-        }
-      }
-    } catch {
-      // Keep unresolved tokens visible if the session list cannot be loaded.
-    }
-  }
-
-  const targetIds = labels
-    .map((label) => selectedTargets.get(label) ?? fallbackTargets.get(label))
-    .filter((id): id is string => Boolean(id));
-  const references = await Promise.all(targetIds.map(async (id) => {
-    try {
-      const response = await fetch(`/api/sessions/${encodeURIComponent(id)}/reference`);
-      if (!response.ok) return [id, ""] as const;
-      const data = await response.json() as { reference?: string };
-      return [id, data.reference ?? ""] as const;
-    } catch {
-      return [id, ""] as const;
-    }
-  }));
-  const byId = new Map(references);
-  return message.replace(SESSION_REFERENCE_PATTERN, (token, quotedLabel: string | undefined, plainLabel: string | undefined) => {
-    const label = quotedLabel ?? plainLabel;
-    if (!label) return token;
-    const id = selectedTargets.get(label) ?? fallbackTargets.get(label);
-    return id ? (byId.get(id) || token) : token;
-  });
 }
 
 function formatTokenCount(tokens: number): string {
