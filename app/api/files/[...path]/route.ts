@@ -51,6 +51,26 @@ const MAX_UPLOAD_REQUEST_BYTES = MAX_UPLOAD_TOTAL_BYTES + 1024 * 1024;
 const MAX_IMPORT_JSON_BYTES = 256 * 1024;
 const MAX_IMPORT_FILES = 100;
 const HTML_PREVIEW_MAX_BYTES = 10 * 1024 * 1024;
+// Local HTML previews are rendered in a same-origin iframe whose sandbox
+// attribute has no allow-scripts. This CSP is the defense-in-depth layer for
+// the raw bytes served to that iframe (and to its sibling resources): no
+// scripts, no network fetch, no forms, no nested frames. A local HTML file can
+// never reach the application's API surface, even if the sandbox attribute is
+// ever dropped by a future refactor.
+const HTML_PREVIEW_CSP = [
+  "default-src 'none'",
+  "script-src 'none'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "media-src 'self'",
+  "connect-src 'none'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-src 'none'",
+  "frame-ancestors 'self'",
+].join("; ");
 
 // MIME types needed when a local HTML document loads its own stylesheets and
 // scripts. The regular `read` endpoint returns JSON for text files, while the
@@ -437,12 +457,14 @@ function getContentDisposition(filePath: string, asDownload = false): string {
   return `${disposition}; filename="${fallback}"; filename*=UTF-8''${encodeHeaderValue(fileName)}`;
 }
 
-function streamFile(filePath: string, stat: fs.Stats, contentType: string, rangeHeader: string | null, asDownload = false): Response {
+function streamFile(filePath: string, stat: fs.Stats, contentType: string, rangeHeader: string | null, asDownload = false, extraHeaders: Record<string, string> = {}): Response {
   const headers = {
     "Content-Type": contentType,
     "Cache-Control": "no-cache",
     "Accept-Ranges": "bytes",
     "Content-Disposition": getContentDisposition(filePath, asDownload),
+    "X-Content-Type-Options": "nosniff",
+    ...extraHeaders,
   };
 
   if (!rangeHeader) {
@@ -634,7 +656,7 @@ export async function GET(
       if (!stat.isFile()) {
         return NextResponse.json({ error: "Not a file" }, { status: 400 });
       }
-      return streamFile(filePath, stat, getServeMime(filePath), request.headers.get("range"));
+      return streamFile(filePath, stat, getServeMime(filePath), request.headers.get("range"), false, { "Content-Security-Policy": HTML_PREVIEW_CSP });
     }
 
     if (type === "meta") {
@@ -817,7 +839,7 @@ export async function GET(
     // untyped file request as an inline file response so relative CSS, JS,
     // images, and other assets loaded by the HTML preview keep working.
     if (type === "list" && requestedType === null && stat.isFile()) {
-      return streamFile(filePath, stat, getServeMime(filePath), request.headers.get("range"));
+      return streamFile(filePath, stat, getServeMime(filePath), request.headers.get("range"), false, { "Content-Security-Policy": HTML_PREVIEW_CSP });
     }
 
     // type === "list"

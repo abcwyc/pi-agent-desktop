@@ -4,6 +4,7 @@ import { dirname, join } from "path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { writePrivateFileAtomicSync } from "@/lib/atomic-file";
 import { invalidateModelsCache } from "@/lib/models-cache";
+import { mergeStoredLiteralApiKeys, redactModelsJson } from "@/lib/models-config-redaction";
 
 export const dynamic = "force-dynamic";
 
@@ -29,13 +30,24 @@ function writeModelsJson(data: Record<string, unknown>): void {
 }
 
 export async function GET() {
-  return NextResponse.json(readModelsJson());
+  // Literal apiKey values never leave the server; shell/env references and
+  // every other field are configuration the editor needs to see.
+  return NextResponse.json(redactModelsJson(readModelsJson()));
 }
 
 export async function PUT(req: Request) {
   try {
     const body = await req.json() as Record<string, unknown>;
-    writeModelsJson(body);
+    const existing = readModelsJson();
+    const incomingProviders = (body.providers ?? {}) as Record<string, Record<string, unknown>>;
+    const existingProviders = (existing.providers ?? {}) as Record<string, Record<string, unknown>>;
+    // The client never sees stored literal apiKeys (GET redacts them), so an
+    // incoming provider that omits the field must keep the stored value while
+    // the user edits unrelated settings. An explicit apiKey (even "") wins.
+    writeModelsJson({
+      ...body,
+      providers: mergeStoredLiteralApiKeys(incomingProviders, existingProviders),
+    });
     invalidateModelsCache();
     return NextResponse.json({ success: true });
   } catch (error) {

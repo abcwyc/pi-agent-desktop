@@ -151,8 +151,6 @@ export const zhCNLocale: LocalePlugin = {
     "sidebar.moreActions": "项目操作",
     "sidebar.newChat": "新建会话",
     "sidebar.archiveProject": "移除项目",
-    "sidebar.restoreProject": "重新添加项目",
-    "sidebar.archivedProjects": "已移除",
     "contextPanel.tabOpen": "打开",
     "contextPanel.tabFiles": "文件",
     "contextPanel.tabSearch": "搜索",

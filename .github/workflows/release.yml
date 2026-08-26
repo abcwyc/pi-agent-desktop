@@ -103,7 +103,7 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.4.0
+            ## Pi Agent Desktop 0.4.1
 
             This release includes the latest desktop UI improvements and layout refinements.
 
@@ -117,7 +117,7 @@ jobs:
 
             ---
 
-            ## Pi Agent Desktop 0.4.0
+            ## Pi Agent Desktop 0.4.1
 
             本次发布包含最新的桌面端界面改进与布局优化。
 
@@ -125,7 +125,7 @@ jobs:
 
             - 优化文件树面板及其宽度调整交互。
             - 改进面板对齐、边框和响应式布局表现。
-            - 内置 Pi 引擎升级至 0.84.3，pi-web 保持在 0.8.7。
+            - 内置 Pi 引擎 0.84.3，pi-web 0.8.7。
 
             内置组件版本：pi 0.84.3、pi-web 0.8.7。
           releaseDraft: true

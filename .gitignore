@@ -56,3 +56,7 @@ next-env.d.ts
 
 # pi agent local state
 /.pi/
+
+# local tooling artifacts
+.playwright-mcp/
+pi-gui-session-preview.png

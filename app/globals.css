@@ -255,15 +255,13 @@ body {
   border-radius: 8px;
 }
 .sidebar-project-tree.is-scrolling::-webkit-scrollbar-thumb { background: var(--border); }
-.sidebar-project-tree-header,
-.sidebar-archived-projects-header {
+ .sidebar-project-tree-header {
   display: flex;
   align-items: center;
   min-height: 34px;
   padding: 4px 12px 4px 16px;
 }
-.sidebar-project-tree-title,
-.sidebar-archived-projects-header {
+.sidebar-project-tree-title {
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 650;
@@ -322,21 +320,18 @@ body {
   text-align: left;
   cursor: pointer;
 }
-.sidebar-project-tree-row-main:focus-visible,
+ .sidebar-project-tree-row-main:focus-visible,
 .sidebar-project-tree-action:focus-visible,
 .sidebar-project-tree-menu:focus-visible,
-.sidebar-project-tree-add:focus-visible,
-.sidebar-archived-projects-header:focus-visible {
+.sidebar-project-tree-add:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
   outline-offset: 1px;
 }
-.sidebar-project-tree-chevron,
-.sidebar-archived-projects-header > svg {
+.sidebar-project-tree-chevron {
   flex-shrink: 0;
   transition: transform 0.15s ease;
 }
-.sidebar-project-tree-group.is-collapsed .sidebar-project-tree-chevron,
-.sidebar-archived-projects.is-collapsed > .sidebar-archived-projects-header > svg {
+.sidebar-project-tree-group.is-collapsed .sidebar-project-tree-chevron {
   transform: rotate(-90deg);
 }
 .sidebar-project-tree-folder {
@@ -392,30 +387,8 @@ body {
   width: 24px;
   height: 24px;
 }
-.sidebar-project-tree-group.is-archived > .sidebar-project-tree-row {
-  opacity: 0.78;
-}
-.sidebar-project-tree-children {
+ .sidebar-project-tree-children {
   min-width: 0;
-}
-.sidebar-archived-projects {
-  margin-top: 12px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-}
-.sidebar-archived-projects-header {
-  width: 100%;
-  gap: 7px;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-.sidebar-archived-projects-count {
-  margin-left: auto;
-  color: var(--text-dim);
-  font-size: 11px;
-  letter-spacing: 0;
 }
 .sidebar-project-context-menu {
   position: fixed;

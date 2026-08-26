@@ -186,8 +186,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       ? new Set(stored.filter((root): root is string => typeof root === "string"))
       : new Set();
   });
-  const [archivedProjectsCollapsed, setArchivedProjectsCollapsed] = useState(false);
-  const [projectMenu, setProjectMenu] = useState<{ root: string; archived: boolean } | null>(null);
+  const [projectMenu, setProjectMenu] = useState<{ root: string } | null>(null);
   const [projectMenuPos, setProjectMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [projectBranchMenu, setProjectBranchMenu] = useState<ProjectBranchMenuState | null>(null);
   const [projectBranchLoading, setProjectBranchLoading] = useState(false);
@@ -821,18 +820,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     setProjectMenuPos(null);
   }, []);
 
-  const restoreProject = useCallback((projectRoot: string) => {
-    setArchivedProjectRoots((prev) => {
-      const next = new Set(prev);
-      next.delete(projectRoot);
-      return next;
-    });
-    setSelectedCwd(projectRoot);
-    setProjectMenu(null);
-    setProjectMenuPos(null);
-  }, []);
-
-  const openProjectMenu = useCallback((e: React.MouseEvent<HTMLButtonElement>, projectRoot: string, archived: boolean) => {
+  const openProjectMenu = useCallback((e: React.MouseEvent<HTMLButtonElement>, projectRoot: string) => {
     e.stopPropagation();
     if (projectMenu?.root === projectRoot) {
       setProjectMenu(null);
@@ -847,7 +835,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     const top = rect.bottom + menuHeight > window.innerHeight - 8
       ? rect.top - menuHeight - 4
       : rect.bottom + 4;
-    setProjectMenu({ root: projectRoot, archived });
+    setProjectMenu({ root: projectRoot });
     setProjectMenuPos({ top, left });
     setProjectBranchMenu(null);
   }, [projectMenu]);
@@ -861,7 +849,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     : allSessions;
   const allProjects = groupByProject(searchedSessions, { runningIds: runningSessionIds, unreadIds: unreadSessionIds });
   const activeProjects = allProjects.filter((group) => !archivedProjectRoots.has(group.projectRoot));
-  const archivedProjects = allProjects.filter((group) => archivedProjectRoots.has(group.projectRoot));
   useEffect(() => {
     const projectRoots = activeProjects.map((group) => group.projectRoot);
     onProjectsChange?.(projectRoots);
@@ -903,7 +890,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   // fallback, but do not show the duplicated directory/worktree summary.
   const showLegacyHeaderProjectRows = false;
 
-  const renderProjectGroup = (group: ReturnType<typeof groupByProject>[number], archived = false) => {
+  const renderProjectGroup = (group: ReturnType<typeof groupByProject>[number]) => {
     const isCollapsed = !trimmedSessionQuery && collapsedProjects.has(group.projectRoot);
     const isActive = group.projectRoot === selectedProject;
     const runningCount = group.runningIds.size;
@@ -940,7 +927,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     };
 
     return (
-      <div key={group.projectRoot} className={`sidebar-project-tree-group${isCollapsed ? " is-collapsed" : ""}${isActive ? " is-active" : ""}${archived ? " is-archived" : ""}`}>
+      <div key={group.projectRoot} className={`sidebar-project-tree-group${isCollapsed ? " is-collapsed" : ""}${isActive ? " is-active" : ""}`}>
         <div className="sidebar-project-tree-row">
           <button
             type="button"
@@ -993,7 +980,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             <button
               type="button"
               className="sidebar-project-tree-action sidebar-project-tree-more"
-              onClick={(e) => openProjectMenu(e, group.projectRoot, archived)}
+              onClick={(e) => openProjectMenu(e, group.projectRoot)}
               title={t("sidebar.moreActions")}
               aria-label={t("sidebar.moreActions")}
               aria-expanded={projectMenu?.root === group.projectRoot}
@@ -1654,23 +1641,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             </div>
           </div>
           {activeProjects.map((group) => renderProjectGroup(group))}
-          {archivedProjects.length > 0 && (
-            <div className={`sidebar-archived-projects${archivedProjectsCollapsed ? " is-collapsed" : ""}`}>
-              <button
-                type="button"
-                className="sidebar-archived-projects-header"
-                onClick={() => setArchivedProjectsCollapsed((value) => !value)}
-                aria-expanded={!archivedProjectsCollapsed}
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <polyline points="2 3.5 5 6.5 8 3.5" />
-                </svg>
-                <span>{t("sidebar.archivedProjects")}</span>
-                <span className="sidebar-archived-projects-count">{archivedProjects.length}</span>
-              </button>
-              {!archivedProjectsCollapsed && archivedProjects.map((group) => renderProjectGroup(group, true))}
-            </div>
-          )}
         </div>
       )}
       {projectMenu && projectMenuPos && createPortal(
@@ -1692,9 +1662,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               <button
                 type="button"
                 role="menuitem"
-                onClick={() => projectMenu.archived ? restoreProject(projectMenu.root) : archiveProject(projectMenu.root)}
+                onClick={() => archiveProject(projectMenu.root)}
               >
-                {projectMenu.archived ? t("sidebar.restoreProject") : t("sidebar.archiveProject")}
+                {t("sidebar.archiveProject")}
               </button>
             </>
           ) : (
