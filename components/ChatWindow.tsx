@@ -2,7 +2,7 @@
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecutionMessage, CustomMessage, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage, UserMessage } from "@/lib/types";
-import type { TodoState } from "@/lib/todo-state";
+import type { TodoPanelState } from "@/lib/todo-state";
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
@@ -44,7 +44,7 @@ interface Props {
   /** Fired after non-image drops are copied into the session cwd (so the explorer can refresh). */
   onProjectFilesImported?: () => void;
   /** Fired whenever the active session's pi-todo plan changes (or clears). */
-  onTodoStateChange?: (state: TodoState | null) => void;
+  onTodoStateChange?: (state: TodoPanelState | null) => void;
 }
 
 function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, string | number>) => string): string | null {
@@ -275,9 +275,35 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   // Lift the active session's todo plan to the shell (left-nav Todo panel).
   // Fires when the plan appears, updates, or clears — including while streaming,
   // since toolResult details arrive on message_end and recompute todoState.
+  // Each fresh todo message bumps the arrival counter, so a later agent_start
+  // can tell "the extension refreshed the plan for this run" apart from "the
+  // displayed plan is stale from a previous run".
+  const todoArrivalCountRef = useRef(0);
   useEffect(() => {
+    if (todoState) todoArrivalCountRef.current++;
     onTodoStateChange?.(todoState);
   }, [todoState, onTodoStateChange]);
+
+  // A new run (agent_start) starts a new task: the previous task's plan is
+  // stale unless the extension refreshed it for this run. before_agent_start
+  // drops completed tasks and re-emits the cleaned plan (e.g. "5 tasks, 2
+  // done" → "3 remaining"), which arrives before agent_start. So only clear
+  // when NO todo message arrived since the last turn ended — otherwise the
+  // fresh plan would be wiped by the clear. Tracks both edges of agentRunning;
+  // mount/reconnect with an already-active run does not blank a valid plan.
+  const prevAgentRunningRef = useRef(agentRunning);
+  const todoCountAtLastEndRef = useRef(0);
+  useEffect(() => {
+    const wasRunning = prevAgentRunningRef.current;
+    prevAgentRunningRef.current = agentRunning;
+    if (agentRunning && !wasRunning) {
+      if (todoArrivalCountRef.current === todoCountAtLastEndRef.current) {
+        onTodoStateChange?.(null);
+      }
+    } else if (!agentRunning && wasRunning) {
+      todoCountAtLastEndRef.current = todoArrivalCountRef.current;
+    }
+  }, [agentRunning, onTodoStateChange]);
 
   const conversationTurns = useMemo<ConversationTurnLocation[]>(() => {
     const turns: ConversationTurnLocation[] = [];
