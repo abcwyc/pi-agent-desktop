@@ -63,6 +63,16 @@ native tasks as-is; no mapping needed.
   snapshot only. On session open the extension's `session_start` restore re-emits
   the current plan, so the latest snapshot reappears.
 
+### Integrating into an existing tool
+
+- The widget key is a `setWidget` `widgetKey` on the `extension_ui_request`
+  channel — **not a tool name**. It never collides with a `todo` tool (or any
+  other tool you already register).
+- If you already have a todo tool (e.g. `@99percentpeople/pi-todo`), you don't
+  need a separate extension: just emit this widget after every write — call
+  `ctx.ui.setWidget(TODO_WIDGET_KEY, state.tasks.map(JSON.stringify))` in the
+  same place your tool updates the plan, and pass `undefined` to clear.
+
 ## Why `setWidget` and not the alternatives
 
 - **`setWidget` (extension_ui_request) reaches the panel live** — the desktop's
@@ -80,4 +90,3 @@ native tasks as-is; no mapping needed.
 
 - Protocol: `lib/todo-state.ts` — `TODO_WIDGET_KEY`, `serializeTodoWidgetLines()`, `parseTodoWidgetLines()`.
 - UI: `components/TodoPanel.tsx`; routing: `hooks/useAgentSession.ts` (`setWidget` case + `todoState`).
-- Working example: `examples/todo-extension.ts` — copy to `~/.pi/agent/extensions/`.
