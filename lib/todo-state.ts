@@ -14,7 +14,7 @@
  * `dependsOn`, `description`, ...) is ignored, never validated. The desktop is
  * a read-only renderer — it just shows the newest plan pushed by the widget.
  *
- * See docs/todo-protocol.md.
+ * See docs/protocols/todo.md.
  */
 
 export type TodoStatus = "pending" | "in_progress" | "completed";

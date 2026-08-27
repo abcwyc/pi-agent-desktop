@@ -1,5 +1,10 @@
 # Todo Widget Protocol
 
+**Version**: unversioned. The contract is deliberately minimal and
+backward-compatible — unknown extra fields are tolerated and ignored, so
+consumers don't need to pin a version. Breaking changes (if any) will be
+announced in the desktop release notes.
+
 A public, desktop-owned contract for showing a todo plan in pi-agent-desktop's
 left-nav panel. Extensions **opt in**: if your extension emits this protocol, its
 todo state renders in the desktop panel for free. If it doesn't, the desktop
@@ -52,16 +57,23 @@ only needs a task list to draw. Any extra fields an extension carries (`revision
 are **tolerated and ignored** — never validated, never required. Emit your
 native tasks as-is; no mapping needed.
 
-### Rules (mirror the desktop's validation)
+### Rules
+
+**MUST** — hard validation, the desktop enforces these:
 
 - `widgetLines` is a `string[]`; each line is one JSON `TodoTask`.
+- Every task needs a string `key`.
+- `status`, when present, must be one of `"pending" | "in_progress" | "completed"`.
 - Non-JSON / blank / invalid-task lines are skipped (`parseTodoWidgetLines`).
 - An empty or all-invalid payload hides the panel.
-- Every task needs a string `key`; `status`, when present, must be one of the three values.
-- **Not durable.** `setWidget` is fire-and-forget — it is never written to the
-  session file and carries no progress history. The panel shows the latest
-  snapshot only. On session open the extension's `session_start` restore re-emits
-  the current plan, so the latest snapshot reappears.
+
+**SHOULD** — best practices, not validated but expected:
+
+- Emit immediately after every plan write so the panel stays current.
+- Pass `undefined` to clear the panel when the plan ends.
+- On session open, re-emit the current plan (`session_start` restore) so the
+  latest snapshot reappears. `setWidget` is **not durable** — fire-and-forget,
+  never written to the session file, no progress history.
 
 ### Integrating into an existing tool
 
