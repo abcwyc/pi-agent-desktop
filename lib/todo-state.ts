@@ -46,7 +46,7 @@ export interface TodoPanelState {
 }
 
 /** Desktop-reserved widget key for the todo widget protocol (`setWidget` channel). */
-export const TODO_WIDGET_KEY = "todo";
+export const TODO_WIDGET_KEY = "pi-agent-desktop:todo";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

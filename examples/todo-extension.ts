@@ -8,7 +8,7 @@
 //
 // If you already have a todo tool (e.g. @99percentpeople/pi-todo), you don't
 // need this whole file — just add the emit step to it (see emitTodoWidget()
-// below). The protocol key "todo" is a setWidget widgetKey (an
+// below). The protocol key "pi-agent-desktop:todo" is a setWidget widgetKey (an
 // extension_ui_request), NOT a tool name, so it does not collide with a `todo`
 // tool.
 //
@@ -18,7 +18,7 @@
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 
-const WIDGET_KEY = "todo"; // must match TODO_WIDGET_KEY in lib/todo-state.ts
+const WIDGET_KEY = "pi-agent-desktop:todo"; // must match TODO_WIDGET_KEY in lib/todo-state.ts
 const MAX_TASKS = 50;
 
 // The minimal shape the desktop validates (see docs/todo-protocol.md): only

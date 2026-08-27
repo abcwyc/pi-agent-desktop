@@ -17,7 +17,7 @@ channel — the only channel the panel reads) with:
 
 | Field | Value |
 |---|---|
-| `widgetKey` | `"todo"` (`TODO_WIDGET_KEY`) |
+| `widgetKey` | `"pi-agent-desktop:todo"` (`TODO_WIDGET_KEY`) |
 | `widgetLines` | one JSON `TodoTask` per line (`serializeTodoWidgetLines`) |
 | `widgetLines` = `undefined` | clears the live widget / hides the panel |
 | `placement` | `"aboveEditor"` (default) or `"belowEditor"` |
@@ -26,7 +26,7 @@ Use the extension API:
 
 ```ts
 ctx.ui.setWidget(
-  TODO_WIDGET_KEY,   // "todo" — desktop-reserved
+  TODO_WIDGET_KEY,   // "pi-agent-desktop:todo" — desktop-reserved
   state.tasks.map((task) => JSON.stringify(task)),   // [{ key, subject?, status? }]
   { placement: "aboveEditor" },
 );
@@ -66,7 +66,7 @@ native tasks as-is; no mapping needed.
 ## Why `setWidget` and not the alternatives
 
 - **`setWidget` (extension_ui_request) reaches the panel live** — the desktop's
-  `handleExtensionUiRequest` routes `widgetKey === "todo"` straight into the
+  `handleExtensionUiRequest` routes `widgetKey === "pi-agent-desktop:todo"` straight into the
   sidebar panel, no session round-trip.
 - **Custom messages / tool results are not parsed.** The desktop deliberately
   reads no extension schema; tool results "carry the extension's own schema,

@@ -24,7 +24,7 @@ _Avoid_: todo panel, todo list, "the todo widget"
 **Todo widget protocol**:
 The desktop-owned public contract that shows a todo plan in the panel: a
 `setWidget` extension UI request (extension_ui_request) whose `widgetKey` is the
-desktop-reserved `"todo"` (`TODO_WIDGET_KEY`), with the plan encoded in
+desktop-reserved `"pi-agent-desktop:todo"` (`TODO_WIDGET_KEY`), with the plan encoded in
 `widgetLines` as one JSON `TodoTask` per line. The contract is minimal by design
 — only `tasks: { key, subject?, status? }[]` is enforced; every other field an
 extension carries (`revision`, `version`, `schemaVersion`, `dependsOn`, ...) is
