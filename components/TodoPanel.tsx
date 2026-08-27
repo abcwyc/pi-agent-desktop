@@ -114,7 +114,6 @@ export function TodoPanel({ state }: { state: TodoPanelState | null }) {
           return (
             <div
               key={task.key}
-              title={task.description}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -148,6 +147,9 @@ export function TodoPanel({ state }: { state: TodoPanelState | null }) {
                   flexShrink: 1,
                   minWidth: 0,
                 }}
+                // Native tooltip: the row text is ellipsis-truncated, so show
+                // the full subject on hover (widget tasks have no description).
+                title={task.subject ?? task.key}
               >
                 {task.subject ?? task.key}
               </span>
