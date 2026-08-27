@@ -1,4 +1,4 @@
-# Todo Widget Protocol
+# Todo Widget (extension point)
 
 **Version**: unversioned. The contract is deliberately minimal and
 backward-compatible — unknown extra fields are tolerated and ignored, so
@@ -6,14 +6,14 @@ consumers don't need to pin a version. Breaking changes (if any) will be
 announced in the desktop release notes.
 
 A public, desktop-owned contract for showing a todo plan in pi-agent-desktop's
-left-nav panel. Extensions **opt in**: if your extension emits this protocol, its
+left-nav panel. Extensions **opt in**: if your extension emits this widget, its
 todo state renders in the desktop panel for free. If it doesn't, the desktop
 ignores it entirely.
 
-pi provides no todo protocol and extension schemas differ, so this is
-pi-agent-desktop's own declaration. The desktop only reads this protocol — it
-never parses a specific extension's schema, uses no LLM, and has no hand-written
-adapters.
+pi provides no built-in todo extension point and extension schemas differ, so
+this is pi-agent-desktop's own declaration. The desktop only reads this channel
+— it never parses a specific extension's schema, uses no LLM, and has no
+hand-written adapters.
 
 ## Contract
 
@@ -100,5 +100,5 @@ native tasks as-is; no mapping needed.
 
 ## Reference
 
-- Protocol: `lib/todo-state.ts` — `TODO_WIDGET_KEY`, `serializeTodoWidgetLines()`, `parseTodoWidgetLines()`.
+- Contract: `lib/todo-state.ts` — `TODO_WIDGET_KEY`, `serializeTodoWidgetLines()`, `parseTodoWidgetLines()`.
 - UI: `components/TodoPanel.tsx`; routing: `hooks/useAgentSession.ts` (`setWidget` case + `todoState`).

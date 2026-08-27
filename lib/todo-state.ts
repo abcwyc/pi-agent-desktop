@@ -1,7 +1,7 @@
 /**
- * Todo widget protocol (desktop-owned, extension_ui_request / setWidget channel).
+ * Todo widget extension point (desktop-owned, extension_ui_request / setWidget channel).
  *
- * pi defines no todo protocol and extension schemas differ, so pi-agent-desktop
+ * pi defines no built-in todo widget and extension schemas differ, so pi-agent-desktop
  * declares one. Extensions that want their todo plan shown in the desktop's
  * panel emit a `setWidget` extension UI request with `widgetKey` =
  * `TODO_WIDGET_KEY` and the plan encoded in `widgetLines` (one JSON `TodoTask`
@@ -14,7 +14,7 @@
  * `dependsOn`, `description`, ...) is ignored, never validated. The desktop is
  * a read-only renderer — it just shows the newest plan pushed by the widget.
  *
- * See docs/protocols/todo.md.
+ * See docs/todo-widget.md.
  */
 
 export type TodoStatus = "pending" | "in_progress" | "completed";

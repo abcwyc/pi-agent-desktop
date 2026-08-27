@@ -132,7 +132,7 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
   if (message.role === "custom") {
     const customMessage = message as CustomMessage;
     // Respect the extension's display:false intent (the TUI hides these too).
-    // They stay in `messages` for state extraction (e.g. the todo protocol),
+    // They stay in `messages` for state extraction (e.g. the todo widget),
     // but are never rendered as a card in the history.
     if (customMessage.display === false) return null;
     if (customMessage.customType === "compaction") {
