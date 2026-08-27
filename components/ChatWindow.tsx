@@ -2,6 +2,7 @@
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecutionMessage, CustomMessage, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage, UserMessage } from "@/lib/types";
+import type { TodoPanelState } from "@/lib/todo-state";
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
@@ -42,6 +43,8 @@ interface Props {
   onOpenFile?: (filePath: string) => void;
   /** Fired after non-image drops are copied into the session cwd (so the explorer can refresh). */
   onProjectFilesImported?: () => void;
+  /** Fired whenever the active session's pi-todo plan changes (or clears). */
+  onTodoStateChange?: (state: TodoPanelState | null) => void;
 }
 
 function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, string | number>) => string): string | null {
@@ -115,7 +118,9 @@ function hasDisplayableProcessMessage(message: AgentMessage): boolean {
   if (message.role === "assistant") {
     return getDisplayableAssistantBlocks(message as AssistantMessage).length > 0;
   }
-  return message.role === "custom";
+  // Respect display:false (hidden extension messages) — they render nothing
+  // (MessageView returns null), so they must not inflate group counts either.
+  return message.role === "custom" && (message as CustomMessage).display !== false;
 }
 
 // A user message normally anchors a turn (user prompt → process → final
@@ -218,7 +223,7 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
   );
 }
 
-export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onSelectProject, projectOptions, onProjectChange, onOpenFile, onProjectFilesImported }: Props) {
+export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onSelectProject, projectOptions, onProjectChange, onOpenFile, onProjectFilesImported, onTodoStateChange }: Props) {
   const { t } = useI18n();
   const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio } = useAudio();
   // Wrap onAgentEnd to play the completion sound. This is more reliable than
@@ -248,7 +253,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel: displayModelValue, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,
-    notices, extensionDialog, extensionCustomUi, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
+    notices, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
+    todoState,
     isAutoModelSelection,
     agentPhase,
     addNotice,
@@ -265,6 +271,39 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
   });
   const sessionBusy = agentRunning || bashRunning;
+
+  // Lift the active session's todo plan to the shell (left-nav Todo panel).
+  // Fires when the plan appears, updates, or clears — including while streaming,
+  // since toolResult details arrive on message_end and recompute todoState.
+  // Each fresh todo message bumps the arrival counter, so a later agent_start
+  // can tell "the extension refreshed the plan for this run" apart from "the
+  // displayed plan is stale from a previous run".
+  const todoArrivalCountRef = useRef(0);
+  useEffect(() => {
+    if (todoState) todoArrivalCountRef.current++;
+    onTodoStateChange?.(todoState);
+  }, [todoState, onTodoStateChange]);
+
+  // A new run (agent_start) starts a new task: the previous task's plan is
+  // stale unless the extension refreshed it for this run. before_agent_start
+  // drops completed tasks and re-emits the cleaned plan (e.g. "5 tasks, 2
+  // done" → "3 remaining"), which arrives before agent_start. So only clear
+  // when NO todo message arrived since the last turn ended — otherwise the
+  // fresh plan would be wiped by the clear. Tracks both edges of agentRunning;
+  // mount/reconnect with an already-active run does not blank a valid plan.
+  const prevAgentRunningRef = useRef(agentRunning);
+  const todoCountAtLastEndRef = useRef(0);
+  useEffect(() => {
+    const wasRunning = prevAgentRunningRef.current;
+    prevAgentRunningRef.current = agentRunning;
+    if (agentRunning && !wasRunning) {
+      if (todoArrivalCountRef.current === todoCountAtLastEndRef.current) {
+        onTodoStateChange?.(null);
+      }
+    } else if (!agentRunning && wasRunning) {
+      todoCountAtLastEndRef.current = todoArrivalCountRef.current;
+    }
+  }, [agentRunning, onTodoStateChange]);
 
   const conversationTurns = useMemo<ConversationTurnLocation[]>(() => {
     const turns: ConversationTurnLocation[] = [];

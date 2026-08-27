@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar } from "./SessionSidebar";
 import { ChatWindow } from "./ChatWindow";
+import { TodoPanel } from "./TodoPanel";
+import type { TodoPanelState } from "@/lib/todo-state";
 import { selectProjectDirectoryNative } from "./ProjectPicker";
 import { clearDraft } from "@/lib/draft-store";
 import { TabBar, type Tab } from "./TabBar";
@@ -91,6 +93,11 @@ export function AppShell() {
   const [initialCwdError, setInitialCwdError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sessionKey, setSessionKey] = useState(0);
+  // Latest pi-todo plan of the active chat, lifted up for the left-nav panel.
+  const [activeTodoState, setActiveTodoState] = useState<TodoPanelState | null>(null);
+  // Reset when the selected session changes; the chat reloads the new session's
+  // messages and re-emits its todo plan (or null) via onTodoStateChange.
+  useEffect(() => { setActiveTodoState(null); }, [selectedSession?.id]);
   const [availableProjectRoots, setAvailableProjectRoots] = useState<string[]>([]);
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
   const [modelsConfigOpen, setModelsConfigOpen] = useState(false);
@@ -935,6 +942,7 @@ export function AppShell() {
         onProjectsChange={handleProjectsChange}
         headerControls={sidebarHeaderControls}
       />
+      <TodoPanel state={activeTodoState} />
       <div className="sidebar-footer" style={{ padding: "8px", flexShrink: 0, display: "flex", justifyContent: "space-between", gap: 4 }}>
         {([
           {
@@ -1528,6 +1536,7 @@ export function AppShell() {
               onSessionStatsChange={handleSessionStatsChange}
               onSessionStatsPanelOpen={openSessionStatsPanel}
               onContextUsageChange={handleContextUsageChange}
+              onTodoStateChange={setActiveTodoState}
               onSelectProject={desktopMode ? () => void handleSelectProjectFromComposer() : undefined}
               projectOptions={selectedSession ? [] : availableProjectRoots}
               onProjectChange={selectedSession ? undefined : handleProjectChangeFromComposer}
