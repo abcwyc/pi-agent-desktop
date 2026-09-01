@@ -106,10 +106,10 @@ npm run dev
 
 ```bash
 npm install
-npm run dev
+npm run web
 ```
 
-开发服务器运行在 [http://localhost:30141](http://localhost:30141)。
+开发服务器运行在 [http://localhost:30141](http://localhost:30141)。`npm run web` 会在服务器就绪后打开桌面浏览器（WSL → Windows 浏览器，或 macOS 的 `open`）。`npm run dev` 启动同样的服务器，但不打开标签页。见 [Web profile（浏览器 surface）](./docs/web-profile.md)。
 
 日常开发期间不要运行 `next build` 或 `npm run build`。这些命令会写入 `.next/`，可能干扰正在运行的开发服务器；正式构建由桌面准备脚本或 CI 完成。
 

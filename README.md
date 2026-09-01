@@ -108,10 +108,10 @@ npm run dev
 
 ```bash
 npm install
-npm run dev
+npm run web
 ```
 
-The dev server runs at [http://localhost:30141](http://localhost:30141).
+The dev server runs at [http://localhost:30141](http://localhost:30141). `npm run web` opens that URL in the desktop browser after the server is ready (WSL → Windows browser, or macOS `open`). `npm run dev` starts the same server without opening a tab. See [Web profile (browser surface)](./docs/web-profile.md).
 
 Do not run `next build` or `npm run build` during normal development. They write into `.next/` and can disrupt a running dev server; production builds are done by the desktop preparation script or by CI.
 
