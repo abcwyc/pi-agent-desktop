@@ -1,6 +1,6 @@
 # Web profile (browser surface) — v1
 
-Status: `npm run web` launch path is in. Production `pi-web` still uses the old opener.
+Status: `npm run web` and production `pi-web` share the loopback handoff helper.
 
 This is the **browser** path: the Next/agent process runs on the current OS, and
 the operator's default desktop browser displays it. It is not Tauri, and it is
@@ -324,9 +324,11 @@ window itself; detection/quoting is unit-tested.
 
 ## 12. Reference: current gaps this spec closes
 
-- `bin/pi-web.js` uses `xdg-open` whenever `process.platform !== win32/darwin`.
-  In WSL that does not open the Windows browser.
-- `npm run dev` never opens a browser, so the WSL workflow is "print nothing
-  special, hope the operator types localhost in Edge".
+- `bin/pi-web.js` used `xdg-open` whenever `process.platform !== win32/darwin`.
+  In WSL that does not open the Windows browser. Both `pi-web` and `npm run web`
+  now go through `lib/browser-open.js`.
+- `npm run dev` never opens a browser, so the WSL workflow was "print nothing
+  special, hope the operator types localhost in Edge". `npm run web` is the
+  handoff entry; `dev` stays quiet.
 - [wsl2-feasibility.md](./wsl2-feasibility.md) Option C called this a spike and
   left it unspecified. This file is that specification.

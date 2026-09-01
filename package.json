@@ -19,6 +19,7 @@
   },
   "files": [
     "bin",
+    "lib/browser-open.js",
     ".next",
     "!.next/cache",
     "!.next/dev",
