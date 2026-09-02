@@ -994,8 +994,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 </div>
               ) : (
                 <>
-              <ExtensionWidgets widgets={aboveEditorWidgets} />
-
             {renderedMessages}
             {streamState.isStreaming && streamState.streamingMessage && (
               <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} cwd={messageCwd} onOpenFile={onOpenFile} />
@@ -1052,10 +1050,15 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           }}
         >
           <div style={{ maxWidth: 820, margin: "0 auto" }}>
-            <ExtensionWidgets widgets={belowEditorWidgets} />
+            <ExtensionWidgets widgets={aboveEditorWidgets} />
           </div>
         </div>
         {chatInputElement}
+        <div style={{ padding: `0 ${CHAT_COLUMN_PADDING}px` }}>
+          <div style={{ maxWidth: 820, margin: "0 auto" }}>
+            <ExtensionWidgets widgets={belowEditorWidgets} />
+          </div>
+        </div>
       </div>
       </div>
       </>
