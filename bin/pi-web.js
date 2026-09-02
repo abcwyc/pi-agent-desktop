@@ -17,6 +17,8 @@ const path = require("path");
 const fs = require("fs");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { parseLaunchOptions } = require("./pi-web-options");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { attachReadyHandoff, followChildUntilExit, shouldOpenBrowser } = require("../lib/browser-open");
 
 const pkgDir = path.join(__dirname, "..");
 const nextDir = path.join(pkgDir, ".next");
@@ -37,6 +39,7 @@ try {
 }
 
 const { port, hostname, openBrowser } = parseLaunchOptions();
+const wantOpen = openBrowser && shouldOpenBrowser(process.env);
 const loopbackHostnames = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 const passwordEnabled = Boolean(process.env.PI_WEB_PASSWORD);
 
@@ -68,29 +71,10 @@ const child = spawn(process.execPath, [nextBin, ...nextArgs], {
   env: { ...process.env, PI_WEB_HOSTNAME: hostname },
 });
 
-let browserOpened = false;
-const url = `http://${hostname}:${port}`;
+attachReadyHandoff(child.stdout, { port, wantOpen });
+followChildUntilExit(child);
 
-child.stdout.on("data", (chunk) => {
-  const text = chunk.toString();
-  process.stdout.write(text);
-  if (openBrowser && !browserOpened && text.includes("Ready")) {
-    browserOpened = true;
-    const isWindows = process.platform === "win32";
-    const isMac = process.platform === "darwin";
-    const openCmd = isWindows ? "start" : isMac ? "open" : "xdg-open";
-    const opener = spawn(openCmd, [url], {
-      shell: isWindows,
-      stdio: "ignore",
-      detached: true,
-    });
-
-    opener.on("error", (error) => {
-      console.warn(`Could not open browser automatically: ${error.message}`);
-    });
-
-    opener.unref();
-  }
+child.once("error", (error) => {
+  console.error(error);
+  process.exit(1);
 });
-
-child.on("exit", (code) => process.exit(code ?? 0));
