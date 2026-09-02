@@ -47,6 +47,16 @@ type ActiveCustomUi = {
   settled: boolean;
 };
 
+type ExtensionWidgetComponent = {
+  render: (width: number) => string[];
+  dispose?: () => void;
+};
+
+type ActiveExtensionWidget = {
+  component: ExtensionWidgetComponent;
+  placement: "aboveEditor" | "belowEditor";
+};
+
 type ExtensionUiRequestBody = Record<string, unknown> & {
   method: ExtensionUiRequest["method"];
   timeout?: number;
@@ -162,6 +172,7 @@ export class AgentSessionWrapper {
   private pendingUiResponses = new Map<string, PendingUiResponse>();
   private pendingUiRequests = new Map<string, AgentEvent>();
   private activeCustomUis = new Map<string, ActiveCustomUi>();
+  private activeExtensionWidgets = new Map<string, ActiveExtensionWidget>();
   private extensionStatuses = new Map<string, string>();
   private extensionWidgets = new Map<string, ExtensionWidgetItem>();
   private promptRunning = false;
@@ -666,7 +677,7 @@ export class AgentSessionWrapper {
       case "reload": {
         await this.waitForExtensionsBound();
         this.extensionStatuses.clear();
-        this.extensionWidgets.clear();
+        this.clearExtensionWidgets();
         this.syncProjectTrust();
         await this.inner.reload();
         if (typeof this.inner.bindExtensions !== "function") {
@@ -736,6 +747,7 @@ export class AgentSessionWrapper {
     this.unsubscribe?.();
     for (const pending of this.pendingUiResponses.values()) pending.cancel();
     for (const id of Array.from(this.activeCustomUis.keys())) this.closeCustomUi(id, undefined);
+    this.clearExtensionWidgets();
     this.pendingUiResponses.clear();
     this.pendingUiRequests.clear();
     // Release SSE event listeners so destroyed wrappers don't keep response
@@ -786,6 +798,99 @@ export class AgentSessionWrapper {
 
   private getExtensionWidgets(): ExtensionWidgetItem[] {
     return Array.from(this.extensionWidgets.values());
+  }
+
+  private clearExtensionWidget(key: string): void {
+    const active = this.activeExtensionWidgets.get(key);
+    this.activeExtensionWidgets.delete(key);
+    this.extensionWidgets.delete(key);
+    try {
+      active?.component.dispose?.();
+    } catch {
+      // Ignore dispose errors from extension UI components.
+    }
+  }
+
+  private clearExtensionWidgets(): void {
+    for (const key of Array.from(this.activeExtensionWidgets.keys())) {
+      this.clearExtensionWidget(key);
+    }
+    this.extensionWidgets.clear();
+  }
+
+  private renderExtensionWidget(key: string): void {
+    const active = this.activeExtensionWidgets.get(key);
+    if (!active) return;
+
+    let lines: string[];
+    try {
+      lines = active.component.render(DEFAULT_CUSTOM_UI_COLUMNS);
+    } catch (error) {
+      lines = [`Extension widget render failed: ${error instanceof Error ? error.message : String(error)}`];
+    }
+    this.extensionWidgets.set(key, { key, lines, placement: active.placement });
+    this.emit({
+      type: "extension_ui_request",
+      id: randomUUID(),
+      method: "setWidget",
+      widgetKey: key,
+      widgetLines: lines,
+      widgetPlacement: active.placement,
+    } as ExtensionUiRequest as AgentEvent);
+  }
+
+  private setExtensionWidget(
+    key: string,
+    content: unknown,
+    options?: { placement?: "aboveEditor" | "belowEditor" },
+  ): void {
+    this.clearExtensionWidget(key);
+    if (content === undefined) {
+      this.emit({
+        type: "extension_ui_request",
+        id: randomUUID(),
+        method: "setWidget",
+        widgetKey: key,
+        widgetLines: undefined,
+        widgetPlacement: options?.placement,
+      } as ExtensionUiRequest as AgentEvent);
+      return;
+    }
+
+    if (Array.isArray(content)) {
+      const placement = options?.placement ?? "aboveEditor";
+      this.extensionWidgets.set(key, { key, lines: content, placement });
+      this.emit({
+        type: "extension_ui_request",
+        id: randomUUID(),
+        method: "setWidget",
+        widgetKey: key,
+        widgetLines: content,
+        widgetPlacement: placement,
+      } as ExtensionUiRequest as AgentEvent);
+      return;
+    }
+
+    if (typeof content !== "function") return;
+
+    const tui = createHeadlessCustomUiTui(() => this.renderExtensionWidget(key));
+    try {
+      const component = content(tui, PLAIN_TEXT_THEME);
+      if (!component || typeof component !== "object" || typeof component.render !== "function") return;
+      const placement = options?.placement ?? "aboveEditor";
+      this.activeExtensionWidgets.set(key, {
+        component: component as ExtensionWidgetComponent,
+        placement,
+      });
+      this.renderExtensionWidget(key);
+    } catch (error) {
+      this.emit({
+        type: "extension_error",
+        extensionPath: `widget:${key}`,
+        event: "setWidget",
+        error: error instanceof Error ? error.message : String(error),
+      } as AgentEvent);
+    }
   }
 
   private getCustomUiWidth(options: unknown): number {
@@ -1021,24 +1126,7 @@ export class AgentSessionWrapper {
       setWorkingIndicator: () => {},
       setHiddenThinkingLabel: () => {},
       setWidget: (key, content, options) => {
-        if (content !== undefined && !Array.isArray(content)) return;
-        if (content === undefined) {
-          this.extensionWidgets.delete(key);
-        } else {
-          this.extensionWidgets.set(key, {
-            key,
-            lines: content,
-            placement: options?.placement ?? "aboveEditor",
-          });
-        }
-        this.emit({
-          type: "extension_ui_request",
-          id: randomUUID(),
-          method: "setWidget",
-          widgetKey: key,
-          widgetLines: content,
-          widgetPlacement: options?.placement,
-        } as ExtensionUiRequest as AgentEvent);
+        this.setExtensionWidget(key, content, options);
       },
       setFooter: () => {},
       setHeader: () => {},
@@ -1095,7 +1183,7 @@ export class AgentSessionWrapper {
       switchSession: async () => ({ cancelled: true }),
       reload: async () => {
         this.extensionStatuses.clear();
-        this.extensionWidgets.clear();
+        this.clearExtensionWidgets();
         this.syncProjectTrust();
         await this.inner.reload({
           beforeSessionStart: () => {
