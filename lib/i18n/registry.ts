@@ -1,5 +1,6 @@
 import { enLocale } from "./messages/en.ts";
 import { zhCNLocale } from "./messages/zh-CN.ts";
+import { arLocale } from "./messages/ar.ts";
 import type { Locale, LocalePlugin } from "./types";
 
 const localePlugins = new Map<string, LocalePlugin>();
@@ -35,9 +36,11 @@ export function resolveBrowserLocale(languages: readonly string[]): Locale {
     const normalized = language.toLowerCase();
     if (normalized === "en" || normalized.startsWith("en-")) return "en";
     if (normalized === "zh" || normalized.startsWith("zh-")) return "zh-CN";
+    if (normalized === "ar" || normalized.startsWith("ar-")) return "ar";
   }
   return "en";
 }
 
 registerLocale(enLocale);
 registerLocale(zhCNLocale);
+registerLocale(arLocale);

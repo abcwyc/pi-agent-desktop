@@ -198,7 +198,7 @@ function SkillDetail({
           <span
             style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}
           >
-            Source
+            {t("i18n.source")}
           </span>
           <a
             href={skill.install.skillsShUrl}
@@ -236,7 +236,7 @@ function SkillDetail({
           <span
             style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}
           >
-            Version
+            {t("i18n.version")}
           </span>
           <div
             style={{
@@ -339,7 +339,7 @@ function SkillDetail({
         <span
           style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}
         >
-          Name
+          {t("session.name")}
         </span>
         <span
           style={{

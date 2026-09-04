@@ -268,7 +268,7 @@ export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction }: C
           lineHeight: 1.62,
           border: "none",
           borderRadius: 0,
-          background: "color-mix(in srgb, var(--bg) 92%, var(--bg-panel))",
+          backgroundColor: "color-mix(in srgb, var(--bg) 92%, var(--bg-panel))",
         }}
         codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
       >

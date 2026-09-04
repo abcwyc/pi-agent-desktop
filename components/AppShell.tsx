@@ -988,7 +988,7 @@ export function AppShell() {
             ),
           },
           {
-            label: "Settings",
+            label: translate("appSettings.footerLabel"),
             onClick: () => setAppSettingsOpen(true),
             disabled: false,
             iconOnly: true,

@@ -255,6 +255,7 @@ function DownloadLink({ filePath, sourceSessionId }: { filePath: string; sourceS
 }
 
 function DesktopPathActions({ filePath }: { filePath: string }) {
+  const { t } = useI18n();
   const [desktop, setDesktop] = useState(false);
   useEffect(() => {
     void import("@/lib/desktop-native").then(({ isTauriDesktop }) => {
@@ -267,8 +268,8 @@ function DesktopPathActions({ filePath }: { filePath: string }) {
     <>
       <button
         type="button"
-        title="Open with default app"
-        aria-label="Open with default app"
+        title={t("fileViewer.openDefaultApp")}
+        aria-label={t("fileViewer.openDefaultApp")}
         className="file-viewer-icon-button"
         onClick={() => {
           void import("@/lib/desktop-native").then(({ openPathNative }) => openPathNative(filePath));
@@ -282,8 +283,8 @@ function DesktopPathActions({ filePath }: { filePath: string }) {
       </button>
       <button
         type="button"
-        title="Reveal in Finder"
-        aria-label="Reveal in Finder"
+        title={t("fileViewer.revealInExplorer")}
+        aria-label={t("fileViewer.revealInExplorer")}
         className="file-viewer-icon-button"
         onClick={() => {
           void import("@/lib/desktop-native").then(({ revealItemInDirNative }) => revealItemInDirNative(filePath));

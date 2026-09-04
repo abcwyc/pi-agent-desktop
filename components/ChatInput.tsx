@@ -139,6 +139,16 @@ const THINKING_LEVEL_DESC_KEYS: Record<typeof THINKING_LEVELS[number], string> =
   auto: "chat.thinkingUseDefault", off: "chat.thinkingOff", minimal: "chat.thinkingMinimal", low: "chat.thinkingLow",
   medium: "chat.thinkingMedium", high: "chat.thinkingHigh", xhigh: "chat.thinkingXhigh", max: "chat.thinkingMax",
 };
+/** التسميات العربية المعروضة لكل مستوى تفكير (تُستخدم في الزر والقائمة). */
+const THINKING_LEVEL_LABEL_KEYS: Record<typeof THINKING_LEVELS[number], string> = {
+  auto: "chat.thinkingLabelAuto", off: "chat.thinkingLabelOff", minimal: "chat.thinkingLabelMinimal",
+  low: "chat.thinkingLabelLow", medium: "chat.thinkingLabelMedium", high: "chat.thinkingLabelHigh",
+  xhigh: "chat.thinkingLabelXhigh", max: "chat.thinkingLabelMax",
+};
+/** التسميات العربية لمجموعات الأدوات (بدون أدوات / افتراضي / كل الأدوات). */
+const TOOL_PRESET_LABEL_KEYS = {
+  off: "chat.toolsPresetOff", default: "chat.toolsPresetDefault", full: "chat.toolsPresetFull",
+} as const;
 
 function getProjectLabel(projectPath: string | null | undefined): string | null {
   const normalized = projectPath?.replace(/[\\/]+$/, "");
@@ -1444,10 +1454,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     : null;
   const thinkingDisplayLabel = (() => {
     const lvl = thinkingLevel ?? "auto";
-    if (lvl === "auto" || !thinkingLevelMap) return lvl;
-    return thinkingLevelMap[lvl] ?? lvl;
+    if (thinkingLevelMap && thinkingLevelMap[lvl] && thinkingLevelMap[lvl] !== lvl) return thinkingLevelMap[lvl];
+    return t(THINKING_LEVEL_LABEL_KEYS[lvl]);
   })();
-  const toolPresetLabel = Object.entries(TOOL_PRESET_MAP).find(([, v]) => v === (toolPreset ?? "default"))?.[0] ?? "default";
+  const activeToolPresetKey = Object.entries(TOOL_PRESET_MAP).find(([, v]) => v === (toolPreset ?? "default"))?.[0] ?? "default";
+  const toolPresetLabel = t(TOOL_PRESET_LABEL_KEYS[activeToolPresetKey as keyof typeof TOOL_PRESET_LABEL_KEYS]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -2077,6 +2088,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           >
           <textarea
             ref={textareaRef}
+            dir="auto"
             value={value}
             onChange={(e) => {
               setValue(e.target.value);
@@ -2607,7 +2619,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       const isActive = (thinkingLevel ?? "auto") === lvl;
                        const desc = t(THINKING_LEVEL_DESC_KEYS[lvl]);
                       const mappedVal = (lvl !== "auto" && thinkingLevelMap) ? thinkingLevelMap[lvl] : undefined;
-                      const displayLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : lvl;
+                      const displayLabel = (mappedVal != null && mappedVal !== lvl)
+                        ? mappedVal
+                        : t(THINKING_LEVEL_LABEL_KEYS[lvl]);
                       const showOriginal = mappedVal != null && mappedVal !== lvl;
                       return (
                         <button
@@ -2716,7 +2730,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           {isActive
                             ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
                             : <span style={{ width: 10, flexShrink: 0 }} />}
-                          <span style={{ flex: 1 }}>{lvl}</span>
+                          <span style={{ flex: 1 }}>{t(TOOL_PRESET_LABEL_KEYS[lvl as keyof typeof TOOL_PRESET_LABEL_KEYS])}</span>
                           <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
                         </button>
                       );

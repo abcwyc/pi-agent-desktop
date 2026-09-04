@@ -2,11 +2,17 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { APP_PREF_KEYS, getPref, setPref } from "@/lib/app-prefs";
-import { getLocalePlugin, getSupportedLocales } from "@/lib/i18n/registry";
+import { getLocalePlugin, getSupportedLocales, resolveBrowserLocale } from "@/lib/i18n/registry";
 import { translateMessage } from "@/lib/i18n/format";
 import type { Locale, LocalePlugin, TranslationParams } from "@/lib/i18n/types";
 
-const defaultLocale: Locale = "en";
+// النسخة العربية: اللغة الافتراضية هي العربية، مع إمكانية التبديل للإنجليزية.
+const defaultLocale: Locale = "ar";
+
+/** الاتجاه المطابق لكل لغة: العربية من اليمين إلى اليسار والباقي من اليسار إلى اليمين. */
+function directionOf(locale: Locale): "rtl" | "ltr" {
+  return locale === "ar" ? "rtl" : "ltr";
+}
 
 interface I18nContextValue {
   locale: Locale;
@@ -26,9 +32,13 @@ function getMessages(): Record<string, Record<string, string>> {
 
 function readInitialLocale(): Locale {
   const stored = getPref(APP_PREF_KEYS.locale);
-  if (stored === "en" || stored === "zh-CN") return stored;
-  // UI defaults to English; browser language is intentionally not consulted
-  // (the topbar language switcher was removed).
+  if (stored === "en" || stored === "zh-CN" || stored === "ar") return stored;
+  // هذه النسخة معرّبة: اللغة الافتراضية هي العربية، وتُحترم لغة المتصفح
+  // في حال عدم وجود تفضيل محفوظ.
+  if (typeof navigator !== "undefined") {
+    const matched = resolveBrowserLocale(navigator.languages ?? [navigator.language]);
+    if (matched === "ar") return "ar";
+  }
   return defaultLocale;
 }
 
@@ -50,6 +60,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     const next = readInitialLocale();
     setLocaleState(next);
     document.documentElement.lang = next;
+    document.documentElement.dir = directionOf(next);
     setHydrated(true);
   }, []);
 
@@ -57,6 +68,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     if (!getLocalePlugin(next)) return;
     setLocaleState(next);
     document.documentElement.lang = next;
+    document.documentElement.dir = directionOf(next);
     setPref(APP_PREF_KEYS.locale, next);
   }, []);
 
