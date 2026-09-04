@@ -281,7 +281,7 @@ function SegmentedScope({
               fontSize: 12,
             }}
           >
-            {scope}
+            {scope === "global" ? t("plugins.scopeGlobal") : t("plugins.scopeProject")}
           </button>
         );
       })}
@@ -395,7 +395,7 @@ function AddPluginPanel({
               type="button"
               className="native-button"
               disabled={busy}
-              title="Select local plugin folder"
+              title={t("pluginsConfig.selectLocalFolder")}
               onClick={() => {
                 void (async () => {
                   try {
@@ -908,7 +908,7 @@ export function PluginsConfig({
             <div className="settings-sidebar-scroll" style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {loading ? (
                 <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>
-                  Loading...
+                  {t("i18n.loading")}
                 </div>
               ) : error ? (
                 <div style={{ padding: "10px 8px", fontSize: 11, color: "var(--danger)" }}>
@@ -916,7 +916,7 @@ export function PluginsConfig({
                 </div>
               ) : packages.length === 0 ? (
                 <div style={{ padding: "10px 8px", fontSize: 11, color: "var(--text-dim)" }}>
-                  No plugins configured
+                  {t("i18n.noPlugins")}
                 </div>
               ) : (
                 groupedPackages.map((group) => (
@@ -930,7 +930,7 @@ export function PluginsConfig({
                         textTransform: "uppercase",
                       }}
                     >
-                      {group.scope}
+                      {group.scope === "global" ? t("plugins.scopeGlobal") : t("plugins.scopeProject")}
                     </div>
                     {group.packages.map((pkg) => {
                       const key = packageKey(pkg);

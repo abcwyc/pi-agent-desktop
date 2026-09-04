@@ -138,7 +138,7 @@ body {
    the corresponding question/answer without taking space from the chat. */
 .conversation-navigator {
   position: absolute;
-  left: 10px;
+  inset-inline-start: 10px;
   top: 50%;
   z-index: 30;
   width: 58px;
@@ -157,7 +157,7 @@ body {
 }
 .conversation-navigator-tick {
   position: absolute;
-  left: 4px;
+  inset-inline-start: 4px;
   width: 21px;
   height: 3px;
   border-radius: 999px;
@@ -176,7 +176,7 @@ body {
 }
 .conversation-navigator-preview {
   position: absolute;
-  left: 74px;
+  inset-inline-start: 74px;
   top: 50%;
   width: min(640px, calc(100vw - 220px));
   padding: 18px 20px;
@@ -272,7 +272,7 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .sidebar-project-tree-menu,
 .sidebar-project-tree-add,
@@ -317,7 +317,7 @@ body {
   border: 0;
   color: var(--text);
   background: transparent;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
  .sidebar-project-tree-row-main:focus-visible,
@@ -351,7 +351,7 @@ body {
 .sidebar-project-tree-branch {
   min-width: 0;
   overflow: hidden;
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--text-dim);
   font-family: var(--font-mono);
   font-size: 11px;
@@ -381,7 +381,7 @@ body {
   flex-direction: row-reverse;
   align-items: center;
   gap: 1px;
-  margin-left: 4px;
+  margin-inline-start: 4px;
 }
 .sidebar-project-tree-action {
   width: 24px;
@@ -409,7 +409,7 @@ body {
   color: var(--text);
   background: transparent;
   font-size: 12px;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .sidebar-project-context-menu button:hover {
@@ -443,13 +443,13 @@ body {
   font-family: var(--font-sans);
 }
 .sidebar-project-context-menu-branch-tag {
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--text-dim);
   font-family: var(--font-sans);
   font-size: 9.5px;
 }
 .sidebar-project-context-menu-branch-spinner {
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--accent);
   animation: spin 0.8s linear infinite;
 }
@@ -524,11 +524,11 @@ pre, code {
 .markdown-body h2 { font-size: 1.08em; }
 .markdown-body h3 { font-size: 0.98em; color: color-mix(in srgb, var(--text) 88%, var(--text-muted)); }
 .markdown-body ul, .markdown-body ol {
-  padding-left: 22px;
+  padding-inline-start: 22px;
   margin: 5px 0 8px;
   list-style-position: outside;
 }
-.markdown-body li { margin: 3px 0; padding-left: 2px; }
+.markdown-body li { margin: 3px 0; padding-inline-start: 2px; }
 .markdown-body ul > li { list-style-type: disc; }
 .markdown-body ol > li { list-style-type: decimal; }
 .markdown-body li > p { margin: 0; }
@@ -566,20 +566,20 @@ pre, code {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent);
 }
 .markdown-body .contains-task-list {
-  padding-left: 0;
+  padding-inline-start: 0;
   list-style: none;
 }
 .markdown-body .task-list-item {
   display: block;
   position: relative;
-  padding-left: 25px;
+  padding-inline-start: 25px;
 }
 .markdown-body .task-list-item::marker { content: ""; }
 .markdown-body .task-list-item > input[type="checkbox"],
 .markdown-body .task-list-item > p:first-child > input[type="checkbox"]:first-child {
   appearance: none;
   position: absolute;
-  left: 0;
+  inset-inline-start: 0;
   top: 0.35em;
   width: 14px;
   height: 14px;
@@ -605,7 +605,7 @@ pre, code {
   transform: rotate(45deg) translateY(-1px);
 }
 .markdown-body blockquote {
-  border-left: 3px solid color-mix(in srgb, var(--border) 75%, var(--text-muted));
+  border-inline-start: 3px solid color-mix(in srgb, var(--border) 75%, var(--text-muted));
   border-radius: 0 6px 6px 0;
   margin: 6px 0;
   padding: 6px 11px;
@@ -630,7 +630,7 @@ pre, code {
   border: 0;
   border-bottom: 1px solid var(--border);
   padding: 6px 10px;
-  text-align: left;
+  text-align: start;
   vertical-align: top;
 }
 .markdown-body tr:last-child td { border-bottom: 0; }
@@ -831,7 +831,7 @@ pre, code {
   border: 0;
   color: inherit;
   cursor: zoom-in;
-  text-align: left;
+  text-align: start;
 }
 .mermaid-preview-button:hover {
   opacity: 0.85;
@@ -883,7 +883,7 @@ pre, code {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .mermaid-zoom-stepper {
   display: flex;
@@ -913,7 +913,7 @@ pre, code {
 }
 .mermaid-zoom-stepper button + .mermaid-zoom-value,
 .mermaid-zoom-value + button {
-  border-left: 1px solid var(--border);
+  border-inline-start: 1px solid var(--border);
 }
 .mermaid-zoom-icon-button {
   flex: 0 0 24px;
@@ -1038,7 +1038,7 @@ pre, code {
   height: 22px;
   padding: 0 8px;
   border: 0;
-  border-left: 1px solid var(--border);
+  border-inline-start: 1px solid var(--border);
   font: inherit;
   font-size: 11px;
   font-weight: 500;
@@ -1048,7 +1048,7 @@ pre, code {
 }
 
 .file-viewer-mode-button:first-child {
-  border-left: 0;
+  border-inline-start: 0;
 }
 
 .file-viewer-mode-button:hover {
@@ -1256,7 +1256,7 @@ span.linenumber {
   bottom: 0;
   /* Align with the panel's existing 1px border so hover never adds a second
      visible pixel beside the separator. */
-  left: 5px;
+  inset-inline-start: 5px;
   width: 1px;
   pointer-events: none;
   background: transparent;
@@ -1280,7 +1280,7 @@ span.linenumber {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  border-left: 1px solid var(--border);
+  border-inline-start: 1px solid var(--border);
 }
 .right-panel-overlay-backdrop {
   display: none;
@@ -1303,7 +1303,7 @@ span.linenumber {
   .sidebar-container.sidebar-closed {
     width: 0;
     min-width: 0;
-    border-right: none !important;
+    border-inline-end: none !important;
   }
   /* keep inner content at fixed width so it doesn't reflow during animation */
   .sidebar-container > * {
@@ -1330,7 +1330,7 @@ span.linenumber {
   .right-panel-container.right-panel-closed {
     width: 0;
     min-width: 0;
-    border-left: none !important;
+    border-inline-start: none !important;
   }
   /* keep inner content at fixed width so it doesn't reflow during animation */
   .right-panel-container > * {
@@ -1365,7 +1365,7 @@ span.linenumber {
   .right-panel-container {
     position: fixed;
     top: 0;
-    right: env(safe-area-inset-right);
+    inset-inline-end: env(safe-area-inset-right);
     bottom: 0;
     z-index: 250;
     width: min(560px, calc(100vw - 48px));
@@ -1406,7 +1406,7 @@ span.linenumber {
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 3px;
+    inset-inline-start: 3px;
     width: 1px;
     border-radius: 1px;
     background: transparent;
@@ -1443,7 +1443,7 @@ span.linenumber {
   .sidebar-container {
     position: fixed !important;
     top: 0;
-    left: env(safe-area-inset-left);
+    inset-inline-start: env(safe-area-inset-left);
     bottom: 0;
     width: 280px;
     max-width: 85vw;
@@ -1474,7 +1474,7 @@ span.linenumber {
   .right-panel-container.right-panel-closed {
     width: 0 !important;
     min-width: 0 !important;
-    border-left: none !important;
+    border-inline-start: none !important;
     display: none !important;
   }
   .right-panel-container > * {

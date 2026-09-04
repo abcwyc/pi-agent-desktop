@@ -423,20 +423,20 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddMod
         )}
       </Field>
 
-      <Field label="Base URL">
+      <Field label={t("models.editor.baseUrl")}>
         <TextInput value={provider.baseUrl ?? ""} onChange={(v) => set("baseUrl", v || undefined)}
           placeholder="https://api.example.com/v1" mono />
       </Field>
 
-      <Field label="API Key">
+      <Field label={t("models.editor.apiKey")}>
         <SecretTextInput value={provider.apiKey ?? ""} onChange={(v) => set("apiKey", v || undefined)}
           placeholder="ENV_VAR_NAME, !shell-command, or literal key" mono />
         <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
-          Prefix with <code style={{ fontFamily: "var(--font-mono)" }}>!</code> to run a shell command, or use an env var name
+          {t("models.editor.apiKeyHint")}
         </span>
       </Field>
 
-      <Field label="API">
+      <Field label={t("models.editor.api")}>
         <Select value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={API_OPTIONS} required />
       </Field>
 
@@ -956,8 +956,8 @@ function ModelDetail({
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Field label="ID *"><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></Field>
-        <Field label="Name"><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder="Display name" /></Field>
+        <Field label={t("models.editor.id")}><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></Field>
+        <Field label={t("models.editor.name")}><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder={t("models.editor.displayName")} /></Field>
       </div>
 
       <div style={{ padding: "10px 0", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}>
@@ -1009,33 +1009,33 @@ function ModelDetail({
         </div>
       </div>
 
-      <Field label="API override">
+      <Field label={t("models.editor.apiOverride")}>
         <Select value={model.api ?? ""} onChange={(v) => set("api", v || undefined)} options={API_OPTIONS} />
       </Field>
 
       <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-        <Check label="Reasoning / thinking" checked={model.reasoning ?? false} onChange={(v) => set("reasoning", v || undefined)} />
-        <Check label="Image input" checked={model.input?.includes("image") ?? false}
+        <Check label={t("models.editor.reasoningThinking")} checked={model.reasoning ?? false} onChange={(v) => set("reasoning", v || undefined)} />
+        <Check label={t("models.editor.imageInput")} checked={model.input?.includes("image") ?? false}
           onChange={(v) => set("input", v ? ["text", "image"] : undefined)} />
       </div>
 
       {model.reasoning && (
         <>
           <Check
-            label="DeepSeek thinking compat"
+            label={t("models.editor.deepseekCompat")}
             checked={hasDeepseekCompat(model)}
             onChange={(v) => onChange(setDeepseekCompat(model, v))}
           />
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <SectionTitle>Thinking level map</SectionTitle>
+              <SectionTitle>{t("models.editor.thinkingLevelMap")}</SectionTitle>
               {model.thinkingLevelMap && (
                 <button
                   className="native-button native-button-compact"
                   onClick={() => set("thinkingLevelMap", undefined)}
                   style={{ fontSize: 10, padding: "2px 7px", background: "none", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-dim)", cursor: "pointer" }}
                 >
-                  clear all
+                  {t("i18n.clearAll")}
                 </button>
               )}
             </div>
@@ -1048,21 +1048,21 @@ function ModelDetail({
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Field label="Context window (tokens)">
+        <Field label={t("models.editor.contextWindow")}>
           <NumInput value={model.contextWindow !== undefined ? String(model.contextWindow) : ""}
             onChange={(v) => set("contextWindow", v ? parseInt(v) : undefined)} placeholder="128000" />
         </Field>
-        <Field label="Max output tokens">
+        <Field label={t("models.editor.maxOutput")}>
           <NumInput value={model.maxTokens !== undefined ? String(model.maxTokens) : ""}
             onChange={(v) => set("maxTokens", v ? parseInt(v) : undefined)} placeholder="16384" />
         </Field>
       </div>
 
       <div>
-        <SectionTitle>Cost (per million tokens)</SectionTitle>
+        <SectionTitle>{t("models.editor.cost")}</SectionTitle>
         <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
           {(["input", "output", "cacheRead", "cacheWrite"] as const).map((k) => (
-            <Field key={k} label={k}>
+            <Field key={k} label={k === "input" ? t("session.input") : k === "output" ? t("session.output") : k === "cacheRead" ? t("session.cacheRead") : t("session.cacheWrite")}>
               <NumInput value={costVal(k)} onChange={(v) => setCost(k, v)} placeholder="0" />
             </Field>
           ))}
@@ -1422,7 +1422,7 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
           : t("models.apiKeyPrompt", { name: provider.displayName, count: provider.modelCount })}
       </p>
 
-      <Field label="API Key">
+      <Field label={t("models.editor.apiKey")}>
         <div style={{ display: "flex", gap: 6 }}>
           <SecretTextInput
             value={apiKey}

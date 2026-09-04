@@ -6,6 +6,8 @@ import "./globals.css";
 // Fork-local restyle layer — must come after globals.css so its
 // equal-specificity rules win the cascade. See app/native-theme.css.
 import "./native-theme.css";
+// Arabic RTL layer — must come last so its [dir="rtl"] rules win.
+import "./rtl.css";
 import { PRODUCT_NAME } from "@/lib/branding";
 
 const notoSansMono = Noto_Sans_Mono({
@@ -62,7 +64,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" translate="no" className={`${notoSansMono.variable} notranslate`} suppressHydrationWarning>
+    <html lang="ar" dir="rtl" translate="no" className={`${notoSansMono.variable} notranslate`} suppressHydrationWarning>
       <head>
         <meta name="google" content="notranslate" />
         {/* Optional user stylesheet: <agentDir>/desktop/custom.css served by

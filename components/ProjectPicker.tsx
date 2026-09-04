@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useI18n } from "@/hooks/useI18n";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { AnimatedDropdown, PathLabel, displayCwd } from "./path-ui";
 import { isTauriDesktop } from "@/lib/desktop-updater";
@@ -73,6 +74,7 @@ export async function selectProjectDirectoryNative(selectedCwd: string | null, h
 }
 
 export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, homeDir, onSelectCwd, variant = "block", disabled }: ProjectPickerProps) {
+  const { t } = useI18n();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [projectFilter, setProjectFilter] = useState("");
@@ -291,8 +293,8 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
                   else closeDropdown();
                 }
               }}
-              placeholder="Filter projects…"
-              aria-label="Filter projects"
+              placeholder={t("projectPicker.filterProjects")}
+              aria-label={t("projectPicker.filterProjects")}
               autoFocus
               style={{
                 width: "100%",

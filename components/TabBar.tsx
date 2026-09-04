@@ -22,13 +22,13 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
   const { t } = useI18n();
 
   return (
-    <div className="file-tab-bar" role="tablist" aria-label="Open files">
+    <div className="file-tab-bar" role="tablist" aria-label={t("tabBar.openFiles")}>
       {tabs.length === 0 && (
         <div className="file-tab-bar-empty" aria-hidden="true">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2h6.5A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5Z" />
           </svg>
-          <span>Files</span>
+          <span>{t("tabBar.filesEmpty")}</span>
         </div>
       )}
       {tabs.map((tab) => {
