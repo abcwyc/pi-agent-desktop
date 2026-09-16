@@ -1744,16 +1744,20 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       {projectPickerOpen && (
         <div className="project-picker-modal-overlay" role="dialog" aria-modal="true" onClick={() => setProjectPickerOpen(false)}>
           <div className="project-picker-modal-shell" onClick={(e) => e.stopPropagation()}>
+            <div className="project-picker-modal-title">{t("sidebar.addProject")}</div>
             <ProjectPicker
               recentProjects={recentProjects}
               selectedCwd={selectedCwdProp ?? null}
               selectedProject={selectedProject}
               homeDir={homeDir}
-              onSelectCwd={(cwd) => {
+              onSelectCwd={(cwd, source) => {
                 activateProject(cwd);
                 setProjectPickerOpen(false);
+                // A freshly created folder has no sessions — drop the user
+                // straight into a new chat there instead of a bare project.
+                if (source === "create") handleNewSession(cwd);
               }}
-              variant="block"
+              variant="panel"
             />
           </div>
         </div>

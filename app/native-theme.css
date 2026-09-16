@@ -1324,7 +1324,7 @@ html.dark .sidebar-view-switcher-thumb {
 }
 
 .project-picker-modal-shell {
-  width: min(420px, 100%);
+  width: min(480px, 100%);
   max-height: min(640px, calc(100vh - 48px));
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -1333,6 +1333,17 @@ html.dark .sidebar-view-switcher-thumb {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+/* Header of the add-project modal; the ProjectPicker below renders the
+   "panel" variant, so the shell's overflow: hidden never clips a popover. */
+.project-picker-modal-title {
+  flex-shrink: 0;
+  padding: 14px 18px 12px;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
 }
 .sidebar-session-list {
   padding: 0 0 6px !important;
