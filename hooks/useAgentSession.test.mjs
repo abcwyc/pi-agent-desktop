@@ -4,6 +4,7 @@ import test from "node:test";
 
 const source = await readFile(new URL("./useAgentSession.ts", import.meta.url), "utf8");
 const chatWindowSource = await readFile(new URL("../components/ChatWindow.tsx", import.meta.url), "utf8");
+const promptAnchorSource = await readFile(new URL("../components/prompt-anchor.ts", import.meta.url), "utf8");
 const rpcManagerSource = await readFile(new URL("../lib/rpc-manager.ts", import.meta.url), "utf8");
 
 test("keeps the session event stream open through the idle grace window", () => {
@@ -133,8 +134,10 @@ test("keeps a newly sent user message at the top while its response starts", () 
   assert.match(userScrollSource, /isNearBottomRef\.current = targetTop >= maxScrollTop - SCROLL_BOTTOM_THRESHOLD/);
   assert.match(userScrollSource, /container\.scrollTo\(\{ top: targetTop, behavior: "smooth" \}\)/);
   assert.match(scrollEffectSource, /pendingScrollToUserRef\.current = false;[\s\S]*?scrollUserMsgToTop\(\)/);
-  assert.match(chatWindowSource, /const maxScrollTopWithoutAnchor = Math\.max\([\s\S]*?container\.scrollHeight - promptAnchorSpacerHeightRef\.current - container\.clientHeight/);
-  assert.match(chatWindowSource, /const nextPromptAnchorSpacerHeight = Math\.max\([\s\S]*?Math\.ceil\(targetTop - maxScrollTopWithoutAnchor\)/);
+  assert.match(promptAnchorSource, /scrollHeight - currentHeight - viewportHeight/);
+  assert.match(promptAnchorSource, /Math\.ceil\(targetTop - maxScrollTopWithoutAnchor\)/);
+  assert.match(chatWindowSource, /new ResizeObserver\(scheduleMeasurement\)/);
+  assert.match(chatWindowSource, /frame = requestAnimationFrame\(/);
   assert.match(chatWindowSource, /<div aria-hidden="true" style=\{\{ height: promptAnchorSpacerHeight \}\} \/>/);
 });
 

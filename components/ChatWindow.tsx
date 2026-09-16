@@ -22,6 +22,7 @@ import {
   VISIBLE_PAGE_SIZE,
 } from "@/lib/chat-lazy-load";
 import { sessionVisibleCounts } from "@/lib/scroll-memory";
+import { nextPromptAnchorSpacerHeight } from "./prompt-anchor";
 
 interface Props {
   session: SessionInfo | null;
@@ -569,28 +570,26 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     const userMessage = lastUserMsgRef.current;
     if (!container || !userMessage) return;
 
+    let corrections = 0;
     const updatePromptAnchorSpacer = () => {
       const userMessageTop = userMessage.getBoundingClientRect().top
         - container.getBoundingClientRect().top
         + container.scrollTop;
       const targetTop = Math.max(0, userMessageTop - 16);
-      // Exclude the current spacer so each measurement converges instead of
-      // alternating between adding it and removing it.
-      const maxScrollTopWithoutAnchor = Math.max(
-        0,
-        container.scrollHeight - promptAnchorSpacerHeightRef.current - container.clientHeight,
-      );
-      const nextPromptAnchorSpacerHeight = Math.max(
-        0,
-        Math.ceil(targetTop - maxScrollTopWithoutAnchor),
+      const nextHeight = nextPromptAnchorSpacerHeight(
+        targetTop,
+        container.scrollHeight,
+        container.clientHeight,
+        promptAnchorSpacerHeightRef.current,
       );
 
-      if (nextPromptAnchorSpacerHeight !== promptAnchorSpacerHeightRef.current) {
-        const needsInitialScroll = promptAnchorSpacerHeightRef.current === 0
-          && nextPromptAnchorSpacerHeight > 0;
-        promptAnchorSpacerHeightRef.current = nextPromptAnchorSpacerHeight;
+      if (nextHeight !== promptAnchorSpacerHeightRef.current && corrections < 4) {
+        corrections += 1;
+        const needsInitialScroll = promptAnchorSpacerHeightRef.current === 0 && nextHeight > 0;
+        promptAnchorSpacerHeightRef.current = nextHeight;
         promptAnchorScrollPendingRef.current ||= needsInitialScroll;
-        setPromptAnchorSpacerHeight(nextPromptAnchorSpacerHeight);
+        setPromptAnchorSpacerHeight(nextHeight);
+        scheduleMeasurement();
         return;
       }
 
@@ -600,20 +599,30 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       }
     };
 
-    updatePromptAnchorSpacer();
+    let frame: number | null = null;
+    const scheduleMeasurement = () => {
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        updatePromptAnchorSpacer();
+      });
+    };
+    scheduleMeasurement();
     const observer = typeof ResizeObserver === "undefined"
       ? null
-      : new ResizeObserver(updatePromptAnchorSpacer);
+      : new ResizeObserver(scheduleMeasurement);
     observer?.observe(container);
     observer?.observe(userMessage);
-    return () => observer?.disconnect();
+    return () => {
+      observer?.disconnect();
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
   }, [
     agentRunning,
     bottomComposerHeight,
     lastUserMsgRef,
     messages.length,
     promptAnchorActive,
-    promptAnchorSpacerHeight,
     scrollContainerRef,
     scrollUserMsgToTop,
     streamState.streamingMessage,
