@@ -1,4 +1,5 @@
-import { isAbsolute, join, relative, resolve, sep } from "path";
+import { isAbsolute, join, relative, resolve, sep, dirname } from "path";
+import { existsSync, realpathSync } from "fs";
 import { userHome } from "./user-home";
 
 export interface NewProjectFolderResolution {
@@ -35,6 +36,14 @@ export function resolveNewProjectFolder(
         : join(home, trimmed);
   const rel = relative(home, dir);
   if (rel === "" || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+    return { error: "New folders can only be created inside your home directory" };
+  }
+  const realHome = realpathSync(home);
+  let existing = dir;
+  while (!existsSync(existing) && existing !== dirname(existing)) existing = dirname(existing);
+  const realParent = realpathSync(existing);
+  const parentRel = relative(realHome, realParent);
+  if (parentRel === ".." || parentRel.startsWith(`..${sep}`) || isAbsolute(parentRel)) {
     return { error: "New folders can only be created inside your home directory" };
   }
   return { dir };

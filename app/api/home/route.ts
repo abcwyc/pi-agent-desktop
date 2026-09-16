@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { homedir } from "os";
+import { userHome } from "@/lib/user-home";
 
 export async function GET() {
-  return NextResponse.json({ home: homedir() });
+  return NextResponse.json({ home: userHome() });
 }

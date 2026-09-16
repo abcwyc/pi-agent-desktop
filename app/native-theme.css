@@ -1314,7 +1314,7 @@ html.dark .sidebar-view-switcher-thumb {
 .project-picker-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  z-index: 800;
   background: color-mix(in srgb, var(--bg) 55%, transparent);
   backdrop-filter: blur(6px);
   display: flex;

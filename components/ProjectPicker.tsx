@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { AnimatedDropdown, PathLabel, displayCwd } from "./path-ui";
-import { isTauriDesktop } from "@/lib/desktop-updater";
 import { selectDirectoryNative } from "@/lib/desktop-window";
 
 interface ProjectPickerProps {
@@ -88,8 +87,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
   const [customPathOpen, setCustomPathOpen] = useState(false);
   const [customPathError, setCustomPathError] = useState<string | null>(null);
   const [customPathValidating, setCustomPathValidating] = useState(false);
-  const [newFolderOpen, setNewFolderOpen] = useState(false);
-  const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderBrowseOpen, setNewFolderBrowseOpen] = useState(false);
   const [newFolderBusy, setNewFolderBusy] = useState(false);
   const [newFolderError, setNewFolderError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -99,21 +97,21 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
     setProjectFilter("");
     setCustomPathOpen(false);
     setCustomPathError(null);
-    setNewFolderOpen(false);
-    setNewFolderName("");
+    setNewFolderBrowseOpen(false);
     setNewFolderError(null);
   }, []);
 
   useEffect(() => {
     if (!dropdownOpen) return;
     const handler = (e: MouseEvent) => {
+      if (customPathOpen || newFolderBrowseOpen) return;
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         closeDropdown();
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [dropdownOpen, closeDropdown]);
+  }, [dropdownOpen, closeDropdown, customPathOpen, newFolderBrowseOpen]);
 
   const commitCustomPath = useCallback(async (candidate: string): Promise<boolean> => {
     const path = candidate.trim();
@@ -143,28 +141,11 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
     }
   }, [customPathValidating, onSelectCwd, closeDropdown]);
 
-  const handleCustomPathClick = useCallback(async () => {
-    if (!isTauriDesktop()) {
-      // Web: open the browsable directory picker modal
-      setCustomPathError(null);
-      setCustomPathOpen(true);
-      setDropdownOpen(false);
-      return;
-    }
-
-    // Desktop: native directory dialog only — do not fall back to the web
-    // path browser (users should retry the native picker or see the error).
-    try {
-      setCustomPathError(null);
-      const path = await selectProjectDirectoryNative(selectedCwd, homeDir);
-      if (path === null) return;
-      onSelectCwd(path);
-      closeDropdown();
-    } catch (e) {
-      setCustomPathError(e instanceof Error ? e.message : String(e));
-      setDropdownOpen(true);
-    }
-  }, [selectedCwd, homeDir, onSelectCwd, closeDropdown]);
+  const handleCustomPathClick = useCallback(() => {
+    setCustomPathError(null);
+    setCustomPathOpen(true);
+    setDropdownOpen(false);
+  }, []);
 
   const handleDefaultCwd = useCallback(async () => {
     try {
@@ -176,31 +157,30 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
         return;
       }
       setCustomPathError(data.error ?? `HTTP ${res.status}`);
-      if (!isTauriDesktop()) {
-        setCustomPathOpen(true);
-      }
+      setCustomPathOpen(true);
       setDropdownOpen(true);
     } catch (e) {
       setCustomPathError(e instanceof Error ? e.message : String(e));
-      if (!isTauriDesktop()) {
-        setCustomPathOpen(true);
-      }
+      setCustomPathOpen(true);
       setDropdownOpen(true);
     }
   }, [onSelectCwd, closeDropdown]);
 
   // Create a fresh project folder via /api/cwd/create (home-confined) and
   // hand it to the host with source "create" so a session opens right in it.
-  const submitNewFolder = useCallback(async () => {
-    const candidate = newFolderName.trim();
-    if (!candidate || newFolderBusy) return;
+  const submitNewFolder = useCallback(async (parent: string, name: string) => {
+    if (newFolderBusy) return;
+    if (name === "." || name === ".." || name.includes("/") || name.includes("\\")) {
+      setNewFolderError("Enter a folder name without slashes");
+      return;
+    }
     setNewFolderBusy(true);
     setNewFolderError(null);
     try {
       const res = await fetch("/api/cwd/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: candidate }),
+        body: JSON.stringify({ path: `${parent}/${name}` }),
       });
       const data = await res.json().catch(() => ({})) as { cwd?: string; error?: string };
       if (!res.ok || data.error || !data.cwd) {
@@ -214,7 +194,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
     } finally {
       setNewFolderBusy(false);
     }
-  }, [newFolderName, newFolderBusy, onSelectCwd, closeDropdown]);
+  }, [newFolderBusy, onSelectCwd, closeDropdown]);
 
   const trimmedFilter = projectFilter.trim();
   const showProjectFilter = shouldShowProjectFilter(recentProjects);
@@ -330,7 +310,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
         </button>
       )}
 
-      {/* Open a folder: native dialog on desktop, browsable picker on web */}
+      {/* Browse folders on the server filesystem (including WSL2 home). */}
       <button
         className="project-picker-option"
         onClick={(e) => {
@@ -358,97 +338,36 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
         </svg>
         <span>Open Folder…</span>
       </button>
-      {newFolderOpen ? (
-        <form
-          onSubmit={(e) => { e.preventDefault(); void submitNewFolder(); }}
-          style={{ padding: "8px 10px", borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 6 }}
-        >
-          <input
-            value={newFolderName}
-            disabled={newFolderBusy}
-            onChange={(e) => { setNewFolderName(e.target.value); setNewFolderError(null); }}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                e.preventDefault();
-                e.stopPropagation();
-                setNewFolderOpen(false);
-                setNewFolderError(null);
-              }
-            }}
-            placeholder="folder name or ~/path/to/folder"
-            aria-label="New folder name"
-            autoFocus
-            spellCheck={false}
-            autoComplete="off"
-            style={{
-              width: "100%",
-              fontSize: 11,
-              fontFamily: "var(--font-mono)",
-              padding: "5px 8px",
-              background: "var(--bg-panel)",
-              border: "1px solid var(--border)",
-              borderRadius: 6,
-              color: "var(--text)",
-              outline: "none",
-            }}
-          />
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
-            <span style={{ fontSize: 10, color: "var(--text-dim)" }}>Created inside your home directory</span>
-            <span style={{ display: "flex", gap: 6 }}>
-              <button
-                type="button"
-                onClick={() => { setNewFolderOpen(false); setNewFolderError(null); }}
-                disabled={newFolderBusy}
-                style={{ padding: "4px 10px", fontSize: 11, background: "none", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-muted)", cursor: "pointer" }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={newFolderBusy || !newFolderName.trim()}
-                style={{ padding: "4px 12px", fontSize: 11, border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg-hover)", color: newFolderBusy || !newFolderName.trim() ? "var(--text-dim)" : "var(--text)", cursor: newFolderBusy ? "default" : "pointer" }}
-              >
-                {newFolderBusy ? "Creating…" : "Create"}
-              </button>
-            </span>
-          </div>
-          {newFolderError && (
-            <div role="alert" style={{ color: "var(--danger)", fontSize: 11, lineHeight: 1.35, overflowWrap: "anywhere" }}>
-              {newFolderError}
-            </div>
-          )}
-        </form>
-      ) : (
-        <button
-          className="project-picker-option"
-          onClick={(e) => {
-            e.stopPropagation();
-            setNewFolderOpen(true);
-            setNewFolderError(null);
-          }}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 7,
-            width: "100%",
-            padding: "8px 10px",
-            background: "none",
-            border: "none",
-            borderTop: "1px solid var(--border)",
-            color: "var(--text-muted)",
-            cursor: "pointer",
-            textAlign: "left",
-            fontSize: 11,
-          }}
-        >
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" style={{ flexShrink: 0 }}>
-            <line x1="5" y1="1" x2="5" y2="9" />
-            <line x1="1" y1="5" x2="9" y2="5" />
-          </svg>
-          <span>New Folder…</span>
-        </button>
-      )}
-      {customPathError && isTauriDesktop() && (
+      <button
+        className="project-picker-option"
+        onClick={(e) => {
+          e.stopPropagation();
+          setNewFolderBrowseOpen(true);
+          setNewFolderError(null);
+        }}
+        disabled={!homeDir}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 7,
+          width: "100%",
+          padding: "8px 10px",
+          background: "none",
+          border: "none",
+          borderTop: "1px solid var(--border)",
+          color: "var(--text-muted)",
+          cursor: "pointer",
+          textAlign: "left",
+          fontSize: 11,
+        }}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" style={{ flexShrink: 0 }}>
+          <line x1="5" y1="1" x2="5" y2="9" />
+          <line x1="1" y1="5" x2="9" y2="5" />
+        </svg>
+        <span>New Folder…</span>
+      </button>
+      {customPathError && !customPathOpen && (
         <div
           role="alert"
           style={{
@@ -466,10 +385,35 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
     </>
   );
 
+  const browsers = (
+    <>
+      {customPathOpen && (
+        <DirectoryPicker
+          initialPath={homeDir || undefined}
+          busy={customPathValidating}
+          error={customPathError}
+          onCancel={() => { setCustomPathOpen(false); setCustomPathError(null); }}
+          onSelect={(path) => void commitCustomPath(path)}
+        />
+      )}
+      {newFolderBrowseOpen && homeDir && (
+        <DirectoryPicker
+          initialPath={homeDir}
+          rootPath={homeDir}
+          busy={newFolderBusy}
+          error={newFolderError}
+          onCancel={() => { setNewFolderBrowseOpen(false); setNewFolderError(null); }}
+          onCreate={(parent, name) => void submitNewFolder(parent, name)}
+        />
+      )}
+    </>
+  );
+
   if (variant === "panel") {
     return (
       <div style={{ display: "flex", flexDirection: "column", minHeight: 0, width: "100%" }}>
         {pickerBody}
+        {browsers}
       </div>
     );
   }
@@ -579,17 +523,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
         {pickerBody}
       </AnimatedDropdown>
 
-      {customPathOpen && !isTauriDesktop() && (
-        <DirectoryPicker
-          busy={customPathValidating}
-          error={customPathError}
-          onCancel={() => {
-            setCustomPathOpen(false);
-            setCustomPathError(null);
-          }}
-          onSelect={(path) => void commitCustomPath(path)}
-        />
-      )}
+      {browsers}
     </div>
   );
 }

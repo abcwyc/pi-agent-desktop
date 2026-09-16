@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useState, useCallback, useRef, type ReactNo
 import { createPortal } from "react-dom";
 import type { SessionInfo } from "@/lib/types";
 import { useI18n } from "@/hooks/useI18n";
-import { ProjectPicker, selectProjectDirectoryNative } from "./ProjectPicker";
+import { ProjectPicker } from "./ProjectPicker";
 import { AnimatedDropdown, PathLabel, displayCwd, getRecentProjects } from "./path-ui";
 import { APP_PREF_KEYS, getPrefJson, removePref, setPrefJson } from "@/lib/app-prefs";
 import { groupByProject } from "@/lib/project-group";
@@ -796,19 +796,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     onNewSession?.(tempId, cwd);
   }, [selectedCwd, archivedProjectRoots, onNewSession, projectRootFor]);
 
-  const handleAddProject = useCallback(async () => {
-    if (!isTauriDesktop()) {
-      setProjectPickerOpen(true);
-      return;
-    }
-
-    try {
-      const cwd = await selectProjectDirectoryNative(selectedCwd, homeDir);
-      if (cwd) activateProject(cwd);
-    } catch (error) {
-      console.error("Failed to select project folder:", error);
-    }
-  }, [selectedCwd, homeDir, activateProject]);
+  const handleAddProject = useCallback(() => {
+    setProjectPickerOpen(true);
+  }, []);
 
   const archiveProject = useCallback((projectRoot: string) => {
     setArchivedProjectRoots((prev) => {
@@ -1741,8 +1731,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         </div>,
         document.body,
       )}
-      {projectPickerOpen && (
-        <div className="project-picker-modal-overlay" role="dialog" aria-modal="true" onClick={() => setProjectPickerOpen(false)}>
+      {projectPickerOpen && createPortal(
+        <div className="project-picker-modal-overlay" role="dialog" aria-modal="true" onClick={(e) => { if (e.target === e.currentTarget) setProjectPickerOpen(false); }}>
           <div className="project-picker-modal-shell" onClick={(e) => e.stopPropagation()}>
             <div className="project-picker-modal-title">{t("sidebar.addProject")}</div>
             <ProjectPicker
@@ -1760,7 +1750,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               variant="panel"
             />
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

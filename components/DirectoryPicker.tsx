@@ -47,41 +47,62 @@ function isWindowsDriveRoot(directory: string): boolean {
   return /^[a-zA-Z]:[\\/]?$/.test(directory);
 }
 
+export function visibleDirectoryEntries(entries: DirectoryEntry[], query: string, descending: boolean): DirectoryEntry[] {
+  const needle = query.trim().toLocaleLowerCase();
+  return entries
+    .filter((entry) => entry.name.toLocaleLowerCase().includes(needle))
+    .sort((a, b) => (descending ? -1 : 1) * a.name.localeCompare(b.name));
+}
+
 interface Props {
   onCancel: () => void;
-  onSelect: (path: string) => void;
+  onSelect?: (path: string) => void;
+  onCreate?: (parent: string, name: string) => void;
+  initialPath?: string;
+  rootPath?: string;
   busy?: boolean;
   error?: string | null;
 }
 
-export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Props) {
+export function DirectoryPicker({ onCancel, onSelect, onCreate, initialPath, rootPath, busy = false, error }: Props) {
   const { t } = useI18n();
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [currentPath, setCurrentPath] = useState("");
   const [parentDirectory, setParentDirectory] = useState<string | null>(null);
   const [pathInput, setPathInput] = useState("");
   const [directories, setDirectories] = useState<DirectoryEntry[]>([]);
+  const [filter, setFilter] = useState("");
+  const [folderName, setFolderName] = useState("");
+  const [descending, setDescending] = useState(false);
   const [drives, setDrives] = useState<DirectoryEntry[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const navigateTo = useCallback(async (directory?: string) => {
+    if (rootPath && directory && directory !== rootPath && !directory.startsWith(`${rootPath.replace(/\/$/, "")}/`)) {
+      setLoadError(`Choose a folder inside ${rootPath}`);
+      return;
+    }
     setLoading(true);
     setLoadError(null);
     try {
-      const data = await loadDirectories(directory);
-      const nextPath = data.path ?? directory ?? "/";
+      const data = await loadDirectories(directory ?? initialPath);
+      const nextPath = data.path ?? directory ?? initialPath ?? "/";
+      if (rootPath && nextPath !== rootPath && !nextPath.startsWith(`${rootPath.replace(/\/$/, "")}/`)) {
+        throw new Error(`Choose a folder inside ${rootPath}`);
+      }
       setCurrentPath(nextPath);
       setParentDirectory(data.parentPath ?? null);
       setPathInput(nextPath);
       setDirectories(data.directories ?? []);
+      setFilter("");
       setDrives(data.drives ?? null);
     } catch (cause) {
       setLoadError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initialPath, rootPath]);
 
   useEffect(() => {
     setPortalTarget(document.body);
@@ -94,8 +115,9 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
     if (candidate) void navigateTo(candidate);
   };
   const hasUncommittedPath = pathInput.trim() !== currentPath;
-  const canSelect = Boolean(currentPath) && !hasUncommittedPath && !busy;
-  const canNavigateUp = Boolean(parentDirectory) || isWindowsDriveRoot(currentPath);
+  const canSelect = Boolean(currentPath) && !loading && !hasUncommittedPath && !busy;
+  const canNavigateUp = currentPath !== rootPath && (Boolean(parentDirectory) || isWindowsDriveRoot(currentPath));
+  const visibleDirectories = visibleDirectoryEntries(drives ?? directories, filter, descending);
 
   if (!portalTarget) return null;
 
@@ -104,11 +126,13 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
       className="directory-picker-backdrop"
       role="dialog"
       aria-modal="true"
-      aria-label={t("directoryPicker.selectDirectory")}
+      aria-label={onCreate ? "New Folder" : t("directoryPicker.selectDirectory")}
       onClick={(event) => {
+        event.stopPropagation();
         if (event.target === event.currentTarget && !busy) onCancel();
       }}
       onKeyDown={(event) => {
+        event.stopPropagation();
         if (event.key === "Escape" && !busy) onCancel();
       }}
       style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.35)" }}
@@ -116,7 +140,7 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
       <div className="directory-picker-panel" style={{ width: 520, maxWidth: "calc(100vw - 16px)", height: "min(620px, calc(100dvh - 16px))", maxHeight: "calc(100dvh - 16px)", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, padding: "12px 18px", borderBottom: "1px solid var(--border)" }}>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ color: "var(--text)", fontWeight: 700, fontSize: 15 }}>{t("directoryPicker.selectDirectory")}</div>
+            <div style={{ color: "var(--text)", fontWeight: 700, fontSize: 15 }}>{onCreate ? "New Folder" : t("directoryPicker.selectDirectory")}</div>
           </div>
           <button
             type="button"
@@ -145,7 +169,7 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
             type="text"
             value={pathInput}
             placeholder="/path/to/project or ~/project"
-            autoFocus
+            autoFocus={!onCreate}
             autoComplete="off"
             spellCheck={false}
             onChange={(event) => {
@@ -165,13 +189,34 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
           </button>
         </form>
 
+        <div style={{ display: "flex", gap: 8, padding: "8px 14px", borderBottom: "1px solid var(--border)" }}>
+          <input
+            type="search"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder="Find folder…"
+            aria-label="Find folder"
+            style={{ flex: 1, minWidth: 0, height: 32, padding: "0 10px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg-panel)", color: "var(--text)", fontSize: 12 }}
+          />
+          <button
+            type="button"
+            className="directory-picker-action"
+            onClick={() => setDescending((value) => !value)}
+            title={descending ? "Sort A to Z" : "Sort Z to A"}
+            aria-label={descending ? "Sort A to Z" : "Sort Z to A"}
+            style={{ height: 32, minWidth: 58, border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg-hover)", color: "var(--text-muted)", cursor: "pointer", fontSize: 12 }}
+          >
+            {descending ? "Z-A" : "A-Z"}
+          </button>
+        </div>
+
         <div className="directory-picker-list" style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "8px 10px" }}>
           {loading ? (
             <div style={{ padding: 8, color: "var(--text-dim)", fontSize: 11 }}>{t("directoryPicker.loadingDirectories")}</div>
           ) : drives !== null ? (
             <>
-              {drives.length > 0 ? (
-                drives.map((drive) => (
+              {visibleDirectories.length > 0 ? (
+                visibleDirectories.map((drive) => (
                   <button
                     key={drive.path}
                     className="directory-picker-entry"
@@ -185,11 +230,11 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
                   </button>
                 ))
               ) : (
-                <div style={{ padding: 8, color: "var(--text-dim)", fontSize: 11 }}>{t("directoryPicker.noDrives")}</div>
+                <div style={{ padding: 8, color: "var(--text-dim)", fontSize: 11 }}>{filter ? "No matching folders" : t("directoryPicker.noDrives")}</div>
               )}
             </>
-          ) : directories.length > 0 ? (
-            directories.map((entry) => (
+          ) : visibleDirectories.length > 0 ? (
+            visibleDirectories.map((entry) => (
               <button
                 key={entry.path}
                 className="directory-picker-entry"
@@ -203,14 +248,41 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
               </button>
             ))
           ) : (
-            <div style={{ padding: 8, color: "var(--text-dim)", fontSize: 11 }}>{t("directoryPicker.noSubdirectories")}</div>
+            <div style={{ padding: 8, color: "var(--text-dim)", fontSize: 11 }}>{filter ? "No matching folders" : t("directoryPicker.noSubdirectories")}</div>
           )}
           {(loadError || error) && <div style={{ padding: "8px", color: "#dc2626", fontSize: 11 }}>{loadError ?? error}</div>}
         </div>
 
         <div className="directory-picker-footer" style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, flexShrink: 0, padding: "10px 18px", borderTop: "1px solid var(--border)" }}>
+          {onCreate && (
+            <form
+              onSubmit={(event) => { event.preventDefault(); if (canSelect && folderName.trim()) onCreate(currentPath, folderName.trim()); }}
+              style={{ display: "flex", flex: 1, minWidth: 0, gap: 8 }}
+            >
+              <input
+                type="text"
+                value={folderName}
+                onChange={(event) => setFolderName(event.target.value)}
+                placeholder="New folder name"
+                aria-label="New folder name"
+                autoFocus
+                autoComplete="off"
+                spellCheck={false}
+                disabled={busy}
+                style={{ flex: 1, minWidth: 0, height: 34, padding: "0 10px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg-panel)", color: "var(--text)", fontSize: 12 }}
+              />
+              <button
+                className="directory-picker-action"
+                type="submit"
+                disabled={!canSelect || !folderName.trim()}
+                style={{ padding: "6px 12px", border: 0, borderRadius: 6, background: "var(--accent)", color: "var(--accent-contrast)", opacity: canSelect && folderName.trim() ? 1 : 0.6, cursor: canSelect && folderName.trim() ? "pointer" : "default" }}
+              >
+                {busy ? "Creating…" : "Create"}
+              </button>
+            </form>
+          )}
           <button className="directory-picker-action" type="button" onClick={onCancel} disabled={busy} style={{ padding: "6px 14px", border: "1px solid var(--border)", borderRadius: 6, background: "none", color: "var(--text-muted)", cursor: busy ? "default" : "pointer", fontSize: 13 }}>{t("i18n.cancel")}</button>
-          <button
+          {!onCreate && onSelect && <button
             className="directory-picker-action"
             type="button"
             onClick={() => onSelect(currentPath)}
@@ -219,7 +291,7 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
             style={{ padding: "6px 16px", border: 0, borderRadius: 6, background: "var(--accent)", color: "var(--accent-contrast)", fontSize: 13, fontWeight: 600, opacity: canSelect ? 1 : 0.6, cursor: canSelect ? "pointer" : "default" }}
           >
             {busy ? t("i18n.checking") : t("directoryPicker.selectThisFolder")}
-          </button>
+          </button>}
         </div>
       </div>
     </div>,
