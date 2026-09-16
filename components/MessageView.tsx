@@ -5,6 +5,9 @@ import { MarkdownBody } from "./MarkdownBody";
 import { copyText } from "@/lib/clipboard";
 import { useI18n } from "@/hooks/useI18n";
 import { useDiffViewMode } from "@/hooks/useDiffViewMode";
+import { useTheme } from "@/hooks/useTheme";
+import { SyntaxHighlighter, vs, vscDarkPlus } from "@/lib/syntax-highlighting";
+import { getWrittenFile, sourceLanguageFromPath, type WrittenFile } from "@/lib/write-tool-display";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
 import { getAssistantErrorMessage, isEmptyThinkingBlock } from "@/lib/message-display";
 import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
@@ -865,6 +868,7 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
   const [expanded, setExpanded] = useState(false);
   const inputStr = JSON.stringify(block.input, null, 2);
   const isEditTool = isEditToolName(block.toolName);
+  const writtenFile = getWrittenFile(block.toolName, block.input);
   const resultDiff = result && !result.isError ? getResultDiff(result) : null;
 
   // Result display
@@ -918,22 +922,26 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
 
       {/* ── Expanded: input args ── */}
       {expanded && !isEditTool && (
-        <pre
-          style={{
-            margin: 0,
-            padding: "8px 10px",
-            color: "var(--text-muted)",
-            fontSize: 12,
-            lineHeight: 1.5,
-            overflow: "auto",
-            background: "var(--bg-subtle)",
-            borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-all",
-          }}
-        >
-          {inputStr}
-        </pre>
+        writtenFile ? (
+          <WrittenFileView file={writtenFile} isError={isError} />
+        ) : (
+          <pre
+            style={{
+              margin: 0,
+              padding: "8px 10px",
+              color: "var(--text-muted)",
+              fontSize: 12,
+              lineHeight: 1.5,
+              overflow: "auto",
+              background: "var(--bg-subtle)",
+              borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-all",
+            }}
+          >
+            {inputStr}
+          </pre>
+        )
       )}
 
       {/* ── Paired result — only shown when expanded ── */}
@@ -950,6 +958,61 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
           />
         )
       )}
+    </div>
+  );
+}
+
+function WrittenFileView({ file, isError }: { file: WrittenFile; isError: boolean }) {
+  const { isDark } = useTheme();
+  return (
+    <div style={{ borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)", background: "var(--bg)", minWidth: 0 }}>
+      <div
+        title={file.path}
+        style={{
+          padding: "6px 10px",
+          borderBottom: "1px solid var(--border)",
+          background: "var(--bg-panel)",
+          color: "var(--text-muted)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 11,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {file.path}
+      </div>
+      <div style={{ maxHeight: 560, overflow: "auto" }}>
+        <SyntaxHighlighter
+          language={sourceLanguageFromPath(file.path)}
+          style={isDark ? vscDarkPlus : vs}
+          showLineNumbers
+          lineNumberStyle={{
+            width: 42,
+            minWidth: 42,
+            padding: "0 8px",
+            color: "var(--text-dim)",
+            background: "var(--bg-panel)",
+            borderRight: "1px solid var(--border)",
+            fontSize: 11,
+            userSelect: "none",
+          }}
+          customStyle={{
+            margin: 0,
+            padding: "8px 0",
+            border: 0,
+            background: "var(--bg)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 12,
+            lineHeight: 1.55,
+            minWidth: "100%",
+            width: "max-content",
+          }}
+          codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
+        >
+          {file.content}
+        </SyntaxHighlighter>
+      </div>
     </div>
   );
 }
@@ -1624,6 +1687,7 @@ function getToolPreview(block: ToolCallContent): string {
   // Common tool input patterns
   if ("command" in input) return String(input.command).slice(0, 120);
   if ("path" in input) return String(input.path).slice(0, 120);
+  if ("filePath" in input) return String(input.filePath).slice(0, 120);
   if ("file_path" in input) return String(input.file_path).slice(0, 120);
   if ("pattern" in input) return String(input.pattern).slice(0, 120);
   if ("query" in input) return String(input.query).slice(0, 120);
