@@ -13,7 +13,7 @@ import type {
 import { normalizeToolCalls } from "@/lib/normalize";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { fetchWithRetry } from "@/lib/fetch-timeout";
-import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
+import { getToolNamesForPreset, readStoredToolPreset, storeToolPreset, type ToolEntry } from "@/lib/tool-presets";
 import { rememberScrollPosition, sessionScrollTops } from "@/lib/scroll-memory";
 import { applyAssistantMessageEvent, type ClientAssistantMessageEvent } from "@/lib/streaming-message";
 import { modelScopeWarningKey, type ModelScopeWarning } from "@/lib/model-scope-warnings";
@@ -578,7 +578,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setSlashCommands([]);
       setLoading(Boolean(session?.id) && !cachedSession);
       if (isNew) {
-        setToolPreset("default");
+        setToolPreset(readStoredToolPreset() ?? "default");
         setThinkingLevel("auto");
         setNewSessionModel(null);
       }
@@ -1929,6 +1929,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const handleToolPresetChange = useCallback(async (preset: "none" | "default" | "full") => {
     const toolNames = getToolNamesForPreset(preset);
     setToolPresetState(preset);
+    storeToolPreset(preset);
     const sid = sessionIdRef.current ?? await ensuringNewSessionRef.current;
     if (!sid) return;
     try {

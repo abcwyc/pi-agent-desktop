@@ -32,3 +32,51 @@ export function getToolNamesForPreset(preset: ToolPreset): string[] {
   if (preset === "full") return [...PRESET_FULL];
   return [...PRESET_DEFAULT];
 }
+
+export const TOOL_PRESET_STORAGE_KEY = "pi-agent.tool-preset";
+
+const TOOL_PRESETS: readonly ToolPreset[] = ["none", "default", "full"];
+
+export function isToolPreset(value: unknown): value is ToolPreset {
+  return typeof value === "string" && (TOOL_PRESETS as readonly string[]).includes(value);
+}
+
+/** Minimal storage surface, so tests can pass a fake implementation. */
+export interface ToolPresetStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
+
+function defaultToolPresetStorage(): ToolPresetStorage | null {
+  try {
+    return typeof window !== "undefined" ? window.localStorage : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Read the user's persisted tool preset for newly created sessions. */
+export function readStoredToolPreset(
+  storage: ToolPresetStorage | null = defaultToolPresetStorage(),
+): ToolPreset | null {
+  if (!storage) return null;
+  try {
+    const stored = storage.getItem(TOOL_PRESET_STORAGE_KEY);
+    return isToolPreset(stored) ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Persist the user's tool preset so new sessions start with it. */
+export function storeToolPreset(
+  preset: ToolPreset,
+  storage: ToolPresetStorage | null = defaultToolPresetStorage(),
+): void {
+  if (!storage) return;
+  try {
+    storage.setItem(TOOL_PRESET_STORAGE_KEY, preset);
+  } catch {
+    // Ignore storage failures (private mode, quota, disabled storage).
+  }
+}
