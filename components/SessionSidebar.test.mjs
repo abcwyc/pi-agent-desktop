@@ -124,3 +124,17 @@ test("hides subagent rows and aggregates their state into the main session row",
   assert.match(source, /familySessions\.some\(\(session\) => runningSessionIds\.has\(session\.id\)\)/);
   assert.doesNotMatch(source, /function SessionTreeItem/);
 });
+
+test("project more menu can open the folder and the title accepts a context menu", () => {
+  assert.match(source, /openPathNative\(cwd\)/);
+  assert.match(source, /t\("sidebar\.openFolder"\)/);
+  assert.match(source, /t\("sidebar\.renameProject"\)/);
+  assert.match(source, /startProjectRename\(projectMenu\.root\)/);
+  assert.match(source, /APP_PREF_KEYS\.projectAliases/);
+  assert.match(source, /className="sidebar-project-tree-name-input"/);
+  assert.match(source, /sidebarPrefsHydrated/);
+  assert.match(
+    source,
+    /onContextMenu=\{\(e\) => openProjectContextMenu\(e, group\.projectRoot\)\}/,
+  );
+});

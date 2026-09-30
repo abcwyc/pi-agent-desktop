@@ -279,6 +279,8 @@ export const enLocale: LocalePlugin = {
     "sidebar.moreActions": "Project actions",
     "sidebar.newChat": "New Session",
     "sidebar.archiveProject": "Remove project",
+    "sidebar.renameProject": "Rename",
+    "sidebar.openFolder": "Open folder",
     "sidebar.openTerminalHere": "Open terminal here",
     "contextPanel.tabFiles": "Files",
     "contextPanel.tabBrowser": "Browser",

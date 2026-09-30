@@ -5,16 +5,19 @@ import test from "node:test";
 const source = await readFile(new URL("./AppShell.tsx", import.meta.url), "utf8");
 
 test("first paint does not read tab sessionStorage", () => {
-  // The fork initializes navigation through its workspace-aware wrapper
-  // (desktop cold-start restore); it calls getInitialNavigation internally,
-  // so tab sessionStorage is still read only in the post-mount effect.
+  // First paint is URL-only (matches SSR). Desktop workspace + tab memory
+  // apply in useLayoutEffect after mount.
   assert.match(
     source,
-    /const \[initialNavigation, setInitialNavigation\] = useState\(\(\) => resolveInitialNavigation\(searchParams, persistedWorkspace\)\);/,
+    /const \[initialNavigation, setInitialNavigation\] = useState\(\(\) => resolveInitialNavigation\(searchParams, null\)\);/,
   );
   assert.doesNotMatch(
     source,
     /useState\(\(\) => getInitialNavigation\(searchParams,\s*getTabOpen/,
+  );
+  assert.doesNotMatch(
+    source,
+    /useState\(\(\) => isTauriDesktop\(\)\)/,
   );
 });
 
@@ -22,6 +25,10 @@ test("applies tab session memory after mount instead of suppressing hydration", 
   assert.match(
     source,
     /useLayoutEffect\(\(\) => \{\s+const next = withTabOpen\(initialNavigation, getTabOpen\(\)\);[\s\S]*?setInitialNavigation\(next\);[\s\S]*?if \(next\.sessionId\) setInitialSessionRestored\(false\);[\s\S]*?\}, \[initialNavigation\]\);/,
+  );
+  assert.match(
+    source,
+    /desktopBootstrappedRef/,
   );
   assert.doesNotMatch(source, /suppressHydrationWarning/);
 });

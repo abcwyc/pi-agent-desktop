@@ -545,8 +545,9 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
     void handleSend(initialPrompt);
   }, [initialPrompt, loading, error, handleSend, onInitialPromptConsumed]);
 
-  const conversationTurns = useMemo<ConversationTurnLocation[]>(() => {
+  const { conversationTurns, conversationTurnByMessageIndex } = useMemo(() => {
     const turns: ConversationTurnLocation[] = [];
+    const byMessageIndex = new Map<number, number>();
     for (let userIdx = 0; userIdx < messages.length; userIdx++) {
       const question = getUserInputText(messages[userIdx]);
       if (!question) continue;
@@ -554,9 +555,10 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
       for (let idx = userIdx + 1; idx < messages.length && messages[idx].role !== "user"; idx++) {
         answer = getAssistantPreviewText(messages[idx]) ?? answer;
       }
+      byMessageIndex.set(userIdx, turns.length);
       turns.push({ index: turns.length, question, answer });
     }
-    return turns;
+    return { conversationTurns: turns, conversationTurnByMessageIndex: byMessageIndex };
   }, [messages]);
 
   // Fork/navigate stay referentially stable across busy transitions; gating
@@ -1128,17 +1130,24 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
 
   // Jump to a conversation turn from the navigator rail. Turns can sit
   // outside the rendered window, so expand the window to the full branch
-  // first, then scroll once the anchor is mounted.
+  // first, then scroll once the [data-conversation-turn] anchor is mounted.
+  const [pendingTurnScroll, setPendingTurnScroll] = useState<number | null>(null);
   const selectConversationTurn = useCallback((turnIndex: number) => {
-    setVisibleCount(messages.length);
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      const container = scrollContainerRef.current;
-      const anchor = container?.querySelector<HTMLElement>(`[data-conversation-turn="${turnIndex}"]`);
-      if (!container || !anchor) return;
-      const top = anchor.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - 16;
-      container.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
-    }));
-  }, [messages.length, scrollContainerRef]);
+    // rendered.length can exceed messages.length (process/answer splits), so
+    // mirror the search-path expansion (messages.length * 2).
+    setVisibleCount((current) => Math.max(current, messages.length * 2));
+    setPendingTurnScroll(turnIndex);
+  }, [messages.length]);
+
+  useLayoutEffect(() => {
+    if (pendingTurnScroll == null) return;
+    const container = scrollContainerRef.current;
+    const anchor = container?.querySelector<HTMLElement>(`[data-conversation-turn="${pendingTurnScroll}"]`);
+    if (!container || !anchor) return;
+    const top = anchor.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - 16;
+    container.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    setPendingTurnScroll(null);
+  }, [pendingTurnScroll, visibleCount, messages.length, scrollContainerRef]);
 
   const chatInputElement = (
     <ChatInput
@@ -1390,8 +1399,14 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                   />
                 );
                 if (!isVisible || currentRefIdx === undefined) return view;
+                const conversationTurn = conversationTurnByMessageIndex.get(idx);
                 return (
-                  <div key={`${keyPrefix}-${messageKey}`} data-entry-id={entryIds[idx]} ref={options.attachRef === false ? undefined : attachVisibleRef(idx, currentRefIdx)}>
+                  <div
+                    key={`${keyPrefix}-${messageKey}`}
+                    data-entry-id={entryIds[idx]}
+                    data-conversation-turn={conversationTurn}
+                    ref={options.attachRef === false ? undefined : attachVisibleRef(idx, currentRefIdx)}
+                  >
                     {view}
                   </div>
                 );
