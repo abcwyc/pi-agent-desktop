@@ -1936,6 +1936,22 @@ html.dark .sidebar-view-switcher-thumb {
   font-weight: 500;
 }
 
+.sidebar-project-tree-name-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 24px;
+  margin: 0;
+  padding: 0 6px;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  outline: none;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+}
+
 .sidebar-project-tree-branch {
   font-family: var(--font-mono);
   font-size: 10px;

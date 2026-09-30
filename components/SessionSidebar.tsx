@@ -12,9 +12,9 @@ import { createPortal } from "react-dom";
 import { ProjectPicker, selectProjectDirectoryNative } from "./ProjectPicker";
 import { AnimatedDropdown, PathLabel, displayCwd, getRecentProjects } from "./path-ui";
 import { APP_PREF_KEYS, getPrefJson, removePref, setPrefJson } from "@/lib/app-prefs";
-import { groupByProject } from "@/lib/project-group";
+import { groupByProject, projectBasename } from "@/lib/project-group";
 import { notifyDesktop } from "@/lib/desktop-notify";
-import { revealItemInDirNative } from "@/lib/desktop-native";
+import { openPathNative, revealItemInDirNative } from "@/lib/desktop-native";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import { getDesktopPlatform, type DesktopPlatform } from "@/lib/desktop-window";
 import { useWindowDrag } from "./desktop";
@@ -239,6 +239,18 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       ? new Set(stored.filter((root): root is string => typeof root === "string"))
       : new Set();
   });
+  const [projectAliases, setProjectAliases] = useState<Record<string, string>>(() => {
+    const stored = getPrefJson<unknown>(APP_PREF_KEYS.projectAliases);
+    if (!stored || typeof stored !== "object" || Array.isArray(stored)) return {};
+    const next: Record<string, string> = {};
+    for (const [root, alias] of Object.entries(stored as Record<string, unknown>)) {
+      if (typeof alias === "string" && alias.trim()) next[root] = alias.trim();
+    }
+    return next;
+  });
+  const [renamingProjectRoot, setRenamingProjectRoot] = useState<string | null>(null);
+  const [projectRenameValue, setProjectRenameValue] = useState("");
+  const projectRenameInputRef = useRef<HTMLInputElement>(null);
   const [projectMenu, setProjectMenu] = useState<{ root: string } | null>(null);
   const [projectMenuPos, setProjectMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [projectBranchMenu, setProjectBranchMenu] = useState<ProjectBranchMenuState | null>(null);
@@ -351,6 +363,16 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   useEffect(() => {
     setPrefJson(APP_PREF_KEYS.archivedProjects, [...archivedProjectRoots]);
   }, [archivedProjectRoots]);
+
+  useEffect(() => {
+    setPrefJson(APP_PREF_KEYS.projectAliases, projectAliases);
+  }, [projectAliases]);
+
+  useEffect(() => {
+    if (!renamingProjectRoot) return;
+    const id = requestAnimationFrame(() => projectRenameInputRef.current?.select());
+    return () => cancelAnimationFrame(id);
+  }, [renamingProjectRoot]);
 
   useEffect(() => {
     // Live running status via SSE — no polling. The server pushes the current
@@ -970,6 +992,52 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     setProjectMenuPos(null);
   }, []);
 
+  const projectLabel = useCallback((projectRoot: string, fallback?: string) => {
+    return projectAliases[projectRoot] || fallback || projectBasename(projectRoot);
+  }, [projectAliases]);
+
+  const startProjectRename = useCallback((projectRoot: string) => {
+    setProjectMenu(null);
+    setProjectMenuPos(null);
+    setProjectBranchMenu(null);
+    setProjectRenameValue(projectLabel(projectRoot));
+    setRenamingProjectRoot(projectRoot);
+  }, [projectLabel]);
+
+  const commitProjectRename = useCallback(() => {
+    const root = renamingProjectRoot;
+    if (!root) return;
+    const name = projectRenameValue.trim();
+    const defaultName = projectBasename(root);
+    setRenamingProjectRoot(null);
+    setProjectAliases((prev) => {
+      const next = { ...prev };
+      if (!name || name === defaultName) delete next[root];
+      else next[root] = name;
+      return next;
+    });
+  }, [projectRenameValue, renamingProjectRoot]);
+
+  const cancelProjectRename = useCallback(() => {
+    setRenamingProjectRoot(null);
+  }, []);
+
+  const placeProjectMenu = useCallback((projectRoot: string, left: number, top: number) => {
+    setProjectMenu({ root: projectRoot });
+    setProjectMenuPos({ top, left });
+    setProjectBranchMenu(null);
+  }, []);
+
+  const projectMenuPlacement = useCallback((anchorX: number, anchorY: number, preferAbove = false) => {
+    const menuWidth = 168;
+    const menuHeight = 160;
+    const left = Math.max(8, Math.min(anchorX, window.innerWidth - menuWidth - 8));
+    const top = preferAbove || anchorY + menuHeight > window.innerHeight - 8
+      ? Math.max(8, anchorY - menuHeight)
+      : anchorY;
+    return { left, top };
+  }, []);
+
   const openProjectMenu = useCallback((e: React.MouseEvent<HTMLButtonElement>, projectRoot: string) => {
     e.stopPropagation();
     if (projectMenu?.root === projectRoot) {
@@ -980,15 +1048,21 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     }
     const rect = e.currentTarget.getBoundingClientRect();
     const menuWidth = 168;
-    const menuHeight = 42;
-    const left = Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8));
-    const top = rect.bottom + menuHeight > window.innerHeight - 8
-      ? rect.top - menuHeight - 4
-      : rect.bottom + 4;
-    setProjectMenu({ root: projectRoot });
-    setProjectMenuPos({ top, left });
-    setProjectBranchMenu(null);
-  }, [projectMenu]);
+    const preferAbove = rect.bottom + 160 > window.innerHeight - 8;
+    const { left, top } = projectMenuPlacement(
+      rect.right - menuWidth,
+      preferAbove ? rect.top - 4 : rect.bottom + 4,
+      preferAbove,
+    );
+    placeProjectMenu(projectRoot, left, top);
+  }, [placeProjectMenu, projectMenu, projectMenuPlacement]);
+
+  const openProjectContextMenu = useCallback((e: React.MouseEvent, projectRoot: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const { left, top } = projectMenuPlacement(e.clientX, e.clientY);
+    placeProjectMenu(projectRoot, left, top);
+  }, [placeProjectMenu, projectMenuPlacement]);
 
   // Phase A: project tree — groups sessions by project root. Sorting is
   const trimmedSessionQuery = sessionQuery.trim().toLowerCase();
@@ -1067,6 +1141,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         : group.branches.length > 1
           ? `${group.branches[0]} +${group.branches.length - 1}`
           : null;
+    const displayName = projectLabel(group.projectRoot, group.displayName);
+    const isRenaming = renamingProjectRoot === group.projectRoot;
     const toggleCollapse = () => {
       setCollapsedProjects((prev) => {
         const next = new Set(prev);
@@ -1080,10 +1156,44 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     return (
       <div key={group.projectRoot} className={`sidebar-project-tree-group${isCollapsed ? " is-collapsed" : ""}${isActive ? " is-active" : ""}`}>
         <div className="sidebar-project-tree-row">
+          {isRenaming ? (
+            <div className="sidebar-project-tree-row-main is-renaming">
+              <span className="sidebar-project-tree-folder" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                  {isCollapsed ? (
+                    <path d="M3.5 6.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5Z" />
+                  ) : (
+                    <path d="M3.5 7.5h6l2 2H21l-2 9.5H5a1.5 1.5 0 0 1-1.5-1.5Z" />
+                  )}
+                </svg>
+              </span>
+              <input
+                ref={projectRenameInputRef}
+                className="sidebar-project-tree-name-input"
+                value={projectRenameValue}
+                onChange={(e) => setProjectRenameValue(e.target.value)}
+                onBlur={commitProjectRename}
+                onKeyDown={(e) => {
+                  if (isImeComposing(e)) return;
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitProjectRename();
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    cancelProjectRename();
+                  }
+                }}
+                aria-label={t("sidebar.renameProject")}
+                autoFocus
+              />
+            </div>
+          ) : (
           <button
             type="button"
             className="sidebar-project-tree-row-main"
             onClick={toggleCollapse}
+            onContextMenu={(e) => openProjectContextMenu(e, group.projectRoot)}
             aria-expanded={!isCollapsed}
             title={group.projectRoot}
           >
@@ -1096,7 +1206,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 )}
               </svg>
             </span>
-            <span className="sidebar-project-tree-name">{group.displayName}</span>
+            <span className="sidebar-project-tree-name">{displayName}</span>
             {branchSubtitle && (
               <span className="sidebar-project-tree-branch" title={branchSubtitle}>
                 {branchSubtitle}
@@ -1115,6 +1225,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               )}
             </span>
           </button>
+          )}
           <div className="sidebar-project-tree-row-actions" data-no-drag>
             <button
               type="button"
@@ -1868,6 +1979,13 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               <button
                 type="button"
                 role="menuitem"
+                onClick={() => startProjectRename(projectMenu.root)}
+              >
+                {t("sidebar.renameProject")}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
                 onClick={() => void openProjectBranchMenu(projectMenu.root)}
               >
                 {t("sidebar.switchBranch")}
@@ -1879,10 +1997,27 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   onClick={() => {
                     const cwd = projectMenu.root;
                     setProjectMenu(null);
+                    setProjectMenuPos(null);
                     onOpenTerminal(cwd);
                   }}
                 >
                   {t("sidebar.openTerminalHere")}
+                </button>
+              )}
+              {isTauriDesktop() && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    const cwd = projectMenu.root;
+                    setProjectMenu(null);
+                    setProjectMenuPos(null);
+                    void openPathNative(cwd).catch((error) => {
+                      console.error("Failed to open project folder:", error);
+                    });
+                  }}
+                >
+                  {t("sidebar.openFolder")}
                 </button>
               )}
               <button

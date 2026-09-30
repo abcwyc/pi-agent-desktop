@@ -14,6 +14,8 @@ export const APP_PREF_KEYS = {
   rightPanelWidth: "pi-right-panel-width",
   unreadSessionIds: "pi-web:unread-session-ids",
   archivedProjects: "pi-web:archived-projects",
+  /** Sidebar display aliases for project roots: Record<projectRoot, alias>. */
+  projectAliases: "pi-web:project-aliases",
   updateSnooze: "pi-web:update-snooze",
   closeQuits: "pi-desktop-close-quits",
   notifyOnComplete: "pi-desktop-notify-on-complete",

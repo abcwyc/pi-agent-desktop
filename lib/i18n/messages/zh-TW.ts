@@ -710,6 +710,8 @@ export const zhTWLocale: LocalePlugin = {
     "sidebar.moreActions": "專案操作",
     "sidebar.newChat": "新建會話",
     "sidebar.archiveProject": "移除專案",
+    "sidebar.renameProject": "重新命名",
+    "sidebar.openFolder": "開啟資料夾",
     "sidebar.openTerminalHere": "在終端機中開啟",
     "contextPanel.tabFiles": "檔案",
     "contextPanel.tabBrowser": "瀏覽器",

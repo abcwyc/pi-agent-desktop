@@ -30,6 +30,11 @@ function basenameOf(path: string): string {
   return idx === -1 ? trimmed : trimmed.slice(idx + 1);
 }
 
+/** Basename of a project root path — safe for browser and Node. */
+export function projectBasename(path: string): string {
+  return basenameOf(path);
+}
+
 /**
  * Group sessions by project root. Sessions without `projectRoot` (older records
  * built before the server started filling it) fall back to their cwd and are

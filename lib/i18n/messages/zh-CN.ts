@@ -278,6 +278,8 @@ export const zhCNLocale: LocalePlugin = {
     "sidebar.moreActions": "项目操作",
     "sidebar.newChat": "新建会话",
     "sidebar.archiveProject": "移除项目",
+    "sidebar.renameProject": "重命名",
+    "sidebar.openFolder": "打开文件夹",
     "sidebar.openTerminalHere": "在终端中打开",
     "contextPanel.tabFiles": "文件",
     "contextPanel.tabBrowser": "浏览器",
