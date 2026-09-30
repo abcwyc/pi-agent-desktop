@@ -1,10 +1,16 @@
 import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
 import * as undici from "undici";
 
 export const DEFAULT_HTTP_IDLE_TIMEOUT_MS = 300_000;
 
 type DispatcherGlobal = typeof globalThis & {
   __piWebHttpDispatcherConfigured?: boolean;
+};
+
+type TlsConnectOptions = {
+  autoSelectFamily?: boolean;
+  ca?: Buffer | string;
 };
 
 const dispatcherGlobal = globalThis as DispatcherGlobal;
@@ -23,6 +29,32 @@ function parseHttpIdleTimeoutMs(value: unknown): number | undefined {
     return undefined;
   }
   return Math.floor(value);
+}
+
+/** Read NODE_EXTRA_CA_CERTS so undici's custom dispatcher trusts company CAs. */
+export function loadExtraCaCerts(
+  env: NodeJS.ProcessEnv = process.env,
+): Buffer | undefined {
+  const certPath = env.NODE_EXTRA_CA_CERTS?.trim();
+  if (!certPath) return undefined;
+  try {
+    return readFileSync(certPath);
+  } catch (error) {
+    console.warn(`[pi-web] Failed to read NODE_EXTRA_CA_CERTS (${certPath}):`, error);
+    return undefined;
+  }
+}
+
+export function buildTlsConnectOptions(
+  env: NodeJS.ProcessEnv = process.env,
+): TlsConnectOptions {
+  const ca = loadExtraCaCerts(env);
+  return {
+    // Prefer IPv6 when available, but fall back to IPv4 on ENETUNREACH —
+    // common on corp networks that advertise AAAA records they cannot route.
+    autoSelectFamily: true,
+    ...(ca ? { ca } : {}),
+  };
 }
 
 // Undici can emit an internal Client error while terminating a response body.
@@ -65,11 +97,17 @@ export function configureHttpDispatcher(
     throw new Error(`Invalid HTTP idle timeout: ${String(timeoutMs)}`);
   }
 
+  const tls = buildTlsConnectOptions();
   const dispatcher = withUndiciErrorListener(
     new undici.EnvHttpProxyAgent({
       allowH2: false,
       bodyTimeout: normalizedTimeoutMs,
       headersTimeout: normalizedTimeoutMs,
+      // Direct Agent connections (no proxy / NO_PROXY).
+      connect: tls,
+      // ProxyAgent origin + proxy TLS — EnvHttpProxyAgent forwards these opts.
+      requestTls: tls,
+      proxyTls: tls,
       clientFactory: createUndiciClient,
       factory: createUndiciOriginDispatcher,
     }),

@@ -132,6 +132,7 @@ test("project more menu can open the folder and the title accepts a context menu
   assert.match(source, /startProjectRename\(projectMenu\.root\)/);
   assert.match(source, /APP_PREF_KEYS\.projectAliases/);
   assert.match(source, /className="sidebar-project-tree-name-input"/);
+  assert.match(source, /sidebarPrefsHydrated/);
   assert.match(
     source,
     /onContextMenu=\{\(e\) => openProjectContextMenu\(e, group\.projectRoot\)\}/,

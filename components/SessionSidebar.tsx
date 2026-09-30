@@ -233,21 +233,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const wtNewInputRef = useRef<HTMLInputElement>(null);
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => new Set());
   const [expandedProjectSessions, setExpandedProjectSessions] = useState<Set<string>>(() => new Set());
-  const [archivedProjectRoots, setArchivedProjectRoots] = useState<Set<string>>(() => {
-    const stored = getPrefJson<unknown>(APP_PREF_KEYS.archivedProjects);
-    return Array.isArray(stored)
-      ? new Set(stored.filter((root): root is string => typeof root === "string"))
-      : new Set();
-  });
-  const [projectAliases, setProjectAliases] = useState<Record<string, string>>(() => {
-    const stored = getPrefJson<unknown>(APP_PREF_KEYS.projectAliases);
-    if (!stored || typeof stored !== "object" || Array.isArray(stored)) return {};
-    const next: Record<string, string> = {};
-    for (const [root, alias] of Object.entries(stored as Record<string, unknown>)) {
-      if (typeof alias === "string" && alias.trim()) next[root] = alias.trim();
-    }
-    return next;
-  });
+  const [archivedProjectRoots, setArchivedProjectRoots] = useState<Set<string>>(() => new Set());
+  const [projectAliases, setProjectAliases] = useState<Record<string, string>>(() => ({}));
   const [renamingProjectRoot, setRenamingProjectRoot] = useState<string | null>(null);
   const [projectRenameValue, setProjectRenameValue] = useState("");
   const projectRenameInputRef = useRef<HTMLInputElement>(null);
@@ -258,7 +245,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const projectMenuRef = useRef<HTMLDivElement>(null);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
-  const [unreadSessionIds, setUnreadSessionIds] = useState<Set<string>>(() => loadUnreadSessionIds());
+  const [unreadSessionIds, setUnreadSessionIds] = useState<Set<string>>(() => new Set());
+  // Sidebar prefs live in localStorage; load after mount so SSR HTML matches
+  // the first client tree (empty aliases / unread / archive).
+  const [sidebarPrefsHydrated, setSidebarPrefsHydrated] = useState(false);
   const previousRunningSessionIdsRef = useRef<Set<string>>(new Set());
   const previousSuppressedCompletionSessionIdsRef = useRef<Set<string>>(new Set());
   // Once polling has delivered a snapshot it is the source of truth for
@@ -357,16 +347,38 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   // Persist unread markers so they survive a browser refresh before the user
   // has actually opened the completed session.
   useEffect(() => {
+    if (!sidebarPrefsHydrated) return;
     saveUnreadSessionIds(unreadSessionIds);
-  }, [unreadSessionIds]);
+  }, [unreadSessionIds, sidebarPrefsHydrated]);
 
   useEffect(() => {
+    if (!sidebarPrefsHydrated) return;
     setPrefJson(APP_PREF_KEYS.archivedProjects, [...archivedProjectRoots]);
-  }, [archivedProjectRoots]);
+  }, [archivedProjectRoots, sidebarPrefsHydrated]);
 
   useEffect(() => {
+    if (!sidebarPrefsHydrated) return;
     setPrefJson(APP_PREF_KEYS.projectAliases, projectAliases);
-  }, [projectAliases]);
+  }, [projectAliases, sidebarPrefsHydrated]);
+
+  useLayoutEffect(() => {
+    const archived = getPrefJson<unknown>(APP_PREF_KEYS.archivedProjects);
+    setArchivedProjectRoots(
+      Array.isArray(archived)
+        ? new Set(archived.filter((root): root is string => typeof root === "string"))
+        : new Set(),
+    );
+    const aliases = getPrefJson<unknown>(APP_PREF_KEYS.projectAliases);
+    if (aliases && typeof aliases === "object" && !Array.isArray(aliases)) {
+      const next: Record<string, string> = {};
+      for (const [root, alias] of Object.entries(aliases as Record<string, unknown>)) {
+        if (typeof alias === "string" && alias.trim()) next[root] = alias.trim();
+      }
+      setProjectAliases(next);
+    }
+    setUnreadSessionIds(loadUnreadSessionIds());
+    setSidebarPrefsHydrated(true);
+  }, []);
 
   useEffect(() => {
     if (!renamingProjectRoot) return;

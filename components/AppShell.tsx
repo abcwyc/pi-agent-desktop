@@ -106,12 +106,14 @@ function parkedNewSessionDraftKey(cwd: string): string {
 export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [desktopMode] = useState(() => isTauriDesktop());
-  const [persistedWorkspace] = useState(() => (
-    desktopMode ? getPrefJson<PersistedWorkspace>(APP_PREF_KEYS.workspace) : null
-  ));
-  const [initialNavigation, setInitialNavigation] = useState(() => resolveInitialNavigation(searchParams, persistedWorkspace));
-  const [workspaceHydrated, setWorkspaceHydrated] = useState(() => !desktopMode);
+  // First paint must match SSR: never read isTauriDesktop() / localStorage in
+  // useState initializers — both are empty/false on the server and populated
+  // in the desktop WebView, which flipped showPlaceholder and caused a
+  // hydration mismatch (Get Started vs restored session).
+  const [desktopMode, setDesktopMode] = useState(false);
+  const [persistedWorkspace, setPersistedWorkspace] = useState<PersistedWorkspace | null>(null);
+  const [initialNavigation, setInitialNavigation] = useState(() => resolveInitialNavigation(searchParams, null));
+  const [workspaceHydrated, setWorkspaceHydrated] = useState(true);
   // Subscribed for its side effects only: this hook installs the shared theme
   // store's listener for the app's lifetime, so an "auto" preference keeps
   // following OS scheme changes and the resolved palette keeps being mirrored
@@ -687,9 +689,29 @@ export function AppShell() {
   const activeProjectKeyRef = useRef<string | null>(null);
   // True once the initial ?session= URL param has been resolved (or confirmed absent)
   const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !initialSessionId);
+  // Desktop workspace + isTauriDesktop() are applied once after mount so the
+  // first client tree matches SSR (URL-only). Reading them in useState made
+  // showPlaceholder diverge (Get Started vs restored chat) and failed hydration.
+  const desktopBootstrappedRef = useRef(false);
+  useLayoutEffect(() => {
+    if (desktopBootstrappedRef.current) return;
+    desktopBootstrappedRef.current = true;
+    if (!isTauriDesktop()) return;
+    const workspace = getPrefJson<PersistedWorkspace>(APP_PREF_KEYS.workspace);
+    setWorkspaceHydrated(false);
+    setDesktopMode(true);
+    setPersistedWorkspace(workspace);
+    setInitialNavigation((current) => {
+      const resolved = resolveInitialNavigation(searchParams, workspace);
+      if (resolved.sessionId && resolved.sessionId !== current.sessionId) {
+        setInitialSessionRestored(false);
+      }
+      return resolved;
+    });
+  }, [searchParams]);
   // sessionStorage is empty during SSR. Applying the tab's remembered session
   // in the useState initializer made the first client tree differ from the
-  // server HTML (sidebar "select project" vs ""). Restore after mount instead.
+  // server HTML. Restore after mount instead.
   useLayoutEffect(() => {
     const next = withTabOpen(initialNavigation, getTabOpen());
     if (next === initialNavigation) return;
