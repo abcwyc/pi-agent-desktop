@@ -49,11 +49,9 @@ export function McpPanel({
       return;
     }
     try {
-      const response = await fetch("/api/mcp", {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cwd, ...(sessionId ? { sessionId } : {}) }),
-      });
+      const query = new URLSearchParams({ cwd });
+      if (sessionId) query.set("sessionId", sessionId);
+      const response = await fetch(`/api/mcp?${query.toString()}`);
       const data = await response.json() as {
         servers?: McpServer[];
         errors?: string[];

@@ -36,12 +36,12 @@ async function readTools(sessionId: string) {
 
 export async function GET(req: Request) {
   try {
-    const body = await req.json().catch(() => ({})) as { cwd?: unknown; sessionId?: unknown };
-    const cwd = cwdFrom(body.cwd);
+    const { searchParams } = new URL(req.url);
+    const cwd = cwdFrom(searchParams.get("cwd"));
     if (!cwd) return NextResponse.json({ error: "cwd is required" }, { status: 400 });
 
     const config = readMcpConfig(cwd);
-    const sessionId = cwdFrom(body.sessionId);
+    const sessionId = cwdFrom(searchParams.get("sessionId"));
     let tools: Awaited<ReturnType<typeof readTools>> = null;
     if (sessionId) {
       try {

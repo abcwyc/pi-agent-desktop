@@ -29,6 +29,7 @@ test("MCP panel is reachable from the More menu", () => {
   assert.match(appShellSource, /handleSystemInfoToggle\("mcp"\)/);
   assert.match(appShellSource, /activeTopPanel === "mcp"[\s\S]*?<McpPanel/);
   assert.match(panelSource, /fetch\("\/api\/mcp"/);
+  assert.match(panelSource, /new URLSearchParams\(\{ cwd \}\)/);
   assert.match(panelSource, /action: "disable"/);
   assert.match(panelSource, /action: "exposure", exposure/);
   assert.match(panelSource, /mcp-panel/);
