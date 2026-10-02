@@ -28,6 +28,7 @@ import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
 import { useDesktopConnection } from "@/lib/desktop-connection";
 import { isTauriDesktop, setCloseQuitsNative } from "@/lib/desktop-native";
+import { isTauriDesktop as isDesktopShell } from "@/lib/desktop-updater";
 import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import { PRODUCT_NAME } from "@/lib/branding";
@@ -1019,6 +1020,40 @@ export function AppShell() {
       console.error("Failed to switch project:", error);
     }
   }, [desktopMode, selectedSession?.cwd, newSessionCwd, activeCwd, handleNewSession]);
+
+  // The native macOS menu is the only reliable route when the webview has no
+  // focused element. Route its custom items back through the same app state.
+  useEffect(() => {
+    if (!isDesktopShell()) return;
+    let dispose: (() => void) | undefined;
+    let cancelled = false;
+
+    void import("@tauri-apps/api/event").then(({ listen }) => {
+      if (cancelled) return;
+      void listen<string>("pi-agent-menu-action", ({ payload }) => {
+        if (payload === "new-session") {
+          if (activeCwd) handleNewSession(`native-menu-${Date.now()}`, activeCwd);
+          return;
+        }
+        if (payload === "settings-general" || payload === "settings-models") {
+          closeSettingsMenu();
+          setActiveTopPanel(null);
+          setTopMoreOpen(false);
+          setSettingsSection(payload === "settings-general" ? "general" : "models");
+        }
+      }).then((unlisten) => {
+        if (cancelled) unlisten();
+        else dispose = unlisten;
+      });
+    }).catch((error) => {
+      console.error("Failed to connect the native app menu:", error);
+    });
+
+    return () => {
+      cancelled = true;
+      dispose?.();
+    };
+  }, [activeCwd, closeSettingsMenu, handleNewSession]);
 
   // Global keyboard shortcuts (handles Esc, Ctrl+Alt+N etc.)
   useGlobalKeyboardShortcuts({
