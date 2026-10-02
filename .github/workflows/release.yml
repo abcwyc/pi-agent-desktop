@@ -103,35 +103,35 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.4.8
+            ## Pi Agent Desktop 0.4.9
 
-            A polish and performance release on top of 0.4.7: faster large sessions, a steadier chat layout, IME-safe shortcuts, and several features an upstream merge had left unreachable are wired back up.
+            A Pi 1.0 and MCP-focused release: built-in MCP sessions now have a first-class desktop manager, Pi 1.0 tool exposure is visible, OAuth authorization is easier to complete, and macOS gains standard native menus.
 
             ### Highlights
 
-            - Performance: finished turns no longer re-render on every streaming token, large tool-result payloads (e.g. browser DOM outlines) are trimmed to the fields the UI shows so big sessions load far smaller, and file-access checks reuse the cached session list instead of rebuilding it.
-            - Chat layout: the composer floats over the transcript, pages open on whole turns instead of mid-turn, the message column stays centred with the composer, and the scrollbar thumb only appears for user scrolls.
-            - Input methods: Escape and Enter no longer close dialogs, menus or submit inline inputs while a Chinese/Japanese/Korean IME candidate is open (including the macOS WebView).
-            - File panel: local HTML previews load their relative CSS/images again with scripts blocked, with an opt-in "Run scripts" mode in an isolated sandbox; the file tree refreshes after a run again.
-            - Fixes: failed forks and branch switches now show an error instead of failing silently; model-scope warnings can be dismissed and link to provider settings; the unified diff setting applies to patch diffs in chat; the topbar More panels are opaque; the sidebar shows a retry state when the session list cannot load.
+            - Pi 1.0: upgrades the bundled agent SDK from 0.87.1 to 1.0.0 and enables built-in MCP sessions in normal chats while preserving Chat-only and subagent resource boundaries.
+            - MCP: a new master-detail manager lists global/project servers, live tool registration, scope, transport, and access; server enable/disable and codemode/deferred/direct/hidden exposure changes are written safely to mcp.json.
+            - Tools and auth: indirect codemode and deferred MCP tools are now visible in Tool Definitions, and MCP OAuth dialogs offer one-click opening of the authorization page.
+            - macOS: adds the standard application, File, Edit, Settings, View, and Window menus with native shortcuts.
+            - Stability: MCP HTTP URLs are redacted before display, project MCP config remains behind the trust boundary, config edits preserve unrelated fields, and full desktop/E2E validation now covers the manager.
 
-            Bundled components: pi 0.87.1, pi-web 0.10.0.
+            Bundled components: pi 1.0.0, pi-web 0.10.0.
 
             ---
 
-            ## Pi Agent Desktop 0.4.8
+            ## Pi Agent Desktop 0.4.9
 
-            本次是基于 0.4.7 的打磨与性能版本：大会话更快、聊天布局更稳定、快捷键兼容输入法，并重新接通了上游合并后无法触达的几项功能。
+            本次是 Pi 1.0 与 MCP 主题版本：内置 MCP 会话拥有桌面级管理界面，Pi 1.0 工具暴露方式清晰可见，OAuth 授权更容易完成，macOS 增加标准原生菜单。
 
             ### 主要更新
 
-            - 性能：流式输出时已完成的轮次不再逐字重渲染；工具结果中的大体积数据（如浏览器 DOM 大纲）只保留界面所需字段，大会话加载体积显著减小；文件访问检查复用缓存的会话列表，不再重复全量扫描。
-            - 聊天布局：输入框悬浮于对话之上，分页按完整轮次加载而不会从轮次中间开始；消息列与输入框保持居中对齐，滚动条仅在手动滚动时显示。
-            - 输入法：中文/日文/韩文输入法候选框打开时，Esc 和回车不再误关闭对话框、菜单或提前提交行内输入（包括 macOS WebView）。
-            - 文件面板：本地 HTML 预览重新加载相对路径的 CSS/图片且禁止脚本执行，并提供在隔离沙箱中“运行脚本”的可选模式；运行结束后文件树重新自动刷新。
-            - 修复：分叉和切换分支失败时会显示错误提示，不再静默失败；模型范围警告可关闭并可跳转到服务商设置；聊天中的补丁差异遵循“统一视图”设置；顶栏 More 面板改为不透明；会话列表加载失败时侧栏显示重试入口。
+            - Pi 1.0：内置 agent SDK 从 0.87.1 升级到 1.0.0，普通会话启用内核 MCP，同时保持 Chat-only 与 subagent 的资源加载边界。
+            - MCP：新增 master-detail 管理器，展示全局/项目 server、实时工具注册、来源、传输方式与访问方式；支持启用/禁用以及 codemode/deferred/direct/hidden 暴露策略，并安全写回 mcp.json。
+            - 工具与登录：Tool Definitions 面板显示间接 codemode/deferred MCP 工具；MCP OAuth 对话框提供一键打开授权页面。
+            - macOS：新增标准应用、File、Edit、Settings、View、Window 菜单与原生快捷键。
+            - 稳定性：MCP HTTP URL 显示前会移除凭证参数；项目 MCP 配置仍受信任边界保护；配置编辑保留无关字段；桌面与 E2E 验证覆盖 MCP 管理器。
 
-            内置组件版本：pi 0.87.1、pi-web 0.10.0。
+            内置组件版本：pi 1.0.0、pi-web 0.10.0。
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
