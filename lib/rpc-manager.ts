@@ -1,5 +1,5 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import { createAgentSessionFromServices, createAgentSessionServices, getAgentDir, initTheme, SessionManager, SettingsManager, Theme } from "@earendil-works/pi-coding-agent";
+import { createAgentSessionFromServices, createAgentSessionServices, getAgentDir, initTheme, createMcpExtension, SessionManager, SettingsManager, Theme } from "@earendil-works/pi-coding-agent";
 import { KeybindingsManager as TuiKeybindingsManager, TUI_KEYBINDINGS } from "@earendil-works/pi-tui";
 import { randomUUID } from "crypto";
 import { existsSync, realpathSync, writeFileSync } from "fs";
@@ -211,8 +211,8 @@ function withExtensionTools(session: AgentSessionLike, toolNames: string[]): str
   const selectedToolNames = resolveShellTools(toolNames, session.settingsManager.getDefaultTools());
   const extensionToolNames = session
     .getAllTools()
-    .map((t) => t.name)
-    .filter((name) => !codingToolNames.has(name));
+    .filter((tool) => !codingToolNames.has(tool.name) && (tool.exposure ?? "direct") === "direct")
+    .map((tool) => tool.name);
 
   return [...new Set([...selectedToolNames, ...extensionToolNames])];
 }
@@ -2184,6 +2184,7 @@ export async function startRpcSession(
                 () => listSubagentProfiles(sessionCwd),
                 isBuiltInSubagentsEnabled,
               ),
+              createMcpExtension(),
             ],
             extensionsOverride: (base) => preferUserBashExtension(preferPiWebSubagentExtension(base)),
           },

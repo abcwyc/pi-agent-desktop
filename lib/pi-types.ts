@@ -27,6 +27,7 @@ export interface ToolInfo {
   description: string;
   parameters?: unknown;
   promptGuidelines?: string[];
+  exposure?: "direct" | "model-only" | "codemode" | "deferred" | "hidden";
   sourceInfo?: unknown;
 }
 
