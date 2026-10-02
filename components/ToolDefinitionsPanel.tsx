@@ -20,6 +20,37 @@ interface ParameterField {
   defaultValue?: string;
 }
 
+const EXPOSURE_ORDER = ["direct", "model-only", "deferred", "codemode", "hidden"] as const;
+type ToolExposure = ToolEntry["exposure"];
+
+function normalizeExposure(exposure: ToolExposure): NonNullable<ToolExposure> {
+  return exposure ?? "direct";
+}
+
+function exposureRank(exposure: ToolExposure): number {
+  const index = EXPOSURE_ORDER.indexOf(normalizeExposure(exposure));
+  return index === -1 ? EXPOSURE_ORDER.length : index;
+}
+
+function sourceLabel(tool: ToolEntry): string | null {
+  const source = tool.sourceInfo;
+  if (typeof source === "string") return source.split("/").pop() || source;
+  if (!source || typeof source !== "object") return null;
+  const record = source as Record<string, unknown>;
+  const name = [record.path, record.source]
+    .find((value): value is string => typeof value === "string" && value.trim() !== "");
+  if (!name) return null;
+  return name.split("/").pop() || name;
+}
+
+function isMcpTool(tool: ToolEntry): boolean {
+  const source = tool.sourceInfo;
+  const path = source && typeof source === "object"
+    ? String((source as Record<string, unknown>).path ?? "")
+    : String(source ?? "");
+  return tool.name.startsWith("mcp__") || path.startsWith("builtin:mcp");
+}
+
 function formatValue(value: unknown): string {
   if (typeof value === "string") return value;
   if (value === undefined) return "";
@@ -96,28 +127,55 @@ function EmptyState({ children }: { children: string }) {
 }
 
 export function ToolDefinitionsPanel({ loading, tools, translate }: Props) {
-  const activeTools = useMemo(() => tools?.filter((tool) => tool.active) ?? null, [tools]);
+  const visibleTools = useMemo(() => tools
+    ? [...tools]
+      .filter((tool) => normalizeExposure(tool.exposure) !== "hidden")
+      .sort((a, b) => (
+        exposureRank(a.exposure) - exposureRank(b.exposure)
+        || a.name.localeCompare(b.name)
+      ))
+    : null, [tools]);
   const [selectedToolName, setSelectedToolName] = useState<string | null>(null);
+  const [exposureFilter, setExposureFilter] = useState<"active" | "all">("active");
 
   useEffect(() => {
     setSelectedToolName((current) => (
-      activeTools?.some((tool) => tool.name === current)
+      visibleTools?.some((tool) => tool.name === current)
         ? current
-        : activeTools?.[0]?.name ?? null
+      : visibleTools?.[0]?.name ?? null
     ));
-  }, [activeTools]);
+  }, [visibleTools]);
 
-  const selectedTool = activeTools?.find((tool) => tool.name === selectedToolName)
-    ?? activeTools?.[0]
+  const displayedTools = useMemo(() => (
+    visibleTools?.filter((tool) => exposureFilter === "all" || tool.active) ?? null
+  ), [exposureFilter, visibleTools]);
+  const selectedTool = displayedTools?.find((tool) => tool.name === selectedToolName)
+    ?? displayedTools?.[0]
     ?? null;
   const fields = selectedTool ? getToolParameterFields(selectedTool.parameters) : [];
+  const selectedExposure = normalizeExposure(selectedTool?.exposure);
+  const selectedSource = selectedTool ? sourceLabel(selectedTool) : null;
 
   return (
     <div className="tool-definitions-panel">
       <nav className="tool-definitions-sidebar" aria-label={translate("tools.title")}>
         <div className="tool-definitions-list">
-          {activeTools && activeTools.length > 0 ? activeTools.map((tool) => {
+          <div className="tool-definitions-filters" role="group" aria-label={translate("tools.visibility")}>
+            {(["active", "all"] as const).map((filter) => (
+              <button
+                key={filter}
+                type="button"
+                className={`tool-definitions-filter${exposureFilter === filter ? " selected" : ""}`}
+                aria-pressed={exposureFilter === filter}
+                onClick={() => setExposureFilter(filter)}
+              >
+                {translate(filter === "active" ? "tools.activeOnly" : "tools.allExposures")}
+              </button>
+            ))}
+          </div>
+          {displayedTools && displayedTools.length > 0 ? displayedTools.map((tool) => {
             const selected = tool.name === selectedTool?.name;
+            const exposure = normalizeExposure(tool.exposure);
             return (
               <button
                 key={tool.name}
@@ -127,9 +185,14 @@ export function ToolDefinitionsPanel({ loading, tools, translate }: Props) {
                 onClick={() => setSelectedToolName(tool.name)}
               >
                 <code>{tool.name}</code>
+                {exposure !== "direct" && (
+                  <span className={`tool-exposure-badge exposure-${exposure}`}>
+                    {translate(`tools.exposure.${exposure}`)}
+                  </span>
+                )}
               </button>
             );
-          }) : activeTools ? (
+          }) : displayedTools ? (
             <EmptyState>{translate("tools.noTools")}</EmptyState>
           ) : (
             <EmptyState>{loading ? translate("tools.loading") : translate("tools.load")}</EmptyState>
@@ -184,6 +247,23 @@ export function ToolDefinitionsPanel({ loading, tools, translate }: Props) {
               )}
             </section>
 
+            <section className="tool-definition-section">
+              <div className="tool-definition-section-label">
+                <span>{translate("tools.availability")}</span>
+              </div>
+              <div className="tool-definition-availability">
+                <span className={`tool-exposure-badge exposure-${selectedExposure}`}>
+                  {translate(`tools.exposure.${selectedExposure}`)}
+                </span>
+                <span>{translate(selectedTool.active ? "tools.declaredToModel" : "tools.availableIndirectly")}</span>
+              </div>
+              {selectedSource && (
+                <div className="tool-definition-meta">
+                  {isMcpTool(selectedTool) ? translate("tools.mcpSource") : translate("tools.source")}: <code>{selectedSource}</code>
+                </div>
+              )}
+            </section>
+
             {selectedTool.promptGuidelines && selectedTool.promptGuidelines.length > 0 && (
               <section className="tool-definition-section">
                 <div className="tool-definition-section-label">{translate("tools.guidelines")}</div>
@@ -197,7 +277,7 @@ export function ToolDefinitionsPanel({ loading, tools, translate }: Props) {
           </div>
         ) : (
           <EmptyState>
-            {activeTools
+            {displayedTools
               ? translate("tools.noTools")
               : loading
                 ? translate("tools.loading")
@@ -233,11 +313,39 @@ export function ToolDefinitionsPanel({ loading, tools, translate }: Props) {
           flex: 1;
           overflow: auto;
         }
+        .tool-definitions-filters {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1px;
+          padding: 8px;
+          border-bottom: 1px solid var(--border);
+          background: var(--border);
+          position: sticky;
+          top: 0;
+          z-index: 1;
+        }
+        .tool-definitions-filter {
+          min-height: 28px;
+          border: 1px solid transparent;
+          background: var(--bg-panel);
+          color: var(--text-dim);
+          font-size: 10px;
+          font-weight: 650;
+          letter-spacing: 0.03em;
+          cursor: pointer;
+        }
+        .tool-definitions-filter.selected {
+          border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+          background: color-mix(in srgb, var(--accent) 12%, var(--bg-panel));
+          color: var(--accent);
+        }
         .tool-definitions-item {
-          display: flex;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
           width: 100%;
-          min-height: 38px;
+          min-height: 42px;
           align-items: center;
+          gap: 7px;
           padding: 8px 12px;
           border: none;
           border-bottom: 1px solid var(--border);
@@ -261,6 +369,35 @@ export function ToolDefinitionsPanel({ loading, tools, translate }: Props) {
           font-size: 11px;
           font-weight: 600;
           overflow-wrap: anywhere;
+        }
+        .tool-exposure-badge {
+          display: inline-flex;
+          align-items: center;
+          min-height: 18px;
+          padding: 2px 6px;
+          border: 1px solid color-mix(in srgb, currentColor 34%, transparent);
+          border-radius: 999px;
+          color: var(--text-dim);
+          font-family: var(--font-ui);
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          white-space: nowrap;
+        }
+        .tool-exposure-badge.exposure-model-only,
+        .tool-exposure-badge.exposure-deferred {
+          color: var(--accent);
+        }
+        .tool-exposure-badge.exposure-codemode {
+          color: color-mix(in srgb, var(--accent) 70%, var(--text-dim));
+        }
+        .tool-definition-availability {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: var(--text-muted);
+          font-size: 11px;
         }
         .tool-definition-scroll {
           padding: 14px 16px 20px;

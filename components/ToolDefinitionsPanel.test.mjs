@@ -18,12 +18,20 @@ test("keeps System and Tools reachable as separate top-panel actions", () => {
 });
 
 test("renders active tool definitions in a selectable master-detail layout", () => {
-  assert.match(panelSource, /tools\?\.filter\(\(tool\) => tool\.active\)/);
+  assert.match(panelSource, /exposureFilter === "all" \|\| tool\.active/);
   assert.match(panelSource, /setSelectedToolName\(tool\.name\)/);
-  assert.match(panelSource, /activeTools\?\.some\(\(tool\) => tool\.name === current\)/);
+  assert.match(panelSource, /visibleTools\?\.some\(\(tool\) => tool\.name === current\)/);
   assert.match(panelSource, /className="tool-definitions-sidebar"/);
   assert.match(panelSource, /className="tool-definition-detail"/);
   assert.match(panelSource, /grid-template-columns: clamp\(112px, 26%, 220px\) minmax\(0, 1fr\)/);
+});
+
+test("keeps indirect Pi 1.0 MCP tools visible and labeled by exposure", () => {
+  assert.match(panelSource, /normalizeExposure\(tool\.exposure\) !== "hidden"/);
+  assert.match(panelSource, /exposureRank\(a\.exposure\) - exposureRank\(b\.exposure\)/);
+  assert.match(panelSource, /tool-definitions-filters/);
+  assert.match(panelSource, /tool-exposure-badge exposure-\$\{exposure\}/);
+  assert.match(panelSource, /isMcpTool\(selectedTool\)/);
 });
 
 test("shows schema fields and metadata in the detail form", () => {

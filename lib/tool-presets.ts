@@ -2,8 +2,10 @@ export interface ToolEntry {
   name: string;
   description: string;
   active: boolean;
+  exposure?: "direct" | "model-only" | "codemode" | "deferred" | "hidden";
   parameters?: Record<string, unknown>;
   promptGuidelines?: string[];
+  sourceInfo?: unknown;
 }
 
 /** Presets that pin an explicit tool list onto the session. */
