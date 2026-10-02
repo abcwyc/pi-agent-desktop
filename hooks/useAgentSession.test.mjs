@@ -87,7 +87,7 @@ test("opening System or Tools lazily starts a dormant session without sending a 
   assert.match(loadSystemInfoSource, /loadTools\(sid\)/);
   assert.doesNotMatch(loadSystemInfoSource, /type: "prompt"/);
   assert.match(loadSystemInfoSource, /setSystemPrompt\(state\.systemPrompt \?\? ""\)/);
-  assert.match(loaderEffectSource, /onSystemInfoLoaderChange\?\.\(loadSystemInfo\)/);
+  assert.match(loaderEffectSource, /onSystemInfoLoaderChange\?\.\(loadSystemInfoFor\)/);
   assert.match(loaderEffectSource, /onSystemInfoLoaderChange\?\.\(null\)/);
   // System/Tools now live in the topbar More menu (the duplicate desktop
   // toolbar was folded away); entries keep the lazy-loading toggle.
