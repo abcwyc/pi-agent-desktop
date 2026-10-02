@@ -33,4 +33,7 @@ test("MCP panel is reachable from the More menu", () => {
   assert.match(panelSource, /action: "disable"/);
   assert.match(panelSource, /action: "exposure", exposure/);
   assert.match(panelSource, /mcp-panel/);
+  assert.match(panelSource, /function redactUrl/);
+  assert.match(panelSource, /url\.search = ""/);
+  assert.match(panelSource, /role="listbox"/);
 });
