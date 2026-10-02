@@ -1,8 +1,9 @@
 import {
   createAgentSessionServices,
   getAgentDir,
-  type ModelRuntime,
+  ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
+import { join } from "node:path";
 
 /**
  * ModelRuntime that also includes providers registered by extensions (an
@@ -15,8 +16,21 @@ import {
  * package extensions always load. Not cached: these routes need fresh
  * credentials for auth status and login/logout to be truthful.
  */
-export async function createModelRuntimeWithExtensions(): Promise<ModelRuntime> {
+export async function createModelRuntimeWithExtensions(
+  modelRuntime?: ModelRuntime,
+): Promise<ModelRuntime> {
   const agentDir = getAgentDir();
-  const services = await createAgentSessionServices({ cwd: agentDir, agentDir });
+  const runtime = modelRuntime ?? await ModelRuntime.create({
+    authPath: join(agentDir, "auth.json"),
+    modelsPath: join(agentDir, "models.json"),
+    allowModelNetwork: false,
+    refreshOnCreate: false,
+  });
+  const services = await createAgentSessionServices({
+    cwd: agentDir,
+    agentDir,
+    modelRuntime: runtime,
+    resourceLoaderOptions: { noPromptTemplates: true, noThemes: true },
+  });
   return services.modelRuntime;
 }

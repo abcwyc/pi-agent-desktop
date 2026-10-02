@@ -676,10 +676,10 @@ export class AgentSessionWrapper {
               ...(promptImages?.length ? { images: promptImages } : {}),
               ...(streamingBehavior ? { streamingBehavior } : {}),
               source: "rpc",
-              // Match pi's RPC contract: acknowledge only after synchronous prompt
-              // validation and extension preflight have accepted the submission.
-              preflightResult: (success) => {
-                if (success) acceptPreflight();
+              // Match pi's RPC contract: acknowledge after the prompt is accepted as
+              // a run, queued input, or an extension command; rejection still throws.
+              preflightResult: () => {
+                acceptPreflight();
               },
             });
           } catch (error) {
@@ -867,8 +867,8 @@ export class AgentSessionWrapper {
           (entry) => entry.type === "message" && entry.message.role === "assistant",
         );
 
-        if (!sessionManager.isPersisted() || !leafId || !branchHasAssistant) return { cancelled: true };
         if (!currentSessionFile || !existsSync(currentSessionFile)) return { cancelled: true };
+        if (!leafId || !branchHasAssistant) return { cancelled: true };
 
         return this.withSessionReplacement("clone", async () => {
           const sessionDir = sessionManager.getSessionDir();
