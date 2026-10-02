@@ -110,10 +110,23 @@ export function readMcpConfig(cwd: string): McpConfigSnapshot {
 }
 
 function describeTransport(config: Record<string, unknown>): string {
-  if (typeof config.url === "string") return config.url;
+  if (typeof config.url === "string") return redactUrl(config.url);
   const command = typeof config.command === "string" ? config.command : "(missing command)";
   const args = Array.isArray(config.args) ? config.args.filter((arg) => typeof arg === "string") : [];
   return [command, ...args].join(" ");
+}
+
+function redactUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    url.search = "";
+    url.username = "";
+    url.password = "";
+    url.hash = "";
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return value;
+  }
 }
 
 export function findMcpServer(cwd: string, name: string): McpServerConfigEntry | undefined {
