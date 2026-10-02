@@ -53,7 +53,9 @@ interface Props {
   onBranchDataChange?: (tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => void;
   onSystemPromptChange?: (prompt: string | null) => void;
   onSystemToolsChange?: (tools: ToolEntry[] | null) => void;
-  onSystemInfoLoaderChange?: (loader: (() => Promise<void>) | null) => void;
+  onSystemInfoLoaderChange?: (
+    loader: ((kind: "system" | "tools" | "mcp") => Promise<void>) | null,
+  ) => void;
   onSessionStatsChange?: (stats: SessionStatsInfo | null) => void;
   onSessionStatsPanelOpen?: () => void;
   onContextUsageChange?: (usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => void;

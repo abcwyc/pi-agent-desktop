@@ -186,7 +186,9 @@ export interface UseAgentSessionOptions {
   onSystemPromptChange?: (prompt: string | null) => void;
   onSystemToolsChange?: (tools: ToolEntry[] | null) => void;
   /** Registers an action that lazily starts the session and loads its prompt and tools. */
-  onSystemInfoLoaderChange?: (loader: (() => Promise<void>) | null) => void;
+  onSystemInfoLoaderChange?: (
+    loader: ((kind: "system" | "tools" | "mcp") => Promise<void>) | null,
+  ) => void;
   onSessionStatsPanelOpen?: () => void;
   setToolPreset?: (preset: ToolPreset) => void;
   deferInitialScroll?: boolean;
@@ -995,6 +997,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     syncLiveModel(state);
     setSystemPrompt(state.systemPrompt ?? "");
   }, [ensureNewSession, loadTools, syncLiveModel]);
+
+  const loadSystemInfoFor = useCallback(async (kind: "system" | "tools" | "mcp") => {
+    await loadSystemInfo();
+    void kind;
+    return undefined;
+  }, [loadSystemInfo]);
 
   const loadSlashCommands = useCallback(async () => {
     const sid = sessionIdRef.current ?? await ensureNewSession();
@@ -2591,9 +2599,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [systemPrompt, onSystemPromptChange]);
 
   useEffect(() => {
-    onSystemInfoLoaderChange?.(loadSystemInfo);
+    onSystemInfoLoaderChange?.(loadSystemInfoFor);
     return () => onSystemInfoLoaderChange?.(null);
-  }, [loadSystemInfo, onSystemInfoLoaderChange]);
+  }, [loadSystemInfoFor, onSystemInfoLoaderChange]);
 
   useEffect(() => {
     if (!onBranchDataChange) return;

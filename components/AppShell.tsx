@@ -43,6 +43,7 @@ import { SETTINGS_SECTION_ITEMS, SettingsPanel, SettingsSectionIcon } from "./Se
 import { SystemPromptPanel } from "./SystemPromptPanel";
 import { ToolDefinitionsPanel } from "./ToolDefinitionsPanel";
 import { AgentSessionPanel } from "./AgentSessionPanel";
+import { McpPanel } from "./McpPanel";
 import { TerminalPanel } from "./TerminalPanel";
 import { newTerminalTab, restoreTerminalTabs, TERMINAL_TABS_KEY, type TerminalTab } from "./terminal-tab-state";
 import { useAudio } from "@/hooks/useAudio";
@@ -409,7 +410,7 @@ export function AppShell() {
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
   const [systemTools, setSystemTools] = useState<ToolEntry[] | null>(null);
   const [systemInfoLoading, setSystemInfoLoading] = useState(false);
-  const systemInfoLoaderRef = useRef<(() => Promise<void>) | null>(null);
+  const systemInfoLoaderRef = useRef<((kind: "system" | "tools" | "mcp") => Promise<void>) | null>(null);
   const systemInfoLoadIdRef = useRef(0);
 
   const handleSystemPromptChange = useCallback((prompt: string | null) => {
@@ -421,7 +422,9 @@ export function AppShell() {
     setSystemTools(tools);
   }, []);
 
-  const handleSystemInfoLoaderChange = useCallback((loader: (() => Promise<void>) | null) => {
+  const handleSystemInfoLoaderChange = useCallback((
+    loader: ((kind: "system" | "tools" | "mcp") => Promise<void>) | null,
+  ) => {
     systemInfoLoadIdRef.current += 1;
     systemInfoLoaderRef.current = loader;
     setSystemInfoLoading(false);
@@ -450,7 +453,7 @@ export function AppShell() {
   }, []);
 
   // Single active panel — only one dropdown open at a time
-  const [activeTopPanel, setActiveTopPanel] = useState<"agents" | "branches" | "system" | "tools" | "session" | null>(null);
+  const [activeTopPanel, setActiveTopPanel] = useState<"agents" | "branches" | "system" | "tools" | "mcp" | "session" | null>(null);
   const [topPanelPos, setTopPanelPos] = useState<{ top: number; left: number; width: number } | null>(null);
   // Viewport is wide enough for the file panel to split the row (not overlay)
   const [wideSplitLayout, setWideSplitLayout] = useState(false);
@@ -472,7 +475,7 @@ export function AppShell() {
   }, [rightPanelFullWidth]);
 
   const toggleTopPanel = useCallback((
-    panel: "agents" | "branches" | "system" | "tools" | "session",
+    panel: "agents" | "branches" | "system" | "tools" | "mcp" | "session",
   ) => {
     if (isMobile) setSidebarOpen(false);
     setTopMoreOpen(false);
@@ -480,7 +483,7 @@ export function AppShell() {
   }, [isMobile]);
 
   const handleSystemInfoToggle = useCallback((
-    panel: "system" | "tools",
+    panel: "system" | "tools" | "mcp",
   ) => {
     const opening = activeTopPanel !== panel;
     toggleTopPanel(panel);
@@ -490,7 +493,7 @@ export function AppShell() {
     if (!load) return;
     const loadId = ++systemInfoLoadIdRef.current;
     setSystemInfoLoading(true);
-    void load().catch((error) => {
+    void load(panel).catch((error) => {
       console.error("Failed to load system information:", error);
     }).finally(() => {
       if (systemInfoLoadIdRef.current === loadId) {
@@ -2030,6 +2033,28 @@ export function AppShell() {
                           className="app-topbar-more-item"
                           type="button"
                           role="menuitem"
+                          onClick={() => handleSystemInfoToggle("mcp")}
+                        >
+                          <span
+                            className="app-topbar-more-icon"
+                            style={{ color: "var(--accent)" }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <circle cx="5" cy="12" r="2.2" />
+                              <circle cx="19" cy="5" r="2.2" />
+                              <circle cx="19" cy="19" r="2.2" />
+                              <path d="M7.2 12h4.3c.9 0 1.6-.7 1.6-1.6V7.7M13.1 16.3v-1.1c0-.9.7-1.6 1.6-1.6h2.1" />
+                            </svg>
+                          </span>
+                          <span className="app-topbar-more-copy">
+                            <span>{translate("mcp.label")}</span>
+                            <small>{translate("mcp.description")}</small>
+                          </span>
+                        </button>
+                        <button
+                          className="app-topbar-more-item"
+                          type="button"
+                          role="menuitem"
                           onClick={() => handleSystemInfoToggle("system")}
                         >
                           <span
@@ -2177,6 +2202,13 @@ export function AppShell() {
               )}
               {activeTopPanel === "tools" && (
                 <ToolDefinitionsPanel
+                  loading={systemInfoLoading}
+                  tools={systemTools}
+                  translate={translate}
+                />
+              )}
+              {activeTopPanel === "mcp" && (
+                <McpPanel
                   loading={systemInfoLoading}
                   tools={systemTools}
                   translate={translate}
