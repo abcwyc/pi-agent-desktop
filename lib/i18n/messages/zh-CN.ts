@@ -160,6 +160,7 @@ export const zhCNLocale: LocalePlugin = {
     "mcp.indirect": "间接",
     "mcp.empty": "此会话中还没有 MCP 服务器注册工具。",
     "mcp.manageHint": "管理登录与连接：",
+    "mcp.openAuthorization": "打开授权页面",
     "tools.description": "描述",
     "tools.parameters": "参数",
     "tools.parameterCount": "{count} 个参数",

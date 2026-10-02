@@ -49,3 +49,9 @@ test("resets collapse state when a new extension request arrives", () => {
   assert.match(source, /<ExtensionCustomPanel key=\{extensionCustomUi.id\}/);
   assert.match(customSource, /if \(!collapsed\) inputRef.current\?\.focus\(\);\s*}, \[collapsed\]\)/);
 });
+
+test("MCP OAuth input exposes the authorization URL as a one-click action", () => {
+  assert.match(dialogSource, /extractMcpAuthorizationUrl/);
+  assert.match(dialogSource, /mcp\.openAuthorization/);
+  assert.match(dialogSource, /target="_blank"\s+rel="noreferrer noopener"/);
+});

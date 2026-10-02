@@ -160,6 +160,7 @@ export const enLocale: LocalePlugin = {
     "mcp.indirect": "Indirect",
     "mcp.empty": "No MCP server has registered tools in this session.",
     "mcp.manageHint": "Manage sign-in and connections with",
+    "mcp.openAuthorization": "Open authorization page",
     "tools.description": "Description",
     "tools.parameters": "Parameters",
     "tools.parameterCount": "{count} parameters",

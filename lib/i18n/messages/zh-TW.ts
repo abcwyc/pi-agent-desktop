@@ -160,6 +160,7 @@ export const zhTWLocale: LocalePlugin = {
     "mcp.indirect": "間接",
     "mcp.empty": "此工作階段中還沒有 MCP 伺服器註冊工具。",
     "mcp.manageHint": "管理登入與連線：",
+    "mcp.openAuthorization": "開啟授權頁面",
     "tools.description": "描述",
     "tools.parameters": "參數",
     "tools.parameterCount": "{count} 個參數",
