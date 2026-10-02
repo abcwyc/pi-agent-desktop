@@ -2194,6 +2194,8 @@ export function AppShell() {
                 <McpPanel
                   loading={systemInfoLoading}
                   tools={systemTools}
+                  cwd={selectedSession?.cwd ?? newSessionCwd ?? activeCwd}
+                  sessionId={selectedSession?.id ?? null}
                   translate={translate}
                 />
               )}

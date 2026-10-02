@@ -1,6 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+import type { McpExposure } from "@/lib/mcp-config";
+import { summarizeMcpTools } from "@/lib/mcp-status";
 import type { ToolEntry } from "@/lib/tool-presets";
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
@@ -8,45 +11,91 @@ type Translate = (key: string, params?: Record<string, string | number>) => stri
 interface Props {
   loading: boolean;
   tools: ToolEntry[] | null;
+  cwd: string | null;
+  sessionId: string | null;
   translate: Translate;
 }
 
-interface McpServerSummary {
+interface McpServer {
   name: string;
+  enabled: boolean;
   exposure: string;
-  active: boolean;
   toolCount: number;
+  connected: boolean;
+  declared: boolean;
+  transport: "stdio" | "http";
+  transportSummary: string;
+  source: string;
+  scope: "global" | "project";
 }
 
-function mcpServerName(tool: ToolEntry): string | null {
-  if (!tool.name.startsWith("mcp__")) return null;
-  const suffix = tool.name.slice(5);
-  const delimiter = suffix.lastIndexOf("__");
-  return delimiter === -1 ? suffix : suffix.slice(0, delimiter);
-}
+export function McpPanel({
+  loading,
+  tools,
+  cwd,
+  sessionId,
+  translate,
+}: Props) {
+  const liveTools = useMemo(() => tools ?? [], [tools]);
+  const [servers, setServers] = useState<McpServer[] | null>(null);
+  const [configErrors, setConfigErrors] = useState<string[]>([]);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [pendingServer, setPendingServer] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-export function summarizeMcpTools(tools: ToolEntry[]): McpServerSummary[] {
-  const servers = new Map<string, McpServerSummary>();
-  for (const tool of tools) {
-    const name = mcpServerName(tool);
-    if (!name) continue;
-    const current = servers.get(name) ?? {
-      name,
-      exposure: tool.exposure ?? "direct",
-      active: false,
-      toolCount: 0,
-    };
-    current.toolCount += 1;
-    current.active = current.active || tool.active;
-    if ((tool.exposure ?? "direct") === "direct") current.exposure = "direct";
-    servers.set(name, current);
-  }
-  return [...servers.values()].sort((a, b) => a.name.localeCompare(b.name));
-}
+  const load = useCallback(async () => {
+    if (!cwd) {
+      setServers(null);
+      return;
+    }
+    try {
+      const response = await fetch("/api/mcp", {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cwd, ...(sessionId ? { sessionId } : {}) }),
+      });
+      const data = await response.json() as {
+        servers?: McpServer[];
+        errors?: string[];
+        error?: string;
+      };
+      if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
+      setServers(data.servers ?? []);
+      setConfigErrors(data.errors ?? []);
+      setRequestError(null);
+    } catch (error) {
+      setRequestError(error instanceof Error ? error.message : String(error));
+    }
+  }, [cwd, sessionId]);
 
-export function McpPanel({ loading, tools, translate }: Props) {
-  const servers = useMemo(() => tools ? summarizeMcpTools(tools) : null, [tools]);
+  useEffect(() => {
+    void load();
+  }, [load, reloadKey]);
+
+  const update = useCallback(async (
+    server: McpServer,
+    body: { action: "enable" | "disable" } | { action: "exposure"; exposure: McpExposure },
+  ) => {
+    setPendingServer(server.name);
+    try {
+      const response = await fetch("/api/mcp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cwd, server: server.name, ...body }),
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
+      await load();
+    } catch (error) {
+      setRequestError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPendingServer(null);
+    }
+  }, [cwd, load]);
+
+  const liveSummaries = useMemo(() => summarizeMcpTools(liveTools), [liveTools]);
   const totalTools = servers?.reduce((sum, server) => sum + server.toolCount, 0) ?? 0;
+  const connectedCount = servers?.filter((server) => server.connected).length ?? 0;
 
   return (
     <section className="mcp-panel" aria-label={translate("mcp.title")}>
@@ -55,7 +104,11 @@ export function McpPanel({ loading, tools, translate }: Props) {
           <h2>{translate("mcp.title")}</h2>
           <p>
             {servers
-              ? translate("mcp.summary", { servers: servers.length, tools: totalTools })
+              ? translate("mcp.summary", {
+                servers: servers.length,
+                connected: connectedCount,
+                tools: totalTools,
+              })
               : loading
                 ? translate("mcp.loading")
                 : translate("mcp.load")}
@@ -64,24 +117,69 @@ export function McpPanel({ loading, tools, translate }: Props) {
       </header>
 
       <div className="mcp-server-scroll">
-        {servers?.length ? servers.map((server) => (
-          <article key={server.name} className={`mcp-server-card${server.active ? " connected" : ""}`}>
+        {requestError && <div className="mcp-config-error">{requestError}</div>}
+        {configErrors.map((error) => <div key={error} className="mcp-config-error">{error}</div>)}
+        {servers?.length ? servers.map((server) => {
+          const summary = liveSummaries.find((item) => item.name === server.name);
+          const pending = pendingServer === server.name;
+          return (
+          <article
+            key={server.name}
+            className={`mcp-server-card${server.connected ? " connected" : ""}${server.enabled ? "" : " disabled"}`}
+          >
             <div className="mcp-server-title">
               <code>{server.name}</code>
-              <span className="mcp-exposure">{translate(`tools.exposure.${server.exposure}`)}</span>
+              <div className="mcp-server-badges">
+                <span className={`mcp-exposure${server.enabled ? "" : " muted"}`}>
+                  {translate(`tools.exposure.${server.exposure}`)}
+                </span>
+                {!server.enabled && <span className="mcp-disabled-badge">{translate("mcp.disabled")}</span>}
+              </div>
             </div>
+            <div className="mcp-transport" title={server.source}>{server.transportSummary}</div>
             <dl>
               <div>
                 <dt>{translate("mcp.tools")}</dt>
-                <dd>{server.toolCount}</dd>
+                <dd>{summary?.toolCount ?? server.toolCount}</dd>
               </div>
               <div>
                 <dt>{translate("mcp.status")}</dt>
-                <dd>{server.active ? translate("mcp.declared") : translate("mcp.indirect")}</dd>
+                <dd>{server.connected ? translate("mcp.connected") : translate("mcp.notConnected")}</dd>
+              </div>
+              <div>
+                <dt>{translate("mcp.access")}</dt>
+                <dd>{summary?.active ? translate("mcp.declared") : translate("mcp.indirect")}</dd>
+              </div>
+              <div>
+                <dt>{translate("mcp.scope")}</dt>
+                <dd>{translate(server.scope === "global" ? "mcp.global" : "mcp.project")}</dd>
               </div>
             </dl>
+            <div className="mcp-actions">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void update(server, server.enabled
+                  ? { action: "disable" }
+                  : { action: "enable" })}
+              >
+                {translate(server.enabled ? "mcp.disable" : "mcp.enable")}
+              </button>
+              {(["codemode", "deferred", "direct", "hidden"] as const).map((exposure) => (
+                <button
+                  key={exposure}
+                  type="button"
+                  disabled={pending || server.exposure === exposure}
+                  aria-pressed={server.exposure === exposure}
+                  onClick={() => void update(server, { action: "exposure", exposure })}
+                >
+                  {translate(`tools.exposure.${exposure}`)}
+                </button>
+              ))}
+            </div>
           </article>
-        )) : servers ? (
+          );
+        }) : servers ? (
           <div className="mcp-empty">{translate("mcp.empty")}</div>
         ) : (
           <div className="mcp-empty">
@@ -91,8 +189,10 @@ export function McpPanel({ loading, tools, translate }: Props) {
       </div>
 
       <footer className="mcp-panel-footer">
-        <span>{translate("mcp.manageHint")}</span>
-        <code>/mcp</code>
+        <span>{translate("mcp.reloadHint")}</span>
+        <button type="button" onClick={() => setReloadKey((key) => key + 1)}>
+          {translate("mcp.reload")}
+        </button>
       </footer>
 
       <style>{`
@@ -167,9 +267,36 @@ export function McpPanel({ loading, tools, translate }: Props) {
           font-weight: 750;
           text-transform: uppercase;
         }
+        .mcp-server-badges,
+        .mcp-actions {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+        }
+        .mcp-exposure.muted,
+        .mcp-disabled-badge {
+          color: var(--text-dim);
+        }
+        .mcp-disabled-badge {
+          padding: 2px 7px;
+          border: 1px solid var(--border);
+          border-radius: 999px;
+          font-size: 9px;
+          font-weight: 750;
+          text-transform: uppercase;
+        }
+        .mcp-transport {
+          margin-top: 7px;
+          overflow: hidden;
+          color: var(--text-dim);
+          font-family: var(--font-mono);
+          font-size: 10.5px;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
         .mcp-server-card dl {
           display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-columns: repeat(4, minmax(0, 1fr));
           gap: 10px;
           margin: 10px 0 0;
         }
@@ -204,9 +331,51 @@ export function McpPanel({ loading, tools, translate }: Props) {
         .mcp-panel-footer code {
           color: var(--text);
         }
+        .mcp-config-error {
+          margin-bottom: 8px;
+          padding: 8px 10px;
+          border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+          border-radius: 7px;
+          color: var(--danger);
+          font-size: 11.5px;
+          overflow-wrap: anywhere;
+        }
+        .mcp-actions {
+          flex-wrap: wrap;
+          margin-top: 11px;
+        }
+        .mcp-actions button {
+          min-height: 25px;
+          padding: 3px 8px;
+          border: 1px solid var(--border);
+          border-radius: 6px;
+          background: var(--bg-panel);
+          color: var(--text-muted);
+          font-size: 10px;
+          font-weight: 650;
+          cursor: pointer;
+        }
+        .mcp-actions button[aria-pressed="true"] {
+          border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+          color: var(--accent);
+        }
+        .mcp-actions button:disabled {
+          cursor: default;
+          opacity: 0.58;
+        }
+        .mcp-panel-footer button {
+          min-height: 26px;
+          padding: 3px 9px;
+          border: 1px solid var(--border);
+          border-radius: 6px;
+          background: var(--bg);
+          color: var(--text-muted);
+          font-size: 11px;
+          cursor: pointer;
+        }
         @media (max-width: 640px) {
           .mcp-server-card dl {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
         }
       `}</style>

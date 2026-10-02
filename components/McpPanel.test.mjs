@@ -7,7 +7,7 @@ const jiti = createJiti(import.meta.url, {
   jsx: { runtime: "automatic" },
   tsconfigPaths: true,
 });
-const { summarizeMcpTools } = await jiti.import("./McpPanel.tsx");
+const { summarizeMcpTools } = await jiti.import("../lib/mcp-status.ts");
 const appShellSource = await readFile(new URL("./AppShell.tsx", import.meta.url), "utf8");
 const panelSource = await readFile(new URL("./McpPanel.tsx", import.meta.url), "utf8");
 
@@ -28,6 +28,8 @@ test("summarizes direct and indirect tools by MCP server", () => {
 test("MCP panel is reachable from the More menu", () => {
   assert.match(appShellSource, /handleSystemInfoToggle\("mcp"\)/);
   assert.match(appShellSource, /activeTopPanel === "mcp"[\s\S]*?<McpPanel/);
+  assert.match(panelSource, /fetch\("\/api\/mcp"/);
+  assert.match(panelSource, /action: "disable"/);
+  assert.match(panelSource, /action: "exposure", exposure/);
   assert.match(panelSource, /mcp-panel/);
-  assert.match(panelSource, /\/mcp/);
 });
