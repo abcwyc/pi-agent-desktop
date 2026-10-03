@@ -5223,3 +5223,16 @@ span.linenumber {
   background: var(--accent);
   color: var(--bg);
 }
+
+/* ---- Composer: routed model of a virtual model --------------------------------
+   pi's footer shows "auto • high → gpt-6-luna • medium"; the composer shows the
+   arrow half next to the model selector, muted, and truncates before the selector. */
+.routed-model-hint {
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

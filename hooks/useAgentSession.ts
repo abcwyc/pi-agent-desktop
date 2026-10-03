@@ -35,7 +35,7 @@ import { CODEMODE_TOOL_NAME, getCodemodeProgress } from "@/lib/codemode-view";
 import { updateExtensionWidgets } from "@/lib/extension-widgets";
 import { bareMcpOpensSettings } from "@/lib/mcp-command";
 import type { SettingsSection } from "@/lib/settings-navigation";
-import type { ExtensionStatusItem, LeafChangeOptions } from "@/lib/types";
+import type { CacheWarmingInfo, ExtensionStatusItem, LeafChangeOptions, RoutedModelInfo } from "@/lib/types";
 import {
   enqueueExtensionUiRequest,
   removeExtensionUiRequest,
@@ -109,6 +109,8 @@ type AgentStateResponse = {
   streamingMessage?: AgentMessage;
   extensionStatuses?: ExtensionStatusItem[];
   extensionWidgets?: ExtensionWidgetItem[];
+  routedModel?: RoutedModelInfo;
+  cacheWarming?: CacheWarmingInfo;
   queuedMessages?: { steering?: string[]; followUp?: string[] } | null;
   autoCompactionEnabled?: boolean;
   autoRetryEnabled?: boolean;
@@ -414,6 +416,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [forkingEntryId, setForkingEntryId] = useState<string | null>(null);
   const [currentModelOverride, setCurrentModelOverride] = useState<{ provider: string; modelId: string } | null>(null);
   const [liveModel, setLiveModel] = useState<{ provider: string; modelId: string } | null>(null);
+  // Under a virtual model: where the latest response was routed (pi's footer "auto → …").
+  const [routedModel, setRoutedModel] = useState<RoutedModelInfo | null>(null);
+  const [cacheWarming, setCacheWarming] = useState<CacheWarmingInfo | null>(null);
   const [pendingModel, setPendingModel] = useState<{ provider: string; modelId: string } | null>(null);
   const [modelSwitching, setModelSwitching] = useState(false);
   const [isCompacting, setIsCompacting] = useState(false);
@@ -623,6 +628,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setExtensionWidgets([]);
     setQueuedMessages({ steering: [], followUp: [] });
     setLiveModel(null);
+    setRoutedModel(null);
+    setCacheWarming(null);
     setLiveThinkingLevel(null);
   }
 
@@ -648,6 +655,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (state?.thinkingLevel !== undefined) {
       setLiveThinkingLevel(asConcreteThinkingLevel(state.thinkingLevel));
     }
+    setRoutedModel(state?.routedModel ?? null);
+    setCacheWarming(state?.cacheWarming ?? null);
     setAutomation((prev) => ({
       autoCompactionEnabled: state?.autoCompactionEnabled ?? prev.autoCompactionEnabled,
       autoRetryEnabled: state?.autoRetryEnabled ?? prev.autoRetryEnabled,
@@ -710,11 +719,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const cancelEdit = useCallback(() => setEdit(null), [setEdit]);
 
   const sessionStats = useMemo(() => {
+    const selectedModelKey = currentModel ? `${currentModel.provider}/${currentModel.modelId}` : undefined;
     if (sessionStatsOverride) {
       return {
         ...sessionStatsOverride,
         totalActiveMs: data?.totalActiveMs,
         ...(contextUsage ? { contextUsage } : {}),
+        ...(selectedModelKey ? { selectedModelKey } : {}),
       };
     }
     const fileStats = data?.stats;
@@ -727,8 +738,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       ...stats,
       totalActiveMs: data?.totalActiveMs,
       ...(contextUsage ? { contextUsage } : {}),
+      ...(cacheWarming ? { cacheWarming } : {}),
+      ...(selectedModelKey ? { selectedModelKey } : {}),
     } satisfies SessionStatsInfo;
-  }, [messages, sessionStatsOverride, contextUsage, data?.context.messages, data?.filePath, data?.totalActiveMs, data?.stats, session?.id, session?.name]);
+  }, [messages, sessionStatsOverride, contextUsage, cacheWarming, currentModel, data?.context.messages, data?.filePath, data?.totalActiveMs, data?.stats, session?.id, session?.name]);
 
   // Re-connecting to a run already in flight (page refresh mid-stream, or a
   // session opened while the agent works): seed the streaming bubble from the
@@ -3076,7 +3089,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     sessionIdRef, scrollContainerRef,
     lastUserMsgRef, pendingScrollToUserRef, initialScrollDoneRef,
     // Actions
-    branchSummaryPending, handleAbortBranchSummary,
+    branchSummaryPending, handleAbortBranchSummary, routedModel,
     handleSend, handleAbort, handleAbortRetry, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,

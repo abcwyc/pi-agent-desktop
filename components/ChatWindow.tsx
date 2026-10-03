@@ -368,7 +368,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
     showScrollToBottom,
     sessionIdRef, scrollContainerRef,
     lastUserMsgRef, promptAnchorActive,
-    branchSummaryPending, handleAbortBranchSummary,
+    branchSummaryPending, handleAbortBranchSummary, routedModel,
     handleSend, handleAbort, handleAbortRetry, handleFork, handleNavigate, handleEditContent, cancelEdit, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     retryLoad,
@@ -1169,6 +1169,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
       retryInfo={retryInfo}
       onAbortRetry={handleAbortRetry}
       branchSummaryPending={branchSummaryPending}
+      routedModel={routedModel}
       onAbortBranchSummary={handleAbortBranchSummary}
       automation={automation}
       onSetAutomation={handleSetAutomation}

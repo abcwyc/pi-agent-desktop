@@ -25,7 +25,7 @@ import {
   type AtQueryMatch, type FileIndexEntry, type HashQueryMatch, type SessionMentionEntry,
 } from "@/lib/file-fuzzy";
 import { resolveSessionReferences } from "@/lib/session-reference";
-import type { SessionInfo } from "@/lib/types";
+import type { RoutedModelInfo, SessionInfo } from "@/lib/types";
 import { getMarkdownListContinuation } from "@/lib/markdown-list-continuation";
 import { isBareMcpCommand, isBuiltinMcpCommand } from "@/lib/mcp-command";
 import { FolderIcon, getFileIcon } from "./FileIcons";
@@ -98,6 +98,8 @@ interface Props {
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
   /** Cancel the auto-retry backoff (pi ≥ 0.86) shown in the retry banner. */
   onAbortRetry?: () => void;
+  /** Under a virtual model, the physical model the latest response was routed to. */
+  routedModel?: RoutedModelInfo | null;
   /** A summarized branch switch is generating its summary (blocking; abortable). */
   branchSummaryPending?: boolean;
   onAbortBranchSummary?: () => void;
@@ -735,7 +737,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onCompact, onAbortCompaction, isCompacting, compactError, compactNotice, compactResult, summarizationRetry, toolPreset, onToolPresetChange,
   thinkingLevel, isAutoThinkingSelection = false, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   savedDefaultThinkingLevel, onSetDefaultThinkingLevel,
-  retryInfo, onAbortRetry, branchSummaryPending = false, onAbortBranchSummary, automation, onSetAutomation, queuedMessages, inputHistory = [], onRecallQueue,
+  retryInfo, onAbortRetry, routedModel, branchSummaryPending = false, onAbortBranchSummary, automation, onSetAutomation, queuedMessages, inputHistory = [], onRecallQueue,
   slashCommands, slashCommandsLoading, onLoadSlashCommands,
   onBuiltinCommand,
   soundEnabled, onSoundToggle, onAudioUnlock,
@@ -1923,6 +1925,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       name,
     })).sort(compareModelOptions);
   }, [modelList, modelNames, fallbackProvider]);
+  const routedModelName = routedModel
+    ? modelOptions.find((option) => option.provider === routedModel.provider && option.modelId === routedModel.id)?.name
+      ?? modelNames?.[routedModel.id]
+      ?? routedModel.id
+    : null;
 
   useLayoutEffect(() => {
     if (!slashMenuOpen || slashQuery === null) {
@@ -2972,6 +2979,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 defaultValue={defaultModel}
                 onSetDefault={onSetDefaultModel}
               />
+            )}
+            {/* A virtual model routes each request; show where the latest response went, like pi's footer. */}
+            {routedModel && routedModelName && (
+              <span
+                className="routed-model-hint"
+                title={t("chat.routedModelHint", { model: `${routedModel.provider}/${routedModel.id}${routedModel.thinkingLevel ? ` • ${routedModel.thinkingLevel}` : ""}` })}
+              >
+                → {routedModelName}{routedModel.thinkingLevel && !isNarrow ? ` • ${routedModel.thinkingLevel}` : ""}
+              </span>
             )}
             <ContextUsageRing contextUsage={contextUsage} sessionStats={sessionStats} onOpenStats={onSessionStatsPanelOpen} />
           </div>

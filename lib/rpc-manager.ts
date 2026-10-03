@@ -20,13 +20,16 @@ import type { SlashCommandInfo } from "@earendil-works/pi-coding-agent";
 import { PRODUCT_NAME } from "./branding";
 import type { AgentSessionLike, ExtensionUiContextLike, NavigateTreeOptions, ToolInfo } from "./pi-types";
 import type {
+  CacheWarmingInfo,
   ExtensionUiRequest,
   ExtensionUiResponse,
   ExtensionWidgetItem,
+  RoutedModelInfo,
   SessionEntry,
   SessionInfo,
   SessionMessageEntry,
 } from "./types";
+import { getUsageCostBreakdown } from "./usage-breakdown";
 import { createHeadlessCustomUiTui, DEFAULT_CUSTOM_UI_COLUMNS, type HeadlessCustomUiTui } from "./custom-ui-terminal";
 import {
   createSubagentExtension,
@@ -980,6 +983,8 @@ export class AgentSessionWrapper {
           thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
           extensionStatuses: this.getExtensionStatuses(),
           extensionWidgets: this.getExtensionWidgets(),
+          routedModel: this.getRoutedModel(),
+          cacheWarming: this.getCacheWarming(),
         };
       }
 
@@ -1124,6 +1129,8 @@ export class AgentSessionWrapper {
         return {
           ...this.inner.getSessionStats(),
           sessionName: this.inner.sessionManager.getSessionName(),
+          costBreakdown: getUsageCostBreakdown(this.inner.sessionManager.getEntries() as unknown as SessionEntry[]),
+          cacheWarming: this.getCacheWarming(),
         };
       }
 
@@ -1435,6 +1442,27 @@ export class AgentSessionWrapper {
     const pending = this.pendingUiResponses.get(response.id);
     if (!pending) return;
     pending.resolve(response);
+  }
+
+  private getRoutedModel(): RoutedModelInfo | undefined {
+    const routed = this.inner.routedModel;
+    if (!routed) return undefined;
+    return {
+      provider: routed.model.provider,
+      id: routed.model.id,
+      ...(routed.thinkingLevel ? { thinkingLevel: routed.thinkingLevel } : {}),
+    };
+  }
+
+  private getCacheWarming(): CacheWarmingInfo | undefined {
+    // Structural fakes and pre-0.86 sessions have no cache warming to report.
+    const mode = this.inner.settingsManager?.getCacheWarmingMode?.();
+    if (!mode) return undefined;
+    const status = this.inner.cacheWarmingStatus;
+    return {
+      mode,
+      ...(status ? { status: structuredClone(status) } : {}),
+    };
   }
 
   private getExtensionStatuses(): Array<{ key: string; text: string }> {

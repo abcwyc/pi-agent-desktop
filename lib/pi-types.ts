@@ -8,6 +8,8 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage as PiAgentMessage } from "@earendil-works/pi-agent-core";
 import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
+import type { CacheWarmingInfo } from "./types";
+import type { UsageCostBreakdownEntry } from "./usage-breakdown";
 
 export type { PiAgentMessage };
 
@@ -58,6 +60,12 @@ export interface SessionStatsInfo {
   contextUsage?: ContextUsage;
   /** Estimated active time across all entries in the session file. */
   totalActiveMs?: number;
+  /** Cost per model that answered (lib/usage-breakdown.ts). */
+  costBreakdown?: UsageCostBreakdownEntry[];
+  /** Live sessions only. */
+  cacheWarming?: CacheWarmingInfo;
+  /** `provider/modelId` of the selected model; decides whether a one-row breakdown is worth showing. */
+  selectedModelKey?: string;
 }
 
 interface PromptTemplateLike {
@@ -240,6 +248,9 @@ export interface AgentSessionLike {
   getActiveToolNames(): string[];
   setActiveToolsByName(names: string[]): void;
   abortCompaction(): void;
+  /** Under a virtual model, the physical model of the latest successful response (pi >= 0.99). */
+  readonly routedModel?: { model: ModelLike; thinkingLevel?: string };
+  readonly cacheWarmingStatus?: NonNullable<CacheWarmingInfo["status"]>;
   /** Stop a branch summary that `navigateTree({ summarize: true })` is generating. */
   abortBranchSummary?(): void;
   getContextUsage(): ContextUsage | undefined;

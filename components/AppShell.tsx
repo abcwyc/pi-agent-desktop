@@ -78,7 +78,9 @@ import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
 } from "@/lib/panel-layout";
-import type { BlockingExtensionUiRequest, LeafChangeOptions, SessionInfo, SessionTreeNode } from "@/lib/types";
+import type { BlockingExtensionUiRequest, CacheWarmingInfo, LeafChangeOptions, SessionInfo, SessionTreeNode } from "@/lib/types";
+import { shouldShowUsageBreakdown, UNATTRIBUTED_USAGE_KEY } from "@/lib/usage-breakdown";
+import { cacheWarmingRows } from "@/lib/cache-warming-display";
 import type { McpErrorResponse, ProjectTrustStatus } from "@/lib/api-types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { FileExplorerHandle } from "./FileExplorer";
@@ -502,6 +504,23 @@ export function AppShell() {
       }
     });
   }, [activeTopPanel, systemInfoLoading, toggleTopPanel]);
+
+  // Cache warming moves on its own between runs (scheduled → refreshing → stopped), so the
+  // panel asks the live wrapper again each time it opens. GET never starts a dormant session.
+  const [panelCacheWarming, setPanelCacheWarming] = useState<CacheWarmingInfo | null>(null);
+  const sessionPanelSessionId = activeTopPanel === "session" ? selectedSession?.id ?? null : null;
+  useEffect(() => {
+    setPanelCacheWarming(null);
+    if (!sessionPanelSessionId) return;
+    let cancelled = false;
+    fetch(`/api/agent/${encodeURIComponent(sessionPanelSessionId)}`)
+      .then((res) => res.json() as Promise<{ running?: boolean; state?: { cacheWarming?: CacheWarmingInfo } }>)
+      .then((data) => {
+        if (!cancelled && data.state?.cacheWarming) setPanelCacheWarming(data.state.cacheWarming);
+      })
+      .catch(() => { /* the snapshot from the last state sync stays */ });
+    return () => { cancelled = true; };
+  }, [sessionPanelSessionId]);
 
   const openSessionStatsPanel = useCallback(() => {
     if (isMobile) setSidebarOpen(false);
@@ -2334,6 +2353,14 @@ export function AppShell() {
                         </button>
                       );
                     };
+                    const costBreakdownRows = shouldShowUsageBreakdown(sessionStats.costBreakdown, sessionStats.selectedModelKey)
+                      ? (sessionStats.costBreakdown ?? []).map((entry) => [
+                          entry.key === UNATTRIBUTED_USAGE_KEY ? translate("session.unattributedUsage") : entry.key,
+                          `$${entry.cost.toFixed(4)} · ${formatCompact(entry.tokens)}`,
+                        ])
+                      : [];
+                    const cacheWarmingInfo = panelCacheWarming ?? sessionStats.cacheWarming;
+                    const cacheWarmingSectionRows = cacheWarmingInfo ? cacheWarmingRows(cacheWarmingInfo, translate) : [];
                     const sessionInfoSection = (
                       <div style={{ minWidth: 0 }}>
                          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{translate("session.infoSection")}</div>
@@ -2392,6 +2419,8 @@ export function AppShell() {
                         <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? 16 : 20 }}>
                           {sessionInfoSection}
                           {projectInfoSection}
+                          {costBreakdownRows.length > 0 && section(translate("session.costByModel"), costBreakdownRows)}
+                          {cacheWarmingSectionRows.length > 0 && section(translate("session.cacheWarming"), cacheWarmingSectionRows)}
                         </div>
                          {section(translate("session.messages"), messageRows)}
                          {section(translate("session.tokens"), [...tokenRows, ...extraTokenRows], "right", true)}

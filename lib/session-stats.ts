@@ -1,4 +1,5 @@
 import type { AgentMessage, AgentUsage, SessionEntry, SessionMessage } from "./types";
+import { getUsageCostBreakdown, mergeUsageBreakdown, type UsageCostBreakdownEntry } from "./usage-breakdown";
 
 export interface SessionFileStats {
   userMessages: number;
@@ -14,6 +15,8 @@ export interface SessionFileStats {
     total: number;
   };
   cost: number;
+  /** Cost per model that answered, as pi's `/session` lists it (lib/usage-breakdown.ts). */
+  costBreakdown?: UsageCostBreakdownEntry[];
 }
 
 function emptyStats(): SessionFileStats {
@@ -74,7 +77,8 @@ export function mergeSessionStats(
   currentMessages: AgentMessage[],
 ): SessionFileStats {
   const current = computeMessageStats(currentMessages);
-  if (!fileStats) return current;
+  const costBreakdown = mergeUsageBreakdown(fileStats?.costBreakdown, fileStats ? loadedMessages : [], currentMessages);
+  if (!fileStats) return { ...current, costBreakdown };
 
   const loaded = computeMessageStats(loadedMessages);
   const delta = (now: number, before: number) => Math.max(0, now - before);
@@ -94,6 +98,7 @@ export function mergeSessionStats(
     totalMessages: fileStats.totalMessages + delta(current.totalMessages, loaded.totalMessages),
     tokens,
     cost: fileStats.cost + delta(current.cost, loaded.cost),
+    costBreakdown,
   };
 }
 
@@ -122,5 +127,5 @@ export function computeSessionStats(entries: SessionEntry[]): SessionFileStats {
     addMessage(stats, entry.message);
   }
 
-  return finishStats(stats);
+  return { ...finishStats(stats), costBreakdown: getUsageCostBreakdown(entries) };
 }
