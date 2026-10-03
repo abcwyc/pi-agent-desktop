@@ -117,6 +117,45 @@ async function assembleServer() {
     { recursive: true, force: true },
   );
 
+  // quickjs-wasi loads its sandbox through runtime `import.meta.resolve` —
+  // "quickjs-wasi/quickjs.wasm" plus the extensions' *.so — which Next's file
+  // tracer cannot follow: the traced output keeps only dist/ and the sandbox
+  // dies with "Cannot find module .../quickjs-wasi/quickjs.wasm", turning Code
+  // mode off for every packaged session. Ship the complete source package over
+  // it, same policy as jiti above. (npm nests it under pi-coding-agent; fall
+  // back to a hoisted top-level copy for other install shapes.)
+  const quickjsWasiSources = [
+    join(rootDir, "node_modules", "@earendil-works", "pi-coding-agent", "node_modules", "quickjs-wasi"),
+    join(rootDir, "node_modules", "quickjs-wasi"),
+  ];
+  let quickjsWasiSource = null;
+  for (const candidate of quickjsWasiSources) {
+    try {
+      await access(candidate, constants.R_OK);
+      quickjsWasiSource = candidate;
+      break;
+    } catch {
+      // Try the next install shape.
+    }
+  }
+  if (!quickjsWasiSource) {
+    throw new Error(
+      "quickjs-wasi not found under node_modules; the packaged Code mode sandbox would be broken.",
+    );
+  }
+  await cp(
+    quickjsWasiSource,
+    join(
+      serverResourcesDir,
+      "node_modules",
+      "@earendil-works",
+      "pi-coding-agent",
+      "node_modules",
+      "quickjs-wasi",
+    ),
+    { recursive: true, force: true },
+  );
+
   await copyFile(
     join(rootDir, "desktop", "server-launcher.cjs"),
     join(serverResourcesDir, "desktop-server.cjs"),
