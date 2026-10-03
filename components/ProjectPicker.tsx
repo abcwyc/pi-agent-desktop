@@ -155,11 +155,10 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
     try {
       const res = await fetch("/api/default-cwd", { method: "POST" });
       const data = await res.json().catch(() => ({})) as { cwd?: string; error?: string };
-      if (data.cwd) {
-        onSelectCwd(data.cwd);
-        closeDropdown();
-        return;
-      }
+      // Select it like any other directory, so validation and the file
+      // allow-list go through /api/cwd/validate. It is not a path the user
+      // typed, so nothing is remembered as a recent pick.
+      if (data.cwd && await commitCustomPath(data.cwd)) return;
       setCustomPathError(data.error ?? `HTTP ${res.status}`);
       if (!isTauriDesktop()) {
         setCustomPathOpen(true);
@@ -172,7 +171,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
       }
       setDropdownOpen(true);
     }
-  }, [onSelectCwd, closeDropdown]);
+  }, [commitCustomPath, closeDropdown]);
 
   const trimmedFilter = projectFilter.trim();
   const showProjectFilter = shouldShowProjectFilter(recentProjects);

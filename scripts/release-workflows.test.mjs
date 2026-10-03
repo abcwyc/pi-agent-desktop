@@ -193,7 +193,7 @@ test("nothing reintroduces a literal homedir() into an fs call", async () => {
     "lib/directory-browser.ts",
     "lib/skill-lock.ts",
     "app/api/cwd/validate/route.ts",
-    "app/api/default-cwd/route.ts",
+    "lib/default-cwd.ts",
   ];
 
   for (const file of guarded) {

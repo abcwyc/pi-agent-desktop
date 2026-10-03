@@ -2,7 +2,8 @@ export interface ToolEntry {
   name: string;
   description: string;
   active: boolean;
-  exposure?: "direct" | "model-only" | "codemode" | "deferred" | "hidden";
+  /** Active, but left out of requests: the model calls it only from codemode scripts. */
+  declarationHidden?: boolean;
   parameters?: Record<string, unknown>;
   promptGuidelines?: string[];
   sourceInfo?: unknown;

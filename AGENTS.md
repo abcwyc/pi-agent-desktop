@@ -6,9 +6,9 @@
 npm run dev   # port 30141
 ```
 
-Typecheck: `node_modules/.bin/tsc --noEmit`  
-Lint: `npm run lint`  
-**Never run `next build` during dev** — pollutes `.next/` and breaks `npm run dev`.
+Typecheck: `node_modules/.bin/tsc --noEmit` · Lint: `npm run lint`
+
+**Never run `next build` during dev**: it pollutes `.next/` and breaks `npm run dev`.
 
 ---
 
@@ -38,24 +38,9 @@ Lint: `npm run lint`
 
 ## Architecture
 
-```
-Browser                Next.js Server              AgentSession (in-process)
-  │                        │                               │
-  ├─ GET /api/sessions ────▶ reads ~/.pi/agent/sessions/   │
-  ├─ GET /api/sessions/[id] reads .jsonl file directly     │
-  ├─ GET /api/agent/running ───────▶ running id snapshot   │
-  │                        │                               │
-  ├─ send message ─────────▶ POST /api/agent/[id]          │
-  │                        │   startRpcSession() ─────────▶│ createAgentSession()
-  │                        │   session.send(cmd) ─────────▶│ session.prompt()
-  │                        │                               │
-  ├─ SSE connect ──────────▶ GET /api/agent/[id]/events    │
-  │                        │   session.onEvent() ◀─────────│ session.subscribe()
-  │◀── data: {...} ─────────│                               │
-```
-
-**Session browsing** (read-only): reads `.jsonl` files through SDK `SessionManager` helpers and `lib/session-reader.ts` — no AgentSession created.  
-**Sending a message**: `startRpcSession()` in `lib/rpc-manager.ts` creates an AgentSession in-process.
+- **Browsing** (read-only, no AgentSession): `GET /api/sessions` lists `~/.pi/agent/sessions/`; `GET /api/sessions/[id]` reads the `.jsonl` through SDK `SessionManager` helpers and `lib/session-reader.ts`, or an open wrapper's in-memory `SessionManager`. `GET /api/agent/running` snapshots the running ids.
+- **Sending**: `POST /api/agent/[id]` → `startRpcSession()` (`lib/rpc-manager.ts`) creates the AgentSession in-process (`createAgentSessionFromServices()`); `session.send(cmd)` → `session.prompt()`.
+- **Events**: `GET /api/agent/[id]/events` streams SSE `data: {...}` from `session.onEvent()`, fed by `session.subscribe()`.
 
 ---
 
@@ -141,26 +126,36 @@ components/
   TabBar.tsx          tab bar (Chat + open file tabs)
 
 hooks/
-  useAgentSession.ts  messages + streaming + SSE + fork/navigate/reconciliation logic
-  useAudio.ts         completion sound + browser AudioContext unlock
-  useDragDrop.ts      shared drag/drop state
-  useIsMobile.ts      responsive breakpoint hook
-  useTheme.ts         theme state
+  useAgentSession.ts       messages, streaming, SSE, fork/navigate, reconciliation; built-in slash commands (/session, bare /mcp)
+  useAudio.ts              completion sound + AudioContext unlock
+  useDragDrop.ts           shared drag/drop state
+  useIsMobile.ts           responsive breakpoint
+  useKeyboardShortcuts.ts  Esc stops the running agent unless a field or nearer handler took it; Ctrl+Alt+N
+  useTheme.ts              theme state
 ```
 
 ---
 
-## Key Design Decisions & Traps
+## Topic Notes
 
 ### AgentSession lifecycle (`lib/rpc-manager.ts`)
 - One `AgentSessionWrapper` per session id, keyed in `globalThis.__piSessions`
 - `globalThis` survives Next.js hot-reload; plain module-level Map does not
 - Idle timeout: 10 minutes. Concurrent `startRpcSession()` calls share a single start Promise (`globalThis.__piStartLocks`)
 
-### Fork must destroy the wrapper immediately
-`AgentSession.fork()` **mutates the wrapper's inner state in-place** — after fork, `inner.sessionId` is the *new* session's id. If the wrapper stays alive in the registry under the old id, the next request gets the already-forked state and subsequent forks produce a corrupt `parentSession` chain.
+- [sessions.md](docs/agents/sessions.md): AgentSession lifecycle and shutdown, fork vs in-session branching, session file rewrites, toolCall normalization, SSE reconnect and tool events, transcript system / usage / context-edit entries, running-state polling, exported HTML. Files: `lib/rpc-manager.ts`, `lib/session-reader.ts`, `lib/normalize.ts`, `hooks/useAgentSession.ts`, `app/api/agent/**`, `app/api/sessions/**`, `components/BranchNavigator.tsx`, `components/MessageView.tsx`, `components/CodemodeToolView.tsx`.
+- [tools.md](docs/agents/tools.md): tool presets and Chat only, exact system prompts, tool exposure, the codemode / tool-search / mcp built-ins, the read-only MCP policy, the Code mode and PowerShell `defaultTools` switches. Files: `lib/tool-presets.ts`, `lib/tool-preset-preference.ts`, `lib/chat-only.ts`, `lib/exact-system-prompt.ts`, `lib/builtin-extensions.ts`, `lib/mcp-read-only-policy.ts`, `lib/codemode-settings.ts`, `lib/powershell-settings.ts`, `lib/global-settings-file.ts`, `app/api/agent/new/route.ts`, `app/api/tools/settings/route.ts`, tool selection in `lib/rpc-manager.ts`.
+- [mcp-runtime.md](docs/agents/mcp-runtime.md): the per-session MCP host (when servers register and connect, reported states, trust read on every sync, idle release); `/mcp` in the composer. Files: `lib/mcp-host.ts`, `lib/mcp-transport.ts`, `lib/mcp-status.ts`, `lib/mcp-command.ts`, `lib/mcp-config-key.ts`, MCP wiring in `lib/rpc-manager.ts` and `lib/builtin-extensions.ts`, `/mcp` handling in `hooks/useAgentSession.ts`.
+- [mcp-settings.md](docs/agents/mcp-settings.md): Settings › MCP reads without running anything, masking, the trust dialog's server list, row states, notices, Code mode choice, trust from Settings, Escape stacking, every `mcp.json` write and undo. Files: `app/api/mcp/route.ts`, `app/api/project-trust/route.ts`, `lib/mcp-config-read.ts`, `lib/mcp-config-file.ts`, `lib/mcp-undo.ts`, `lib/mcp-secrets.ts`, `lib/mcp-server-display.ts`, `lib/mcp-json-error.ts`, `lib/project-trust.ts`, `lib/regular-file.ts`, `lib/stacked-dialog.ts`, `lib/settings-navigation.ts`, `components/McpConfig.tsx`, `components/mcp-config-helpers.ts`, `components/ProjectTrustDialog.tsx`, `components/SettingsPanel.tsx`.
+- [mcp-test-sign-in.md](docs/agents/mcp-test-sign-in.md): Settings › MCP Test (route checks, bounded connection, `!command` queue, redaction, status store) and OAuth sign-in / sign-out. Files: `app/api/mcp/test/**`, `app/api/mcp/sign-in/**`, `lib/mcp-test.ts`, `lib/mcp-entry-request.ts`, `lib/mcp-status.ts`, `lib/mcp-sign-in.ts`, `lib/mcp-sign-out.ts`, `components/McpSignIn.tsx`, `components/mcp-sign-in-helpers.ts`, `components/OAuthPastePanel.tsx`.
+- [mcp-add.md](docs/agents/mcp-add.md): Settings › MCP add (paste re-parsed on the server, host-variable confirmation, literal secrets kept global, fresh-folder trust, the add pane) and the paste importer's escaping and grammars. Files: `lib/mcp-add.ts`, `lib/mcp-import*.ts`, `lib/shell-words.ts`, fresh-folder trust in `lib/project-trust.ts`, `components/McpAddServer.tsx`, `components/mcp-add-helpers.ts`, the `add` action of `app/api/mcp/route.ts`.
+- [models.md](docs/agents/models.md): default model and reasoning level, mid-run reasoning changes, remote provider catalogs, `enabledModels` scoping and minimal edits, provider auth listing and credentials. Files: `app/api/models/**`, `app/api/models-config/**`, `app/api/auth/**`, `lib/default-preferences.ts`, `lib/model-scope.ts`, `lib/enabled-models*.ts`, `lib/model-catalog-refresh.ts`, `lib/provider-listing*.ts`, `components/ModelsConfig.tsx`, `components/EnabledModelsSection.tsx`, `components/ModelSelector.tsx`, `components/SelectorRow.tsx`.
+- [files-and-access.md](docs/agents/files-and-access.md): worktrees and project grouping, the file access allow-list (the `/api/files` security boundary), file tree visibility, web password throttling. Files: `app/api/files/**`, `app/api/cwd/**`, `app/api/worktrees/**`, `app/api/file-index/**`, `app/api/web-auth/**`, `proxy.ts`, `lib/path-security.ts`, `lib/file-access.ts`, `lib/linked-directory.ts`, `lib/session-file-references*.ts`, `lib/file-tree-visibility.ts`, `lib/worktree.ts`, `lib/paths.ts`, `lib/auth-throttle.ts`, `components/FileExplorer.tsx`.
+- [settings-ui.md](docs/agents/settings-ui.md): Plugins and Skills routes, sidebar group switches, the shared `SettingsUi` blocks every settings panel and add pane uses. Files: `app/api/plugins/**`, `app/api/skills/**`, `components/SettingsUi.tsx`, `components/settings-ui-helpers.ts`, `components/SkillsConfig.tsx`, `components/PluginsConfig.tsx`; also before adding a settings section or add pane.
+- [subagents.md](docs/agents/subagents.md): the built-in subagent setting, profiles and their files, run status, completion notifications. Files: `lib/subagent*.ts`, `app/api/subagents/**`, `components/AgentsConfig.tsx`.
+- [client-platform.md](docs/agents/client-platform.md): mobile software keyboard and viewport height, completion sound. Files: `hooks/useViewportHeight.ts`, `hooks/useAudio.ts`, the keyboard-open CSS.
 
-**Fix**: `send("fork")` captures `newSessionId`, then calls `this.destroy()` before returning. The next request for the original session reloads a clean AgentSession from the original file.
+---
 
 ### Two kinds of branching — don't confuse them
 - **Fork** (Fork button on user message): creates a new independent `.jsonl` file. Shown as a child in the sidebar tree via `parentSession` header field.
@@ -214,7 +209,7 @@ Tool names are passed at session creation (`POST /api/agent/new` -> `toolNames[]
 `AgentState.systemPrompt` became a getter replayed from the transcript's system messages; assigning it throws at runtime (tsc only catches this in code typed against the real SDK — `rpc-manager.ts` goes through the structural `AgentSessionLike`, where it is invisible). Since the 2026-09-25 upstream merge the fork uses upstream's mechanism: `lib/exact-system-prompt.ts` registers a `before_agent_start` extension factory on the resource loader (see the tool-preset section above), and the fork's former `transformContext` projection (`AgentSessionWrapper.applyExactSystemPrompt()`) was deleted in its favor — do not re-add a second exact-prompt path. Stream functions take a `TranscriptContext` — fold a `Context` with `normalizeContext()` before calling one (see `lib/session-title.ts`). `lib/session-list-scanner.ts` reproduces the SDK's ordering (modified descending, then stat mtime, then reverse filename) with the same tie order upstream's `listSessionsIncremental()` implements; the summary/`detailsPending` hydration pass and the scanner's persisted index come from upstream's perf work.
 
 ### Model defaults for new sessions
-`GET /api/models` returns `defaultModel` read from `~/.pi/agent/settings.json`. `ChatWindow` pre-selects this on mount for new sessions. Explicit browser model/thinking selections are applied atomically during AgentSession construction, then `lib/startup-preferences.ts` persists their effective values without replaying `set_model`/`set_thinking_level`; implicit `enabledModels` fallbacks and thinking pins are not persisted.
+`GET /api/models` returns `defaultModel` read from `~/.pi/agent/settings.json`. `ChatWindow` pre-selects this on mount for new sessions. A model picked in the browser is session-scoped, as in the TUI: it is applied atomically during `AgentSession` construction and never written to the global defaults (upstream #871 removed `lib/startup-preferences.ts`; saving a default is its own request, `PUT /api/models/default`, offered by the model selector's star and `defaultModel`/`savedDefaultThinkingLevel` props).
 
 ### Remote provider catalogs
 pi's built-in model lists are generated when the SDK is built and pi-web pins one SDK version, so a model a provider ships after that release is invisible until pi-web publishes a new version (#914). The SDK carries the other half: each built-in provider is wrapped in a pi.dev catalog overlay that `ModelRuntime.refresh()` fetches and persists to `~/.pi/agent/models-store.json`, and restoring that overlay needs no network. Both of pi-web's refresh paths ask for the offline half only (`createAgentSessionServices()` and `lib/provider-usage.ts` pass `allowNetwork: false`), which is why running the pi CLI once used to be the fix — the CLI refreshed with the network on and pi-web read what it left behind.
@@ -381,6 +376,19 @@ Merged 1eb5e66..96966e5 (v0.9.2 + v0.9.3, pi SDK 0.86.1 → 0.87.1). This was th
 - **Kept fork-only**: models-config literal-key redaction (`mergeStoredLiteralApiKeys`) layered under upstream's `ModelsConfigReadError` handling; the PATCH live-runtime guard for unflushed sessions in `sessions/[id]` (now opening via `openSessionManager({ mutable: true })`); the lazy-wrapper saved-model restore in `startRpcSession`; the workspace/full-height sidebar, desktop i18n. (The sidebar's own sun/moon theme toggle and its `themeLabelKey` copy were removed later: the theme picker in Settings → General is the only switch, and `AppShell` now calls `useTheme()` purely to keep the shared store's system-scheme listener and the desktop `set_ui_theme` mirror alive for the app's lifetime.)
 - **Deps**: pi 0.87.1 (Claude Opus 5.5 / GPT-6 Sol / GPT-6 Luna / Grok 4.7 catalogs), next 16.3.6, semver 7.8.5, undici 8.11.0, upstream's production-install trim (ansi_up, remark-frontmatter → devDependencies); fork keeps `--experimental-strip-types` on its test script plus the `scripts/**` glob upstream doesn't have.
 
+### Segment G merge (6fcd7d4, 2026-10-03) — MCP and Code mode (ADR 0006)
+Merged 96966e5..6fcd7d4 (v0.10.0, pi SDK 1.0.0) on top of the fork's own pi-1.0 bump (`4e226bc`/`2e01612`). This merge fixed the "MCP tools are only reachable from the codemode or tool_search tool" warning: the fork had hand-wired `createMcpExtension()` without the codemode/tool-search built-ins, so every `session_start` with a `codemode`-exposure server in `mcp.json` warned and MCP tools were unreachable.
+
+- **Upstream's ADR 0006 runtime won wholesale**: `lib/builtin-extensions.ts` loads `codemode`/`tool-search`/`mcp` as named `builtin:<name>` entries (CLI parity, so `-builtin:codemode` works); `lib/mcp-host.ts` decides per-prompt which servers connect (nothing connects on browse; trust is re-read before every prompt); `createMcpExtension()` is NOT passed as a bare inline factory anymore — a merge that re-adds it double-loads the MCP extension and reintroduces the session_start fan-out. The read-only MCP policy, codemode sandbox self-test, and `MCP_WAIT_STOPPED_MESSAGE` prompt preparation all ride along.
+- **`resolveActiveToolNames()` replaced `withExtensionTools()`** (ADR 0006): a preset replaces only the coding tools, carries everything else active (codemode, tool_search, extension tools) across `set_tools` and reload, and `navigateTreeKeepingToolSelection()` re-applies the preset after `navigate_tree` because the SDK restores the branch loadout from the transcript. `SESSION_TOOL_NAMES` (codemode + tool_search + subagent control tools) survives navigation.
+- **Settings › MCP is upstream's** (`McpConfig` + `McpAddServer` + `McpSignIn` + `/api/mcp*`): paste-import, exposure per server, Test, OAuth sign-in, undoable Remove, Code mode Automatic/Always-on + inline budget, project servers behind trust. The fork's stopgap panel is deleted (`components/McpPanel.tsx`, `lib/mcp-config.ts`, the More-menu "mcp" entry, `lib/mcp-status.ts` fork variant); a bare `/mcp` in the composer opens Settings › MCP when `builtin:mcp` owns the command. `e2e/mcp-manager.mjs` was re-pointed at the Settings dialog.
+- **Declined again**: upstream's sidebar explorer pane / `DirectoryPicker` / `getSessionListIndices` windowing / second mobile toolbar group (the fork's More menu keeps System/Tools; `handleSystemInfoToggle` takes no `mobile` arg), the topbar models/skills/settings quick-buttons, and `ExtensionStatusBar` stays fork-deleted (upstream re-added it; `MobilePwaLayout.test.mjs` no longer references it). The fork's sidebar Open-in-File-Manager button was not adopted either — upstream's `i18n` keys and `/api/open-in-explorer` route are available for a later port.
+- **Fork layers kept**: `userHome()` routing (upstream's new `lib/default-cwd.ts` now routes through it; `~/pi-cwd/<date>` replaces the flat `pi-cwd-YYYYMMDD`, and `lib/file-access.ts` allow-lists the parent plus the legacy flat names), fork pagination in `/api/models-config/discover` (on top of upstream's catalog endpoint resolution), `resolveSessionReferences` inside upstream's send/queue paths, `CollapsibleUserText` (now with `keepLineBreaks`), the composer tier system, IME guards where the fork still owns the handler (Settings/ModelsConfig/PluginsConfig delegate to upstream's composing-safe `listenForPanelEscape`/`SettingsUi`), desktop sections in Settings, and the fork's topbar design (`AppShell.auto-name` / `right-panel-row` sentinels re-pinned).
+- **MessageView**: upstream's in-place edit flow (`onEditContent(message, entryId)` + `cancelEdit` + `isEditing`) replaced the fork's navigate-then-edit combo; the editing state is a `.message-user-bubble.is-editing` class styled in `native-theme.css` (upstream styles it inline). The fork's `extractMcpAuthorizationUrl` one-click auth link survives inside upstream's queued `ExtensionDialog` (waiting counts included).
+- **SSE**: nested tool events are slimmed (start/end only, updates dropped, `tool_execution_end` carries no `result`) and codemode snapshots truncate (`omittedCalls`); the fork's `slimToolExecutionResult` projection still runs on non-codemode updates and every `message_end` — it must NOT run on codemode updates (`details.calls` is not in `KEPT_DETAIL_KEYS` and would be dropped).
+- **`lib/startup-preferences.ts` deleted** (upstream #871): new-session model picks are session-scoped; `PUT /api/models/default` is the only writer of global defaults.
+- **Deps**: pi 1.0.0. `package-lock.json` keeps the tauri plugin versions pinned to `src-tauri/Cargo.lock` (restore HEAD's lock before `npm install --package-lock-only`, or the carets re-resolve and `release-workflows.test.mjs` fails). `scripts/upstream-css-baseline.json` re-pinned to 6fcd7d4.
+
 ## Pi Session File Format
 
 Location: `~/.pi/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl`
@@ -395,9 +403,7 @@ Location: `~/.pi/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl`
 {"type":"session_info","id":"...","parentId":"...","name":"user-defined name"}
 ```
 
-`entryIds[]` in `SessionContext` is a parallel array to `messages[]` — maps each displayed message back to its `.jsonl` entry id, used for fork and navigate_tree calls.
-
----
+`SessionContext.entryIds[]` parallels `messages[]`: each displayed message's `.jsonl` entry id, used for fork and navigate_tree.
 
 ## Styling: fork CSS lives only in `app/native-theme.css`
 

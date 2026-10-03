@@ -3340,6 +3340,13 @@ html.dark .sidebar-view-switcher-thumb {
   word-break: break-word;
 }
 
+/* A message under in-place edit (upstream's MessageView isEditing state). */
+.message-user-bubble.is-editing {
+  background: color-mix(in srgb, var(--accent) 14%, var(--user-bg));
+  border: 1px solid color-mix(in srgb, var(--accent) 62%, var(--user-bg));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
 .message-assistant {
   margin-bottom: 22px !important;
 }
@@ -5141,4 +5148,14 @@ span.linenumber {
 
 .main-file-toggle:active:not(:disabled) {
   transform: scale(0.94);
+}
+
+/* Mobile keyboard collapse: upstream's rule in globals.css targets
+   .chat-input-controls, but the fork's composer chrome carries its own class
+   (see .chat-composer-controls above); hide it under the same conditions so
+   the on-screen keyboard does not cover it. */
+@media (max-width: 640px), (pointer: coarse) and (max-height: 500px) {
+  html[data-keyboard-open] .chat-composer-controls {
+    display: none !important;
+  }
 }

@@ -16,14 +16,19 @@ export async function checkMcpManager(page, { agentDir, cwd }) {
     },
   }, null, 2));
 
-  const more = page.getByRole("button", { name: "More session actions" });
-  await more.click();
-  await page.getByRole("menuitem").filter({ hasText: "MCP" }).click();
-  const panel = page.getByRole("region", { name: "MCP servers" });
-  await panel.waitFor();
-  await panel.getByRole("option", { name: /alpha/ }).waitFor();
-  await panel.getByRole("option", { name: /beta/ }).click();
-  await panel.getByText("https://beta.example/mcp").waitFor();
-  if (await panel.getByText("secret-token").count()) throw new Error("MCP manager leaked a credential-bearing query string");
-  console.log("PASS: MCP manager master-detail layout and URL redaction");
+  // Settings › MCP lists the files' servers without a session (ADR 0006 P2).
+  // The fork opens Settings from the sidebar header's gear button.
+  await page.getByRole("button", { name: "Settings" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  await dialog.waitFor();
+  await dialog.getByRole("button", { name: /MCP/ }).click();
+
+  const alpha = dialog.getByRole("option", { name: /alpha/ });
+  await alpha.waitFor();
+  await alpha.click();
+  // GET /api/mcp lists files only: the URL's query is masked server-side, so a
+  // credential-bearing query string never reaches the browser.
+  await dialog.getByText("https://beta.example/mcp?ACCESS_KEY=•••").waitFor();
+  if (await dialog.getByText("secret-token").count()) throw new Error("MCP manager leaked a credential-bearing query string");
+  console.log("PASS: Settings › MCP lists file-configured servers with masked URLs");
 }

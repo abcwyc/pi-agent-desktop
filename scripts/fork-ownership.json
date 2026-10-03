@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "upstreamBaseline": "main@96966e5 (post v0.9.3)",
-  "note": "Single source of truth for the pi-web merge boundary. `driftedUpstreamFiles` lists files agegr/pi-web owns that this fork has also edited — every one is a potential merge conflict, and a potential SILENT semantic conflict when git merges cleanly but the two sides changed different things. The automated sync (.github/workflows/component-updates.yml) intersects each incoming upstream release with this map to decide whether it may push to main unattended. Human-facing rationale lives in docs/ownership-boundaries.md.",
+  "note": "Single source of truth for the pi-web merge boundary. `driftedUpstreamFiles` lists files agegr/pi-web owns that this fork has also edited \u2014 every one is a potential merge conflict, and a potential SILENT semantic conflict when git merges cleanly but the two sides changed different things. The automated sync (.github/workflows/component-updates.yml) intersects each incoming upstream release with this map to decide whether it may push to main unattended. Human-facing rationale lives in docs/ownership-boundaries.md.",
   "ignored": [
     "package-lock.json",
     "bun.lock",
@@ -13,56 +13,56 @@
       "high": 250,
       "medium": 30
     },
-    "note": "Risk follows STRUCTURAL drift, not total drift. Replacing an upstream inline style object with a className produces a large diff, but an upstream edit to the same line conflicts textually and fails the sync loudly — that is safe. Rewritten JSX trees and code moved across files are what merge cleanly while being wrong. components/ModelsConfig.tsx is the reference: 146 changed lines, only 12 structural, correctly rated low. Recompute with the hunk classifier described in docs/ownership-boundaries.md after any significant change to a shared file."
+    "note": "Risk follows STRUCTURAL drift, not total drift. Replacing an upstream inline style object with a className produces a large diff, but an upstream edit to the same line conflicts textually and fails the sync loudly \u2014 that is safe. Rewritten JSX trees and code moved across files are what merge cleanly while being wrong. components/ModelsConfig.tsx is the reference: 146 changed lines, only 12 structural, correctly rated low. Recompute with the hunk classifier described in docs/ownership-boundaries.md after any significant change to a shared file."
   },
   "autoPushPolicy": {
     "blockOnRisk": [
       "high",
       "medium"
     ],
-    "note": "Risk levels that force the sync to open a reviewed PR instead of pushing straight to main and triggering a signed release. Most upstream releases will land here, because the remaining drift is accepted by decision rather than pending cleanup — see `dispositions` and `decisionLog`. Narrow this list only if the drift itself actually goes away."
+    "note": "Risk levels that force the sync to open a reviewed PR instead of pushing straight to main and triggering a signed release. Most upstream releases will land here, because the remaining drift is accepted by decision rather than pending cleanup \u2014 see `dispositions` and `decisionLog`. Narrow this list only if the drift itself actually goes away."
   },
   "driftedUpstreamFiles": {
     "components/SessionSidebar.tsx": {
       "risk": "high",
       "drift": 2585,
       "reason": "~500 lines were MOVED OUT into components/ProjectPicker.tsx and components/path-ui.tsx, which do not exist upstream. git merge does not track cross-file moves: an upstream edit to the project-picker block can merge back cleanly and silently resurrect a second copy.",
-      "structuralDrift": 2096,
+      "structuralDrift": 2174,
       "disposition": "accepted"
     },
     "components/AppShell.tsx": {
       "risk": "high",
       "drift": 1797,
       "reason": "Top-bar redesign (toolbar consolidated into a more-menu, inline styles to classNames) plus the mount point for desktop chrome. The desktop-only parts moved to components/desktop/; the remaining 376 structural lines are the fork's own interaction design, not desktop plumbing, so this file stays high risk by design rather than by neglect.",
-      "structuralDrift": 1425,
+      "structuralDrift": 1553,
       "disposition": "accepted"
     },
     "components/FileViewer.tsx": {
       "risk": "high",
       "drift": 470,
-      "reason": "Adds FileViewerToolbar and FileViewerStatus, file icons, a live-sync indicator and a retry action. Both components are defined inside FileViewer.tsx rather than moved out, so there is no cross-file resurrection risk — only a large diff. Kept deliberately.",
-      "structuralDrift": 360,
+      "reason": "Adds FileViewerToolbar and FileViewerStatus, file icons, a live-sync indicator and a retry action. Both components are defined inside FileViewer.tsx rather than moved out, so there is no cross-file resurrection risk \u2014 only a large diff. Kept deliberately.",
+      "structuralDrift": 415,
       "disposition": "accepted"
     },
     "components/FileExplorer.tsx": {
-      "risk": "low",
+      "risk": "medium",
       "drift": 16,
       "reason": "Took upstream FileExplorer wholesale in the v0.8.11 merge (its file-search implementation won); only the selectedFilePath prop remains fork-side. Kept deliberately.",
-      "structuralDrift": 16,
+      "structuralDrift": 164,
       "disposition": "accepted"
     },
     "components/TabBar.tsx": {
       "risk": "medium",
       "drift": 92,
       "reason": "Accessibility work plus the terminal-tab affordance: role=\"tab\", aria-selected, roving tabIndex, keyboard activation, and a New terminal button. The terminal action is fork interaction design inside an upstream-owned component, so incoming TabBar changes require review.",
-      "structuralDrift": 49,
+      "structuralDrift": 55,
       "disposition": "accepted"
     },
     "components/ChatWindow.tsx": {
       "risk": "high",
       "drift": 515,
-      "reason": "Redesigned empty state — the new-session branding header (app icon + PRODUCT_NAME) is removed and only the update chip remains. Part of the fork's interaction design. Kept deliberately.",
-      "structuralDrift": 436,
+      "reason": "Redesigned empty state \u2014 the new-session branding header (app icon + PRODUCT_NAME) is removed and only the update chip remains. Part of the fork's interaction design. Kept deliberately.",
+      "structuralDrift": 722,
       "disposition": "accepted"
     },
     "hooks/useTheme.ts": {
@@ -76,14 +76,14 @@
       "risk": "high",
       "drift": 868,
       "reason": "Composer chrome restyle. Upstream changed this file in v0.8.1, and components/ChatInput.test.mjs covers it.",
-      "structuralDrift": 653,
+      "structuralDrift": 802,
       "disposition": "accepted"
     },
     "components/MessageView.tsx": {
-      "risk": "medium",
+      "risk": "high",
       "drift": 337,
       "reason": "Message bubble markup adjusted.",
-      "structuralDrift": 205,
+      "structuralDrift": 340,
       "disposition": "accepted"
     },
     "lib/i18n/registry.ts": {
@@ -96,7 +96,7 @@
     "next.config.ts": {
       "risk": "medium",
       "drift": 21,
-      "reason": "Desktop standalone build branch. Also holds serverExternalPackages, which upstream updates whenever it adds a pi package — do NOT auto-derive that list here.",
+      "reason": "Desktop standalone build branch. Also holds serverExternalPackages, which upstream updates whenever it adds a pi package \u2014 do NOT auto-derive that list here.",
       "disposition": "accepted"
     },
     "app/layout.tsx": {
@@ -113,10 +113,10 @@
       "disposition": "accepted"
     },
     "lib/rpc-manager.ts": {
-      "risk": "medium",
+      "risk": "high",
       "drift": 109,
       "reason": "Small fork edit in a file upstream changes often; watch it despite the low drift count.",
-      "structuralDrift": 109,
+      "structuralDrift": 595,
       "disposition": "accepted"
     },
     "components/FileIcons.tsx": {
@@ -127,16 +127,16 @@
       "disposition": "accepted"
     },
     "components/BranchNavigator.tsx": {
-      "risk": "low",
+      "risk": "medium",
       "drift": 25,
-      "reason": "className hook only, no structural change — the intended shape for every restyled file.",
-      "structuralDrift": 13,
+      "reason": "className hook only, no structural change \u2014 the intended shape for every restyled file.",
+      "structuralDrift": 32,
       "disposition": "accepted"
     },
     "package.json": {
       "risk": "low",
       "drift": 13,
-      "reason": "Desktop scripts and Tauri deps. Name stays @agegr/pi-web on purpose — see docs/ownership-boundaries.md.",
+      "reason": "Desktop scripts and Tauri deps. Name stays @agegr/pi-web on purpose \u2014 see docs/ownership-boundaries.md.",
       "disposition": "accepted"
     },
     "tsconfig.json": {
@@ -154,49 +154,49 @@
     "README.md": {
       "risk": "low",
       "drift": 264,
-      "reason": "Fork-specific product docs, English and the language switcher's default entry point. Conflicts here are noisy but harmless — resolve by keeping the fork version.",
+      "reason": "Fork-specific product docs, English and the language switcher's default entry point. Conflicts here are noisy but harmless \u2014 resolve by keeping the fork version.",
       "disposition": "accepted"
     },
     "README.zh-CN.md": {
       "risk": "low",
       "drift": 264,
-      "reason": "Fork-specific product docs, Simplified Chinese translation of README.md. Same handling as README.md. Upstream's other translations (ja, ru) are deleted in this fork on purpose — if a sync resurrects them, delete them again rather than translating Pi Agent docs into a language nobody here maintains.",
+      "reason": "Fork-specific product docs, Simplified Chinese translation of README.md. Same handling as README.md. Upstream's other translations (ja, ru) are deleted in this fork on purpose \u2014 if a sync resurrects them, delete them again rather than translating Pi Agent docs into a language nobody here maintains.",
       "disposition": "accepted"
     },
     "lib/file-access.ts": {
       "risk": "low",
       "drift": 13,
-      "structuralDrift": 13,
+      "structuralDrift": 28,
       "disposition": "accepted",
-      "reason": "Routes homedir() through userHome() so Next's file tracer stops folding it into a build-time glob of the whole user profile — the walk that made every Windows build fail. One import plus call swaps; conflicts here would be textual."
+      "reason": "Routes homedir() through userHome() so Next's file tracer stops folding it into a build-time glob of the whole user profile \u2014 the walk that made every Windows build fail. One import plus call swaps; conflicts here would be textual."
     },
     "app/api/default-cwd/route.ts": {
       "risk": "low",
       "drift": 6,
-      "structuralDrift": 6,
+      "structuralDrift": 12,
       "disposition": "accepted",
-      "reason": "Routes homedir() through userHome() so Next's file tracer stops folding it into a build-time glob of the whole user profile — the walk that made every Windows build fail. One import plus call swaps; conflicts here would be textual."
+      "reason": "Routes homedir() through userHome() so Next's file tracer stops folding it into a build-time glob of the whole user profile \u2014 the walk that made every Windows build fail. One import plus call swaps; conflicts here would be textual."
     },
     "lib/directory-browser.ts": {
-      "risk": "low",
+      "risk": "medium",
       "drift": 25,
-      "structuralDrift": 25,
+      "structuralDrift": 42,
       "disposition": "accepted",
-      "reason": "Routes homedir() through userHome() so Next's file tracer stops folding it into a build-time glob of the whole user profile — the walk that made every Windows build fail. One import plus call swaps; conflicts here would be textual."
+      "reason": "Routes homedir() through userHome() so Next's file tracer stops folding it into a build-time glob of the whole user profile \u2014 the walk that made every Windows build fail. One import plus call swaps; conflicts here would be textual."
     },
     "lib/skill-lock.ts": {
       "risk": "low",
       "drift": 4,
       "structuralDrift": 4,
       "disposition": "accepted",
-      "reason": "Routes homedir() through userHome() so Next's file tracer stops folding it into a build-time glob of the whole user profile — the walk that made every Windows build fail. One import plus call swaps; conflicts here would be textual."
+      "reason": "Routes homedir() through userHome() so Next's file tracer stops folding it into a build-time glob of the whole user profile \u2014 the walk that made every Windows build fail. One import plus call swaps; conflicts here would be textual."
     },
     "app/api/cwd/validate/route.ts": {
       "risk": "low",
       "drift": 28,
       "structuralDrift": 28,
       "disposition": "accepted",
-      "reason": "Routes homedir() through userHome() so Next's file tracer stops folding it into a build-time glob of the whole user profile — the walk that made every Windows build fail. One import plus call swaps; conflicts here would be textual."
+      "reason": "Routes homedir() through userHome() so Next's file tracer stops folding it into a build-time glob of the whole user profile \u2014 the walk that made every Windows build fail. One import plus call swaps; conflicts here would be textual."
     }
   },
   "forkOwnedPaths": [
@@ -225,21 +225,21 @@
   ],
   "dispositions": {
     "accepted": "Reviewed and kept. The drift is either the fork's own interaction design or a generic improvement with no desktop coupling, so it cannot be extracted into components/desktop/. Removing it would mean deleting a feature. These files stay permanent review points; that is the running cost of a UI fork, not a backlog item. Do not reopen without new information.",
-    "reduce": "Drift that can be removed without losing anything — desktop-only code that belongs in components/desktop/, or fork additions sitting in an upstream file that can move to a fork-owned one. Act on these."
+    "reduce": "Drift that can be removed without losing anything \u2014 desktop-only code that belongs in components/desktop/, or fork additions sitting in an upstream file that can move to a fork-owned one. Act on these."
   },
   "decisionLog": [
-    "2026-07-26 — lib/api-types.ts: fork update types moved to lib/app-update-types.ts; file now matches upstream and left the manifest.",
-    "2026-07-26 — components/AppShell.tsx: desktop window chrome moved to components/desktop/ (-53 structural). The remaining 376 lines are the top-bar redesign; accepted.",
-    "2026-07-26 — TabBar, FileExplorer, useTheme, FileViewer: assessed as generic improvements with zero desktop coupling. Upstreaming was declined, so accepted rather than reverted — reverting would delete working features to save CI review time.",
-    "2026-07-26 — lib/file-access.ts and app/api/default-cwd/route.ts: a literal homedir() in readdirSync/join arguments made @vercel/nft glob the whole user profile at build time, which is why the Windows release leg never succeeded. Routed both through defaultCwdBase(); accepted as new drift in two upstream files.",
-    "2026-07-26 — lib/user-home.ts added; five upstream files now call userHome() instead of homedir(). A literal homedir() reaching an fs call made @vercel/nft glob the entire user profile at build time. lib/directory-browser.ts (added upstream in v0.8.1) was the source of the fatal <home>/**/* walk, which is why Windows releases started failing exactly when v0.8.1 merged.",
-    "2026-07-28 — merged pi-web v0.8.2 (i18n, explorer quick changes viewer, project trust / restricted mode, Shift+Delete). Fork markup kept, upstream i18n strings adopted inside it. The upstream CWD picker and PiWebTitle scramble blocks that merged back into SessionSidebar.tsx were dropped again; the collapsible-explorer chevron stayed out (fork's explorer is always open) while the changes-viewer toggle was kept. Numbers refreshed against the v0.8.2 baseline.",
-    "2026-07-28 — lib/i18n/registry.ts (new upstream file in v0.8.2): added .ts extensions to its two relative imports so its test loads under Node type stripping; accepted as new low drift.",
-    "2026-07-31 — READMEs reduced to English (README.md, the default) plus Simplified Chinese (README.zh-CN.md), matching the two locales the UI actually ships in lib/i18n. README.ja.md and README.ru.md were still upstream pi-web docs describing an npx web server, so they were deleted rather than kept as stale descriptions of a product this fork no longer is. A sync that restores them should delete them again.",
-    "2026-09-19 — merged upstream v0.8.11 → v0.9.1 → main@974c8bb in four staged merges (88285a4, 7dbd35f, b11eabe, 0e36743). Config modals (Models/Skills/Plugins) now track upstream exactly and left the manifest. Numbers refreshed against main@974c8bb.",
-    "2026-09-25 — merged upstream 1eb5e66..96966e5 (v0.9.2+v0.9.3, pi 0.87.1) in one merge (15bee2b). Upstream owns the exact-system-prompt mechanism (lib/exact-system-prompt.ts) and the session scanner; fork transformContext projection deleted. Declined again: resizable sidebar panes, DirectoryPicker, SessionSearch, sidebar FileExplorer, ChatMinimap. Numbers refreshed against the 96966e5 baseline.",
-    "2026-09-26 — settings: the standalone AppSettings modal and its \"Desktop\" tab were folded into the General tab, which already rendered the same language and theme pickers. The product blurb and Version & Updates now sit at the top of General (components/AppUpdatesSection.tsx); the desktop-only window/tray switches live in components/desktop/DesktopAppSection.tsx (renders nothing in a browser), and the custom-stylesheet and diff-display controls joined General's appearance/chat sections. Seven appSettings.* locale keys went dead with the duplicate pickers and were dropped from all three locales. components/AppSettings.tsx deleted.",
-    "2026-09-26 — components/ChatWindow.tsx: the empty-session branding header upstream renders above the composer (app icon + product name + version badge) is removed entirely rather than rebranded; the row now carries only NewSessionUpdateLink, which self-hides, so the row keeps no margin of its own. This is a deletion, not a move, so it needed a new sentinel direction: FORK_FEATURES entries gained `forbiddenMarkers` in components/fork-extractions.test.mjs, pinning apple-touch-icon and PRODUCT_NAME out of ChatWindow.tsx. A merge that re-adopts upstream's empty state now fails that test instead of silently restoring the branding.",
-    "2026-09-26 — app/globals.css and app/settings.css restored to byte-identical with upstream 96966e5: ~470 + ~220 fork lines that had accumulated in them despite the rule moved to a 'fork base layer' at the top of app/native-theme.css (cascade verified unchanged by a computed-style comparison). scripts/upstream-css-baseline.test.mjs now pins both files to hashes in scripts/upstream-css-baseline.json; the sync workflow refreshes them after a merge with `node scripts/upstream-css-baseline.mjs update`, which refuses when either file differs from upstream. Design intent recorded in docs/native-theme.md."
+    "2026-07-26 \u2014 lib/api-types.ts: fork update types moved to lib/app-update-types.ts; file now matches upstream and left the manifest.",
+    "2026-07-26 \u2014 components/AppShell.tsx: desktop window chrome moved to components/desktop/ (-53 structural). The remaining 376 lines are the top-bar redesign; accepted.",
+    "2026-07-26 \u2014 TabBar, FileExplorer, useTheme, FileViewer: assessed as generic improvements with zero desktop coupling. Upstreaming was declined, so accepted rather than reverted \u2014 reverting would delete working features to save CI review time.",
+    "2026-07-26 \u2014 lib/file-access.ts and app/api/default-cwd/route.ts: a literal homedir() in readdirSync/join arguments made @vercel/nft glob the whole user profile at build time, which is why the Windows release leg never succeeded. Routed both through defaultCwdBase(); accepted as new drift in two upstream files.",
+    "2026-07-26 \u2014 lib/user-home.ts added; five upstream files now call userHome() instead of homedir(). A literal homedir() reaching an fs call made @vercel/nft glob the entire user profile at build time. lib/directory-browser.ts (added upstream in v0.8.1) was the source of the fatal <home>/**/* walk, which is why Windows releases started failing exactly when v0.8.1 merged.",
+    "2026-07-28 \u2014 merged pi-web v0.8.2 (i18n, explorer quick changes viewer, project trust / restricted mode, Shift+Delete). Fork markup kept, upstream i18n strings adopted inside it. The upstream CWD picker and PiWebTitle scramble blocks that merged back into SessionSidebar.tsx were dropped again; the collapsible-explorer chevron stayed out (fork's explorer is always open) while the changes-viewer toggle was kept. Numbers refreshed against the v0.8.2 baseline.",
+    "2026-07-28 \u2014 lib/i18n/registry.ts (new upstream file in v0.8.2): added .ts extensions to its two relative imports so its test loads under Node type stripping; accepted as new low drift.",
+    "2026-07-31 \u2014 READMEs reduced to English (README.md, the default) plus Simplified Chinese (README.zh-CN.md), matching the two locales the UI actually ships in lib/i18n. README.ja.md and README.ru.md were still upstream pi-web docs describing an npx web server, so they were deleted rather than kept as stale descriptions of a product this fork no longer is. A sync that restores them should delete them again.",
+    "2026-09-19 \u2014 merged upstream v0.8.11 \u2192 v0.9.1 \u2192 main@974c8bb in four staged merges (88285a4, 7dbd35f, b11eabe, 0e36743). Config modals (Models/Skills/Plugins) now track upstream exactly and left the manifest. Numbers refreshed against main@974c8bb.",
+    "2026-09-25 \u2014 merged upstream 1eb5e66..96966e5 (v0.9.2+v0.9.3, pi 0.87.1) in one merge (15bee2b). Upstream owns the exact-system-prompt mechanism (lib/exact-system-prompt.ts) and the session scanner; fork transformContext projection deleted. Declined again: resizable sidebar panes, DirectoryPicker, SessionSearch, sidebar FileExplorer, ChatMinimap. Numbers refreshed against the 96966e5 baseline.",
+    "2026-09-26 \u2014 settings: the standalone AppSettings modal and its \"Desktop\" tab were folded into the General tab, which already rendered the same language and theme pickers. The product blurb and Version & Updates now sit at the top of General (components/AppUpdatesSection.tsx); the desktop-only window/tray switches live in components/desktop/DesktopAppSection.tsx (renders nothing in a browser), and the custom-stylesheet and diff-display controls joined General's appearance/chat sections. Seven appSettings.* locale keys went dead with the duplicate pickers and were dropped from all three locales. components/AppSettings.tsx deleted.",
+    "2026-09-26 \u2014 components/ChatWindow.tsx: the empty-session branding header upstream renders above the composer (app icon + product name + version badge) is removed entirely rather than rebranded; the row now carries only NewSessionUpdateLink, which self-hides, so the row keeps no margin of its own. This is a deletion, not a move, so it needed a new sentinel direction: FORK_FEATURES entries gained `forbiddenMarkers` in components/fork-extractions.test.mjs, pinning apple-touch-icon and PRODUCT_NAME out of ChatWindow.tsx. A merge that re-adopts upstream's empty state now fails that test instead of silently restoring the branding.",
+    "2026-09-26 \u2014 app/globals.css and app/settings.css restored to byte-identical with upstream 96966e5: ~470 + ~220 fork lines that had accumulated in them despite the rule moved to a 'fork base layer' at the top of app/native-theme.css (cascade verified unchanged by a computed-style comparison). scripts/upstream-css-baseline.test.mjs now pins both files to hashes in scripts/upstream-css-baseline.json; the sync workflow refreshes them after a merge with `node scripts/upstream-css-baseline.mjs update`, which refuses when either file differs from upstream. Design intent recorded in docs/native-theme.md."
   ]
 }

@@ -36,9 +36,13 @@ export async function getAllowedFileRoots(): Promise<Set<string>> {
     if (s.projectRoot) roots.add(normalizeSlashes(s.projectRoot));
   }
 
-  // Also allow ~/pi-cwd-* directories created by the default-cwd endpoint.
+  // Also allow the ~/pi-cwd parent that default-cwd creates under (one folder
+  // per local date) and the legacy flat ~/pi-cwd-YYYYMMDD layout it used before
+  // the upstream merge. Scanning keeps those browsable after a restart, when the
+  // in-memory allowFileRoot() additions from the creating request are gone.
   try {
     const base = userHome();
+    roots.add(normalizeSlashes(path.join(base, "pi-cwd")));
     for (const name of await readdir(base)) {
       if (/^pi-cwd-\d{8}$/.test(name)) {
         roots.add(normalizeSlashes(path.join(base, name)));
@@ -47,6 +51,7 @@ export async function getAllowedFileRoots(): Promise<Set<string>> {
   } catch {
     // ignore if home is unreadable
   }
+
 
   for (const root of getAdditionalAllowedRoots()) roots.add(root);
 

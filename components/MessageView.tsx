@@ -9,7 +9,7 @@ import { copyText } from "@/lib/clipboard";
 import { useI18n } from "@/hooks/useI18n";
 import { useDiffViewMode } from "@/hooks/useDiffViewMode";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
-import { getAssistantErrorMessage, getThinkingPreview, isAssistantTruncated, isEmptyThinkingBlock } from "@/lib/message-display";
+import { getAssistantErrorMessage, getThinkingPreview, hasAssistantAnswer, isAssistantTruncated, isEmptyThinkingBlock } from "@/lib/message-display";
 import { parseUnifiedPatch, type SplitDiffCell, type SplitDiffFile } from "@/lib/patch";
 import { applyPatchPreviewToFiles, applyPatchResultHasFailures, extractApplyPatchPaths, getApplyPatchInputText, parseApplyPatchInput } from "@/lib/apply-patch";
 import { isApplyPatchToolName, isEditToolName } from "@/lib/tool-names";
@@ -19,6 +19,9 @@ import { TurnWrittenFiles } from "./TurnWrittenFiles";
 import type { WrittenFile } from "@/lib/turn-written-files";
 import { skillExpansionToCommand } from "@/lib/slash-display";
 import type { SubagentToolDetails } from "@/lib/subagent-extension";
+import { CODEMODE_TOOL_NAME, codemodeCalls, codemodeScript, codemodeScriptPreview, stripCodemodeHeader } from "@/lib/codemode-view";
+import { CodemodeCallList } from "./CodemodeToolView";
+import { mcpToolLabel, prettyMcpResultText } from "@/lib/mcp-tool-display";
 import type {
   AgentMessage,
   UserMessage,
@@ -194,9 +197,9 @@ interface Props {
   searchBlock?: AssistantContentBlock;
   onFork?: (entryId: string) => void;
   forking?: boolean;
-  onNavigate?: (entryId: string) => Promise<boolean>;
-  prevAssistantEntryId?: string | null;
-  onEditContent?: (message: UserMessage) => void;
+  onEditContent?: (message: UserMessage, entryId: string) => void;
+  onCancelEdit?: () => void;
+  isEditing?: boolean;
   showTimestamp?: boolean;
   prevTimestamp?: number;
   sessionId?: string;
@@ -207,6 +210,9 @@ interface Props {
    * final answer text-only.
    */
   writtenFiles?: WrittenFile[];
+  onCompact?: () => void;
+  isCompacting?: boolean;
+  compactError?: string | null;
 }
 
 export function getModelDisplayName(
@@ -274,12 +280,12 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, onOpenSession, entryId, searchBlock, onFork, forking, onNavigate, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, onOpenSession, entryId, searchBlock, onFork, forking, onEditContent, onCancelEdit, isEditing, showTimestamp, prevTimestamp, sessionId, writtenFiles, onCompact, isCompacting, compactError }: Props) {
   if (message.role === "user") {
-    return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} onEditContent={onEditContent} />;
+    return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onEditContent={onEditContent} onCancelEdit={onCancelEdit} isEditing={isEditing} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} searchBlock={searchBlock} writtenFiles={writtenFiles} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} searchBlock={searchBlock} writtenFiles={writtenFiles} onCompact={onCompact} isCompacting={isCompacting} compactError={compactError} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -307,36 +313,45 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     && prev.searchBlock === next.searchBlock
     && prev.onFork === next.onFork
     && prev.forking === next.forking
-    && prev.onNavigate === next.onNavigate
     && prev.onEditContent === next.onEditContent
+    && prev.onCancelEdit === next.onCancelEdit
+    && prev.isEditing === next.isEditing
     && prev.showTimestamp === next.showTimestamp
     && prev.prevTimestamp === next.prevTimestamp
     && prev.writtenFiles === next.writtenFiles
-    && prev.sessionId === next.sessionId;
+    && prev.sessionId === next.sessionId
+    && prev.onCompact === next.onCompact
+    && prev.isCompacting === next.isCompacting
+    && prev.compactError === next.compactError;
 });
 
-function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, onNavigate, onEditContent }: {
+function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, onEditContent, onCancelEdit, isEditing }: {
   message: UserMessage;
   cwd?: string;
   onOpenFile?: (filePath: string, page?: number) => void;
   entryId?: string;
   onFork?: (entryId: string) => void;
   forking?: boolean;
-  onNavigate?: (entryId: string) => Promise<boolean>;
-  onEditContent?: (message: UserMessage) => void;
+  onEditContent?: (message: UserMessage, entryId: string) => void;
+  onCancelEdit?: () => void;
+  isEditing?: boolean;
 }) {
   const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
-  const content =
+  // Session files can hold `\r\n` or lone `\r` line endings (#680). Chrome renders
+  // a lone `\r` as a space even in the pre-wrap command-args and raw-text views.
+  // Copy uses this text too; the session file keeps the original endings.
+  const content = (
     typeof message.content === "string"
       ? message.content
       : message.content
           .filter((b): b is TextContent => b.type === "text")
           .map((b) => b.text)
-          .join("\n");
+          .join("\n")
+  ).replace(/\r\n?/g, "\n");
 
   const imageBlocks: ImageContent[] =
     typeof message.content === "string"
@@ -383,7 +398,8 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
       })}
     </div>
   );
-  const canNavigate = !!entryId && !!onNavigate;
+  const canEdit = !!entryId && !!onEditContent;
+  const canCancelEdit = !!isEditing && !!onCancelEdit;
 
   const copyContent = () => {
     copyText(copyTarget).then(() => {
@@ -401,7 +417,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
     >
       <div style={{ display: "flex", alignItems: "flex-end", gap: 6, maxWidth: "min(78%, 660px)" }}>
         <div
-          className="message-user-bubble"
+          className={`message-user-bubble${isEditing ? " is-editing" : ""}`}
           style={{
             flex: 1,
             minWidth: 0,
@@ -465,7 +481,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                 )}
               </div>
               {expanded && (
-                <MarkdownBody className="markdown-user-message" cwd={cwd} onOpenFile={onOpenFile}>{content}</MarkdownBody>
+                <MarkdownBody className="markdown-user-message" keepLineBreaks cwd={cwd} onOpenFile={onOpenFile}>{content}</MarkdownBody>
               )}
             </div>
           ) : (
@@ -479,7 +495,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
       </div>
 
       {/* Bottom row: action buttons + timestamp */}
-      {(time || canFork || canNavigate || true) && (
+      {(time || canFork || canEdit || true) && (
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "flex-end",
           gap: 6, marginTop: 3,
@@ -520,18 +536,16 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                {copied ? t("i18n.copied") : t("i18n.copy")}
             </button>
           </div>
-          {(canFork || canNavigate) && (
+          {(canFork || canEdit || canCancelEdit) && (
             <div className="user-msg-actions" style={{
               display: "flex", gap: 3,
-              opacity: (hovered || forking) ? 1 : 0,
-              pointerEvents: (hovered || forking) ? "auto" : "none",
+              opacity: (hovered || forking || canCancelEdit) ? 1 : 0,
+              pointerEvents: (hovered || forking || canCancelEdit) ? "auto" : "none",
               transition: "opacity 0.12s",
             }}>
-              {canNavigate && (
+              {canEdit && !canCancelEdit && (
                 <button
-                  onClick={() => void onNavigate!(entryId!).then((navigated) => {
-                    if (navigated) onEditContent?.(editTarget);
-                  })}
+                  onClick={() => onEditContent!(editTarget, entryId!)}
                    title={t("i18n.editFromHereTitle")}
                   style={{
                     display: "flex", alignItems: "center", gap: 4,
@@ -552,6 +566,29 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                     <path d="M4 4v7a4 4 0 0 0 4 4h12" />
                   </svg>
                    {t("i18n.editFromHere")}
+                </button>
+              )}
+              {canCancelEdit && (
+                <button
+                  type="button"
+                  onClick={onCancelEdit}
+                  title={t("i18n.cancel")}
+                  aria-label={t("i18n.cancel")}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 4,
+                    padding: "3px 8px", height: 22,
+                    background: "none", border: "none",
+                    borderRadius: 5,
+                    color: "var(--accent)",
+                    cursor: "pointer",
+                    fontSize: 11, fontWeight: 500,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                  {t("i18n.cancel")}
                 </button>
               )}
               {canFork && (
@@ -605,6 +642,9 @@ function AssistantMessageView({
   entryId,
   searchBlock,
   writtenFiles,
+  onCompact,
+  isCompacting,
+  compactError,
 }: {
   message: AssistantMessage;
   isStreaming?: boolean;
@@ -619,6 +659,9 @@ function AssistantMessageView({
   entryId?: string;
   searchBlock?: AssistantContentBlock;
   writtenFiles?: WrittenFile[];
+  onCompact?: () => void;
+  isCompacting?: boolean;
+  compactError?: string | null;
 }) {
   const { t } = useI18n();
   const time = showTimestamp ? formatTime(message.timestamp) : null;
@@ -628,6 +671,7 @@ function AssistantMessageView({
   const blocks = useMemo(() => blockItems.map(({ block }) => block), [blockItems]);
   const providerError = getAssistantErrorMessage(message, { isStreaming });
   const truncated = isAssistantTruncated(message, { isStreaming });
+  const unansweredTruncation = truncated && !hasAssistantAnswer(message);
   const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
   const streamStartRef = useRef<number | null>(null);
@@ -843,7 +887,30 @@ function AssistantMessageView({
             overflowWrap: "anywhere",
           }}
         >
-          {t("chat.truncatedByOutputLimit")}
+          {t(unansweredTruncation ? "chat.truncatedWithoutAnswer" : "chat.truncatedByOutputLimit")}
+          {unansweredTruncation && onCompact && (
+            <button
+              type="button"
+              onClick={onCompact}
+              disabled={isCompacting}
+              style={{
+                display: "block",
+                marginTop: 8,
+                padding: "3px 8px",
+                border: "1px solid currentColor",
+                borderRadius: 5,
+                background: "transparent",
+                color: "inherit",
+                cursor: isCompacting ? "default" : "pointer",
+                font: "inherit",
+              }}
+            >
+              {t(isCompacting ? "chat.compacting" : "chat.compactContext")}
+            </button>
+          )}
+          {unansweredTruncation && compactError && (
+            <div style={{ marginTop: 8, color: "#ef4444", whiteSpace: "pre-wrap" }}>{compactError}</div>
+          )}
         </div>
       )}
 
@@ -1061,16 +1128,28 @@ function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOp
   const patchLabel = isApplyPatchToolName(block.toolName)
     ? summarizeApplyPatchInput(block)
     : null;
+  // A script and the calls it made, instead of the input JSON. Streamed input is
+  // still incomplete JSON and keeps the generic view.
+  const codemodeCode = block.toolName === CODEMODE_TOOL_NAME && !isStreamingInput ? codemodeScript(block.input) : null;
+  const codemode = codemodeCode === null ? null : { code: codemodeCode, ...codemodeCalls(result?.details) };
+  // A running script's progress snapshot has calls but no content yet.
+  const codemodeRunning = codemode !== null && result !== undefined && result.content.length === 0;
+
+  // `server/tool` instead of the registered `mcp__server__tool`, as pi's TUI shows it.
+  const mcpLabel = mcpToolLabel(block.toolName, result?.details);
 
   // Result display
-  const resultText = result
-    ? result.content.filter((b): b is { type: "text"; text: string } => b.type === "text").map((b) => b.text).join("\n")
+  const resultContent = result ? (codemode ? stripCodemodeHeader(result.content) : result.content) : [];
+  const joinedResultText = result
+    ? resultContent.filter((b): b is { type: "text"; text: string } => b.type === "text").map((b) => b.text).join("\n")
     : null;
-  const resultImages = getMessageImages(result?.content ?? []);
+  const resultText = mcpLabel && joinedResultText !== null ? prettyMcpResultText(joinedResultText) : joinedResultText;
+  const resultImages = getMessageImages(resultContent);
   const resultIsEmpty = resultText === null ? false : (resultText.trim() === "(no output)" || resultText.trim() === "");
   const isError = (result?.isError ?? false)
     || (isApplyPatchToolName(block.toolName) && applyPatchResultHasFailures(result?.details));
   const subagent = isSubagentToolDetails(result?.details) ? result.details : null;
+  const codemodeCallCount = codemode ? codemode.calls.length + codemode.omitted : 0;
 
   return (
     <div
@@ -1109,8 +1188,16 @@ function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOp
             textAlign: "left",
           }}
         >
-          <span style={{ color: isError ? "var(--danger)" : aborted ? "var(--text-dim)" : "var(--success)", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
-            {block.toolName}
+          <span
+            title={mcpLabel ? block.toolName : undefined}
+            style={{ color: isError ? "var(--danger)" : aborted ? "var(--text-dim)" : "var(--success)", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}
+          >
+            {mcpLabel ? (
+              <>
+                <span style={{ fontWeight: 500, opacity: 0.75 }}>{mcpLabel.server}/</span>
+                {mcpLabel.tool}
+              </>
+            ) : block.toolName}
           </span>
           {aborted && (
             <span title={t("chat.toolCancelled")} style={{ flexShrink: 0, fontSize: 10, color: "var(--text-dim)", border: "1px solid var(--border)", borderRadius: 4, padding: "1px 5px" }}>
@@ -1118,8 +1205,15 @@ function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOp
             </span>
           )}
           <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-            {isStreamingInput ? t("chat.generatingToolInput") : (patchLabel ?? getToolPreview(block))}
+            {isStreamingInput
+              ? t("chat.generatingToolInput")
+              : (patchLabel ?? (codemode ? codemodeScriptPreview(codemode.code) : getToolPreview(block)))}
           </span>
+          {codemodeCallCount > 0 && (
+            <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+              {codemodeCallCount === 1 ? t("codemode.callCountOne") : t("codemode.callCount", { count: codemodeCallCount })}
+            </span>
+          )}
           {duration !== undefined && (
             <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
           )}
@@ -1140,7 +1234,7 @@ function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOp
         )}
       </div>
 
-      {/* ── Expanded: input args (only when no richer view exists) ── */}
+      {/* ── Expanded: input args (only when no richer view exists); a codemode script in place of its JSON ── */}
       {expanded && (isStreamingInput || !isEditTool) && !patchFiles && (
         <pre
           style={{
@@ -1156,8 +1250,13 @@ function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOp
             wordBreak: "break-all",
           }}
         >
-          {inputStr}
+          {codemode ? codemode.code.replace(/\r/g, "").trimEnd() : inputStr}
         </pre>
+      )}
+
+      {/* ── Expanded: the calls a codemode script made ── */}
+      {expanded && codemode && (
+        <CodemodeCallList calls={codemode.calls} omitted={codemode.omitted} isError={isError} />
       )}
 
       {/* ── Result images — always visible, independent of the collapsed details ── */}
@@ -1178,7 +1277,7 @@ function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOp
           isError={isError}
         />
       )}
-      {expanded && result && !patchFiles && (
+      {expanded && result && !patchFiles && !codemodeRunning && (
         resultDiff ? (
           <PairedDiffResult
             diff={resultDiff}
@@ -1667,7 +1766,7 @@ function CollapsibleUserText({ text, cwd, onOpenFile }: {
           WebkitMaskImage: fade,
         } : undefined}
       >
-        <MarkdownBody className="markdown-user-message" cwd={cwd} onOpenFile={onOpenFile}>{text}</MarkdownBody>
+        <MarkdownBody className="markdown-user-message" keepLineBreaks cwd={cwd} onOpenFile={onOpenFile}>{text}</MarkdownBody>
       </div>
       {overflowing && (
         <button

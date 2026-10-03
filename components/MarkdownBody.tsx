@@ -4,7 +4,7 @@ import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, 
 import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
 import { parsePdfPageFragment, resolveLocalFileHref, shouldOpenLocalFileInApp } from "@/lib/file-links";
 import { encodeFilePathForApi } from "@/lib/file-paths";
-import { markdownRehypePlugins, markdownRemarkPlugins, markdownUrlTransform, normalizeDisplayMath } from "@/lib/markdown";
+import { markdownRehypePlugins, markdownRemarkPlugins, markdownUrlTransform, markdownUserRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 import { ImagePreview } from "./ImagePreview";
 import { MermaidBlock, CodeBlock } from "./MermaidBlock";
 import { handleExternalLinkClick } from "@/lib/desktop-native";
@@ -17,6 +17,8 @@ interface MarkdownBodyProps {
   isStreaming?: boolean;
   cwd?: string;
   onOpenFile?: (filePath: string, page?: number) => void;
+  /** Render every line ending as a line break, for text the user typed. */
+  keepLineBreaks?: boolean;
 }
 
 function MarkdownImage({
@@ -156,7 +158,7 @@ function useStreamingThrottle(value: string, active: boolean): string {
 
 // Memoized: markdown parsing + highlighting is the most expensive render work
 // in the app, so parent re-renders with identical props must be free.
-export const MarkdownBody = memo(function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile }: MarkdownBodyProps) {
+export const MarkdownBody = memo(function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile, keepLineBreaks }: MarkdownBodyProps) {
   const markdown = useStreamingThrottle(children, Boolean(isStreaming));
   const normalizedMarkdown = useMemo(() => normalizeDisplayMath(markdown), [markdown]);
   const components = useMemo(
@@ -167,14 +169,14 @@ export const MarkdownBody = memo(function MarkdownBody({ children, className, is
   // throttled re-renders (text unchanged) skip parsing entirely.
   const body = useMemo(() => (
     <ReactMarkdown
-      remarkPlugins={markdownRemarkPlugins}
+      remarkPlugins={keepLineBreaks ? markdownUserRemarkPlugins : markdownRemarkPlugins}
       rehypePlugins={markdownRehypePlugins}
       urlTransform={onOpenFile ? markdownUrlTransform : undefined}
       components={components}
     >
       {normalizedMarkdown}
     </ReactMarkdown>
-  ), [normalizedMarkdown, components, onOpenFile]);
+  ), [normalizedMarkdown, components, onOpenFile, keepLineBreaks]);
 
   return (
     <div className={["markdown-body", className].filter(Boolean).join(" ")}>
