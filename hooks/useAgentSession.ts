@@ -35,7 +35,7 @@ import { CODEMODE_TOOL_NAME, getCodemodeProgress } from "@/lib/codemode-view";
 import { updateExtensionWidgets } from "@/lib/extension-widgets";
 import { bareMcpOpensSettings } from "@/lib/mcp-command";
 import type { SettingsSection } from "@/lib/settings-navigation";
-import type { ExtensionStatusItem } from "@/lib/types";
+import type { ExtensionStatusItem, LeafChangeOptions } from "@/lib/types";
 import {
   enqueueExtensionUiRequest,
   removeExtensionUiRequest,
@@ -202,7 +202,7 @@ export interface UseAgentSessionOptions {
   onSessionForked?: (newSessionId: string) => void;
   modelsRefreshKey?: number;
   chatInputRef?: React.RefObject<ChatInputHandle | null>;
-  onBranchDataChange?: (tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void, locked: boolean) => void;
+  onBranchDataChange?: (tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null, options?: LeafChangeOptions) => void, locked: boolean) => void;
   onSystemPromptChange?: (prompt: string | null) => void;
   onSystemToolsChange?: (tools: ToolEntry[] | null) => void;
   /** Registers an action that lazily starts the session and loads its prompt and tools. */
@@ -417,6 +417,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [pendingModel, setPendingModel] = useState<{ provider: string; modelId: string } | null>(null);
   const [modelSwitching, setModelSwitching] = useState(false);
   const [isCompacting, setIsCompacting] = useState(false);
+  // The session whose branch summary is being generated: a summarized switch is one
+  // blocking navigate_tree request that can take as long as an LLM call.
+  const [branchSummarySessionId, setBranchSummarySessionId] = useState<string | null>(null);
+  const branchSummarySessionIdRef = useRef<string | null>(null);
   const [compactError, setCompactError] = useState<string | null>(null);
   const [compactNotice, setCompactNotice] = useState<string | null>(null);
   const [compactResult, setCompactResult] = useState<CompactResultInfo | null>(null);
@@ -1879,7 +1883,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
     const trimmedMessage = message.trim();
     if (!trimmedMessage && !images?.length) return;
-    if (agentRunningRef.current || bashRunningRef.current) {
+    if (agentRunningRef.current || bashRunningRef.current || branchSummarySessionIdRef.current) {
       restoreSubmission(message, images, composerDraftKey);
       return;
     }
@@ -2150,11 +2154,55 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [addNotice, loadSession, t]);
   handleNavigateRef.current = handleNavigate;
 
-  const handleLeafChange = useCallback(async (leafId: string | null) => {
+  // A summarized switch cannot switch the view first: pi writes the summary as the new
+  // leaf, so the transcript to show only exists once the request returns.
+  const summarizeAndNavigate = useCallback(async (leafId: string, customInstructions?: string) => {
+    const sid = sessionIdRef.current;
+    if (!sid || branchSummarySessionIdRef.current) return;
+    branchSummarySessionIdRef.current = sid;
+    setBranchSummarySessionId(sid);
+    try {
+      const result = await sendAgentCommand<{ cancelled?: boolean; aborted?: boolean }>(sid, {
+        type: "navigate_tree",
+        targetId: leafId,
+        summarize: true,
+        ...(customInstructions ? { customInstructions } : {}),
+      });
+      if (sessionIdRef.current !== sid) return;
+      if (result?.aborted) {
+        addNotice({ type: "info", message: t("chat.branchSummaryStopped") });
+      } else if (result?.cancelled) {
+        addNotice({ type: "info", message: t("chat.branchSwitchCancelled") });
+      } else {
+        await loadSession(sid);
+      }
+    } catch (e) {
+      if (sessionIdRef.current === sid) {
+        addNotice({ type: "error", message: t("chat.branchSummaryFailed", { error: e instanceof Error ? e.message : String(e) }) });
+      }
+    } finally {
+      branchSummarySessionIdRef.current = null;
+      setBranchSummarySessionId(null);
+    }
+  }, [addNotice, loadSession, t]);
+
+  const handleAbortBranchSummary = useCallback(() => {
+    const sid = branchSummarySessionIdRef.current;
+    if (!sid) return;
+    sendAgentCommand(sid, { type: "abort_branch_summary" }).catch((e) => {
+      console.error("Failed to stop the branch summary:", e);
+    });
+  }, []);
+
+  const handleLeafChange = useCallback(async (leafId: string | null, options?: LeafChangeOptions) => {
     // pi refuses navigate_tree mid-run: it moves the one leaf the running agent
     // appends to. Switching only the view would render the live run under
     // another branch, so the switch waits for the run like the server does.
-    if (bashRunningRef.current || agentRunningRef.current || isCompacting) return;
+    if (bashRunningRef.current || agentRunningRef.current || isCompacting || branchSummarySessionIdRef.current) return;
+    if (options?.summarize && leafId) {
+      await summarizeAndNavigate(leafId, options.customInstructions);
+      return;
+    }
     setActiveLeafId(leafId);
     const sid = sessionIdRef.current;
     if (!sid) return;
@@ -2167,7 +2215,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         addNotice({ type: "error", message: t("chat.navigateFailed", { error: e instanceof Error ? e.message : String(e) }) });
       });
     }
-  }, [addNotice, isCompacting, loadContext, t]);
+  }, [addNotice, isCompacting, loadContext, summarizeAndNavigate, t]);
 
   const handleModelChange = useCallback(async (provider: string, modelId: string) => {
     if (isNew) {
@@ -2850,7 +2898,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     return () => onSystemInfoLoaderChange?.(null);
   }, [loadSystemInfoFor, onSystemInfoLoaderChange]);
 
-  const branchSwitchLocked = agentRunning || bashRunning || isCompacting;
+  const branchSummaryPending = branchSummarySessionId !== null && branchSummarySessionId === (session?.id ?? null);
+  const branchSwitchLocked = agentRunning || bashRunning || isCompacting || branchSummaryPending;
   useEffect(() => {
     if (!onBranchDataChange) return;
     onBranchDataChange(data?.tree ?? [], activeLeafId, handleLeafChange, branchSwitchLocked);
@@ -3027,6 +3076,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     sessionIdRef, scrollContainerRef,
     lastUserMsgRef, pendingScrollToUserRef, initialScrollDoneRef,
     // Actions
+    branchSummaryPending, handleAbortBranchSummary,
     handleSend, handleAbort, handleAbortRetry, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,

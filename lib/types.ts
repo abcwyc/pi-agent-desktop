@@ -220,6 +220,12 @@ export type ExtensionUiResponse =
   | { type: "extension_ui_response"; id: string; confirmed: boolean }
   | { type: "extension_ui_response"; id: string; cancelled: true };
 
+/** How a branch switch treats the branch being left (pi's "Summarize branch?" in /tree). */
+export interface LeafChangeOptions {
+  summarize?: boolean;
+  customInstructions?: string;
+}
+
 export interface ExtensionStatusItem {
   key: string;
   text: string;

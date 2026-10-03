@@ -5159,3 +5159,67 @@ span.linenumber {
     display: none !important;
   }
 }
+
+/* ---- Branch navigator: summarized switch -------------------------------------
+   Rows of other branches offer "Summarize & switch" next to the plain click. It
+   appears on hover (always on touch, where there is no hover) so browsing the
+   tree stays a quiet list. */
+.branch-summary-action {
+  flex-shrink: 0;
+  margin-left: 8px;
+  padding: 0 6px;
+  height: 18px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 16px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.branch-tree-row:hover .branch-summary-action,
+.branch-summary-action:focus-visible {
+  opacity: 1;
+}
+.branch-summary-action:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+@media (hover: none) {
+  .branch-summary-action { opacity: 1; }
+}
+.branch-summary-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 6px 32px;
+}
+.branch-summary-form input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+}
+.branch-summary-form button {
+  flex-shrink: 0;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.branch-summary-form button.branch-summary-confirm {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}

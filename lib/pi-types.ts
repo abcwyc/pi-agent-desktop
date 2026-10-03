@@ -240,5 +240,7 @@ export interface AgentSessionLike {
   getActiveToolNames(): string[];
   setActiveToolsByName(names: string[]): void;
   abortCompaction(): void;
+  /** Stop a branch summary that `navigateTree({ summarize: true })` is generating. */
+  abortBranchSummary?(): void;
   getContextUsage(): ContextUsage | undefined;
 }

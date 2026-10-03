@@ -206,8 +206,9 @@ test("forking stays available during a run while in-session branch switches wait
   assert.match(chatWindowSource, /onAskInNewChat && quotedSelection\.sourceEntryId && !bashRunning &&/);
   assert.match(forkSource, /addNotice\(\{ type: "error", message:/);
 
-  assert.match(leafChangeSource, /if \(bashRunningRef\.current \|\| agentRunningRef\.current \|\| isCompacting\) return;/);
-  assert.match(source, /const branchSwitchLocked = agentRunning \|\| bashRunning \|\| isCompacting;/);
+  // A branch summary being generated holds the leaf too, like compaction.
+  assert.match(leafChangeSource, /if \(bashRunningRef\.current \|\| agentRunningRef\.current \|\| isCompacting \|\| branchSummarySessionIdRef\.current\) return;/);
+  assert.match(source, /const branchSwitchLocked = agentRunning \|\| bashRunning \|\| isCompacting \|\| branchSummaryPending;/);
   assert.match(source, /onBranchDataChange\(data\?\.tree \?\? \[\], activeLeafId, handleLeafChange, branchSwitchLocked\)/);
   assert.match(appShellSource, /setBranchSwitchLocked\(locked\)/);
   // The fork's top bar mounts one BranchNavigator (upstream has a second in

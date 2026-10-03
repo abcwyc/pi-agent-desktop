@@ -98,6 +98,9 @@ interface Props {
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
   /** Cancel the auto-retry backoff (pi ≥ 0.86) shown in the retry banner. */
   onAbortRetry?: () => void;
+  /** A summarized branch switch is generating its summary (blocking; abortable). */
+  branchSummaryPending?: boolean;
+  onAbortBranchSummary?: () => void;
   automation?: { autoCompactionEnabled: boolean | null; autoRetryEnabled: boolean | null; steeringMode: string | null; followUpMode: string | null };
   onSetAutomation?: (change: {
     autoCompaction?: boolean;
@@ -732,7 +735,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onCompact, onAbortCompaction, isCompacting, compactError, compactNotice, compactResult, summarizationRetry, toolPreset, onToolPresetChange,
   thinkingLevel, isAutoThinkingSelection = false, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   savedDefaultThinkingLevel, onSetDefaultThinkingLevel,
-  retryInfo, onAbortRetry, automation, onSetAutomation, queuedMessages, inputHistory = [], onRecallQueue,
+  retryInfo, onAbortRetry, branchSummaryPending = false, onAbortBranchSummary, automation, onSetAutomation, queuedMessages, inputHistory = [], onRecallQueue,
   slashCommands, slashCommandsLoading, onLoadSlashCommands,
   onBuiltinCommand,
   soundEnabled, onSoundToggle, onAudioUnlock,
@@ -2136,6 +2139,31 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                  {t("chat.cancelRetry")}
                </button>
              )}
+          </div>
+        )}
+        {branchSummaryPending && (
+          <div role="status" style={{
+            marginBottom: 8, padding: "5px 10px",
+            background: "var(--bg-hover)", border: "1px solid var(--border)",
+            borderRadius: 6, fontSize: 12, color: "var(--text-muted)",
+            display: "flex", alignItems: "center", gap: 6,
+          }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <line x1="6" y1="3" x2="6" y2="15" />
+              <circle cx="18" cy="6" r="3" />
+              <circle cx="6" cy="18" r="3" />
+              <path d="M18 9a9 9 0 0 1-9 9" />
+            </svg>
+            {t("chat.branchSummarizing")}
+            {onAbortBranchSummary && (
+              <button
+                type="button"
+                onClick={onAbortBranchSummary}
+                style={{ marginLeft: "auto", flexShrink: 0, background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: 11, padding: 0, textDecoration: "underline", textUnderlineOffset: 2 }}
+              >
+                {t("chat.branchSummaryStop")}
+              </button>
+            )}
           </div>
         )}
         {compactResultText && (

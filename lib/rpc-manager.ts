@@ -612,10 +612,12 @@ export class AgentSessionWrapper {
   private async navigateTreeKeepingToolSelection(
     targetId: string,
     options: NavigateTreeOptions,
-  ): Promise<{ cancelled: boolean }> {
+  ): Promise<{ cancelled: boolean; aborted?: boolean }> {
     const activeBefore = this.inner.getActiveToolNames();
     const result = await this.inner.navigateTree(targetId, options);
-    if (result.cancelled || this.chatOnly) return { cancelled: result.cancelled };
+    if (result.cancelled || this.chatOnly) {
+      return { cancelled: result.cancelled, ...(result.aborted ? { aborted: true } : {}) };
+    }
 
     const entries = this.inner.sessionManager.getEntries() as unknown as SessionEntry[];
     if (!readSubagentSessionResources(entries)) {
@@ -1075,7 +1077,20 @@ export class AgentSessionWrapper {
         if (this.inner.isBashRunning) {
           throw new Error("Cannot navigate while a shell command is running");
         }
-        return this.navigateTreeKeepingToolSelection(command.targetId as string, {});
+        // `summarize` asks pi to summarize the branch being left onto the target (pi's
+        // "Summarize branch?" in /tree); the request blocks until the summary is written,
+        // and abort_branch_summary answers it with { cancelled: true, aborted: true }.
+        return this.navigateTreeKeepingToolSelection(command.targetId as string, {
+          ...(command.summarize === true ? { summarize: true } : {}),
+          ...(typeof command.customInstructions === "string" && command.customInstructions.trim()
+            ? { customInstructions: command.customInstructions.trim() }
+            : {}),
+        });
+      }
+
+      case "abort_branch_summary": {
+        this.inner.abortBranchSummary?.();
+        return null;
       }
 
       case "set_thinking_level": {
