@@ -36,10 +36,10 @@
   ],
   "scripts": {
     "dev": "next dev -H 127.0.0.1 -p 30141",
-    "dev:lan": "next dev -H 0.0.0.0 -p 30141",
+    "dev:lan": "node bin/network-exposure-warning.js 0.0.0.0 && next dev -H 0.0.0.0 -p 30141",
     "build": "next build --webpack",
     "start": "next start -H 127.0.0.1 -p 30141",
-    "start:lan": "next start -H 0.0.0.0 -p 30141",
+    "start:lan": "node bin/network-exposure-warning.js 0.0.0.0 && next start -H 0.0.0.0 -p 30141",
     "desktop:dev": "node scripts/desktop-dev.mjs --config src-tauri/tauri.dev.conf.json",
     "desktop:prepare": "node scripts/prepare-desktop.mjs",
     "desktop:build": "npm run desktop:prepare && tauri build",

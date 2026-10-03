@@ -21,6 +21,8 @@ const { getHelpText, parseLaunchOptions } = require("./pi-web-options");
 const { getNextNodeArgs } = require("./pi-web-node-args");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { wireChildProcessLifecycle } = require("./process-lifecycle");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { getNetworkExposureWarning } = require("./network-exposure-warning");
 
 let launchOptions;
 try {
@@ -58,25 +60,13 @@ try {
   }
 }
 
-const loopbackHostnames = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
-const passwordEnabled = Boolean(process.env.PI_WEB_PASSWORD);
-
 if (!fs.existsSync(nextDir)) {
   console.error("Build artifacts not found. Please report this issue.");
   process.exit(1);
 }
 
-if (!loopbackHostnames.has(hostname)) {
-  if (passwordEnabled) {
-    console.warn(
-      `Warning: pi-web is listening on ${hostname} with password authentication over HTTP. Use HTTPS or a trusted VPN to protect the password in transit.`,
-    );
-  } else {
-    console.warn(
-      `Warning: pi-web is listening on ${hostname} without authentication. Only use this on a trusted network.`,
-    );
-  }
-}
+const exposureWarning = getNetworkExposureWarning(hostname);
+if (exposureWarning) console.warn(exposureWarning);
 
 const nextArgs = ["start", "-p", port];
 nextArgs.push("-H", hostname);

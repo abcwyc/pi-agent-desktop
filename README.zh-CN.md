@@ -113,6 +113,16 @@ npm run dev
 
 日常开发期间不要运行 `next build` 或 `npm run build`。这些命令会写入 `.next/`，可能干扰正在运行的开发服务器；正式构建由桌面准备脚本或 CI 完成。
 
+### 网络暴露（局域网）
+
+`npm run dev` 和 `npm start` 只监听 `127.0.0.1`。`npm run dev:lan`、`npm run start:lan` 与 `pi-web -H 0.0.0.0` 会监听所有网卡。Pi Agent 能以你的身份执行 shell 命令（终端标签和 agent 自身工具）并读取文件，因此**任何能访问该端口的人都拥有同样的权限**。使用局域网模式前请先设置密码：
+
+```bash
+PI_WEB_PASSWORD='换成足够长的口令' npm run dev:lan
+```
+
+设置 `PI_WEB_PASSWORD` 后，浏览器首次访问需要输入密码，连续失败会被限流。连接仍是明文 HTTP，请放在 HTTPS 或可信 VPN 之后；如需用 IP 以外的域名访问，用 `PI_WEB_ALLOWED_HOSTS`（逗号分隔）放行。监听非回环地址且未设密码时，启动器会打印警告。桌面 App 不受影响：它只绑定回环地址，并用每进程 token 认证 WebView。
+
 ### 启动桌面开发模式
 
 ```bash

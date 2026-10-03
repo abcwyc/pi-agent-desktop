@@ -115,6 +115,16 @@ The dev server runs at [http://localhost:30141](http://localhost:30141).
 
 Do not run `next build` or `npm run build` during normal development. They write into `.next/` and can disrupt a running dev server; production builds are done by the desktop preparation script or by CI.
 
+### Network Exposure (LAN)
+
+`npm run dev` and `npm start` listen on `127.0.0.1` only. `npm run dev:lan`, `npm run start:lan` and `pi-web -H 0.0.0.0` listen on every interface. Pi Agent can run shell commands (the terminal tab and the agent's own tools) and read files as you, so **anyone who can reach the port gets the same access**. Before using a LAN mode, set a password:
+
+```bash
+PI_WEB_PASSWORD='choose-a-long-passphrase' npm run dev:lan
+```
+
+With `PI_WEB_PASSWORD` set, the browser asks for it on first visit and failed attempts are throttled. The connection is still plain HTTP, so put it behind HTTPS or a trusted VPN, and use `PI_WEB_ALLOWED_HOSTS` (comma-separated) to allow a DNS name other than an IP address. The launcher prints a warning whenever it listens beyond loopback without a password. The packaged desktop app is unaffected: it binds to loopback and authenticates the WebView with a per-process token.
+
 ### Start Desktop Dev Mode
 
 ```bash
