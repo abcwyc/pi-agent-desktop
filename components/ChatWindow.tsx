@@ -13,6 +13,7 @@ import { MarkdownBody } from "./MarkdownBody";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { ConversationNavigator, type ConversationTurnLocation } from "./ConversationNavigator";
 import { ExtensionWidgets } from "./ExtensionWidgets";
+import { ExtensionStatusLine, formatExtensionStatusLine } from "./ExtensionStatusLine";
 import { AnsiText } from "./AnsiText";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -1208,6 +1209,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
 
   const aboveEditorWidgets = extensionWidgets.filter((widget) => widget.placement !== "belowEditor");
   const belowEditorWidgets = extensionWidgets.filter((widget) => widget.placement === "belowEditor");
+  const hasExtensionStatus = formatExtensionStatusLine(extensionStatuses).length > 0;
 
   return (
     <div
@@ -1690,9 +1692,10 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
           </div>
         )}
         {chatInputElement}
-        {belowEditorWidgets.length > 0 && (
-          <div className="extension-status-shelf has-widgets">
-            <ExtensionWidgets widgets={belowEditorWidgets} />
+        {(belowEditorWidgets.length > 0 || hasExtensionStatus) && (
+          <div className={`extension-status-shelf${belowEditorWidgets.length > 0 ? " has-widgets" : ""}${hasExtensionStatus ? " has-status" : ""}`}>
+            {belowEditorWidgets.length > 0 && <ExtensionWidgets widgets={belowEditorWidgets} />}
+            {hasExtensionStatus && <ExtensionStatusLine statuses={extensionStatuses} />}
           </div>
         )}
       </div>

@@ -77,13 +77,26 @@ interface ResourceLoaderLike {
   getAgentsFiles(): { agentsFiles: Array<{ path: string; content: string }> };
 }
 
+export interface NavigateTreeOptions {
+  summarize?: boolean;
+  customInstructions?: string;
+  replaceInstructions?: boolean;
+  label?: string;
+}
+
 interface ExtensionRunnerLike {
   getRegisteredCommands(): Array<{
     invocationName: string;
     description?: string;
     sourceInfo: SlashCommandInfo["sourceInfo"];
   }>;
-  emit?(event: { type: "session_shutdown"; reason: "quit" }): Promise<unknown>;
+  hasHandlers?(eventType: string): boolean;
+  emit?(
+    event:
+      | { type: "session_shutdown"; reason: "quit" }
+      | { type: "session_before_switch"; reason: "new" | "resume"; targetSessionFile?: string }
+      | { type: "session_before_fork"; entryId: string; position: "before" | "at" },
+  ): Promise<unknown>;
   setUIContext?(uiContext?: unknown, mode?: "tui" | "rpc" | "json" | "print"): void;
 }
 
@@ -205,7 +218,11 @@ export interface AgentSessionLike {
   abortBash(): void;
   readonly isBashRunning: boolean;
   setModel(model: ModelLike): Promise<void>;
-  navigateTree(targetId: string, options?: { summarize?: boolean }): Promise<NavigateTreeResult>;
+  navigateTree(targetId: string, options?: NavigateTreeOptions): Promise<NavigateTreeResult>;
+  /** Command-capable context bound to this session, handed to an extension's `withSession()` callback. */
+  createReplacedSessionContext?(): unknown;
+  /** Rebuild the agent's context from the session manager after entries were appended outside a run. */
+  refreshContext?(): void;
   setThinkingLevel(level: string): void;
   compact(customInstructions?: string): Promise<unknown>;
   setSessionName(name: string): void;

@@ -107,6 +107,7 @@ type AgentStateResponse = {
   isCompacting?: boolean;
   /** In-memory partial assistant message, present while a run is streaming. */
   streamingMessage?: AgentMessage;
+  extensionStatuses?: ExtensionStatusItem[];
   extensionWidgets?: ExtensionWidgetItem[];
   queuedMessages?: { steering?: string[]; followUp?: string[] } | null;
   autoCompactionEnabled?: boolean;
@@ -614,6 +615,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setAgentPhase(null);
     setContextUsage(null);
     setSystemPrompt(null);
+    setExtensionStatuses([]);
     setExtensionWidgets([]);
     setQueuedMessages({ steering: [], followUp: [] });
     setLiveModel(null);
@@ -868,6 +870,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (liveState) {
           if (liveState.contextUsage !== undefined) setContextUsage(liveState.contextUsage ?? null);
           if (liveState.systemPrompt !== undefined) setSystemPrompt(liveState.systemPrompt ?? null);
+          if (liveState.extensionStatuses !== undefined) setExtensionStatuses(liveState.extensionStatuses ?? []);
           if (liveState.extensionWidgets !== undefined) setExtensionWidgets(liveState.extensionWidgets ?? []);
           if (liveState.queuedMessages !== undefined) setQueuedMessages(normalizeQueuedMessages(liveState.queuedMessages));
         } else if (!agentState.running) {
@@ -1277,6 +1280,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         });
         break;
       }
+      case "setStatus":
+        setExtensionStatuses((prev) => {
+          const rest = prev.filter((item) => item.key !== request.statusKey);
+          return request.statusText !== undefined
+            ? [...rest, { key: request.statusKey, text: request.statusText }]
+            : rest;
+        });
+        break;
       case "setWidget":
         setExtensionWidgets((prev) => updateExtensionWidgets(
           prev,
@@ -1491,6 +1502,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (state) {
         if (state.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
         if (state.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt ?? null);
+        if (state.extensionStatuses !== undefined) setExtensionStatuses(state.extensionStatuses ?? []);
         if (state.extensionWidgets !== undefined) setExtensionWidgets(state.extensionWidgets ?? []);
       }
       await finishPromptWithoutStream(sid, runId);
@@ -1582,6 +1594,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               syncLiveModel(d.state);
               if (d.state?.contextUsage !== undefined) setContextUsage(d.state.contextUsage ?? null);
               if (d.state?.systemPrompt !== undefined) setSystemPrompt(d.state.systemPrompt ?? null);
+              if (d.state?.extensionStatuses !== undefined) setExtensionStatuses(d.state.extensionStatuses ?? []);
               if (d.state?.extensionWidgets !== undefined) setExtensionWidgets(d.state.extensionWidgets ?? []);
               // Aborted turns can leave messages queued in pi (delivered with the
               // next turn); dead wrapper (no state) means the queue is gone.
@@ -1852,8 +1865,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "extension_ui_closed":
         setExtensionDialogs((queue) => removeExtensionUiRequest(queue, event.id as string));
         break;
+      case "session_replaced":
+        // An extension command called ctx.newSession / fork / switchSession: the
+        // server already created (or resolved) the target, so follow it like a fork.
+        if (typeof event.sessionId === "string" && event.sessionId !== sessionIdRef.current) {
+          onSessionForked?.(event.sessionId);
+        }
+        break;
     }
-  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, reportCompactFailure, scheduleEventStreamClose, scrollToBottom, settleUiStage, syncLiveModel]);
+  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, onSessionForked, reportCompactFailure, scheduleEventStreamClose, scrollToBottom, settleUiStage, syncLiveModel]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
@@ -2763,6 +2783,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (agentState.state.isCompacting !== undefined) setIsCompacting(agentState.state.isCompacting);
           if (agentState.state.contextUsage !== undefined) setContextUsage(agentState.state.contextUsage ?? null);
           if (agentState.state.systemPrompt !== undefined) setSystemPrompt(agentState.state.systemPrompt ?? null);
+          if (agentState.state.extensionStatuses !== undefined) setExtensionStatuses(agentState.state.extensionStatuses ?? []);
           if (agentState.state.extensionWidgets !== undefined) setExtensionWidgets(agentState.state.extensionWidgets ?? []);
           if (agentState.state.queuedMessages !== undefined) setQueuedMessages(normalizeQueuedMessages(agentState.state.queuedMessages));
         }
