@@ -135,6 +135,15 @@ type ExtensionUiDialogRequest = Extract<ExtensionUiRequest, { method: "select" |
 type ExtensionUiCustomRequest = Extract<ExtensionUiRequest, { method: "custom" }>;
 export type NoticeType = "info" | "success" | "warning" | "error";
 
+// pi refuses a manual compact by throwing when there is nothing to fold
+// (`AgentSession.compact()`); that is an answer about the session, not a failure.
+// The RPC reply carries the bare message, `compaction_end` prefixes it with
+// "Compaction failed: " — returns the bare message for a no-op, else null.
+export function compactNoopMessage(message: string): string | null {
+  const bare = message.replace(/^Compaction failed:\s*/, "");
+  return /^(Nothing to compact|Already compacted)\b/.test(bare) ? bare : null;
+}
+
 export type NoticeItem = {
   id: string;
   message: string;
@@ -408,7 +417,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [modelSwitching, setModelSwitching] = useState(false);
   const [isCompacting, setIsCompacting] = useState(false);
   const [compactError, setCompactError] = useState<string | null>(null);
+  const [compactNotice, setCompactNotice] = useState<string | null>(null);
   const [compactResult, setCompactResult] = useState<CompactResultInfo | null>(null);
+  const reportCompactFailure = useCallback((message: string) => {
+    const notice = compactNoopMessage(message);
+    if (notice) setCompactNotice(notice);
+    else setCompactError(message);
+    setCompactResult(null);
+  }, []);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
   const [promptAnchorActive, setPromptAnchorActive] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
@@ -590,6 +606,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setBashRunning(false);
     setPendingBash(null);
     setIsCompacting(false);
+    setCompactError(null);
+    setCompactNotice(null);
+    setCompactResult(null);
     setRetryInfo(null);
     setSummarizationRetry(null);
     setAgentPhase(null);
@@ -1771,13 +1790,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "compaction_start":
         setIsCompacting(true);
         setCompactError(null);
+        setCompactNotice(null);
         setCompactResult(null);
         break;
       case "compaction_end":
         setIsCompacting(false);
         if (event.errorMessage) {
-          setCompactError(event.errorMessage as string);
-          setCompactResult(null);
+          reportCompactFailure(event.errorMessage as string);
         } else if (!event.aborted) {
           setCompactResult(readCompactResult(event.result, (event.reason as string | undefined) ?? "auto"));
           if (sessionIdRef.current) loadSession(sessionIdRef.current);
@@ -1834,7 +1853,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setExtensionDialogs((queue) => removeExtensionUiRequest(queue, event.id as string));
         break;
     }
-  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, scheduleEventStreamClose, scrollToBottom, settleUiStage, syncLiveModel]);
+  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, reportCompactFailure, scheduleEventStreamClose, scrollToBottom, settleUiStage, syncLiveModel]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
@@ -2187,6 +2206,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!sid || isCompacting) return;
     setIsCompacting(true);
     setCompactError(null);
+    setCompactNotice(null);
     setCompactResult(null);
     try {
       const result = await sendAgentCommand<CompactCommandResult>(sid, { type: "compact" });
@@ -2196,12 +2216,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // until the next turn (PR #38).
       await loadSession(sid, true, true);
     } catch (e) {
-      setCompactError(e instanceof Error ? e.message : String(e));
-      setCompactResult(null);
+      reportCompactFailure(e instanceof Error ? e.message : String(e));
     } finally {
       setIsCompacting(false);
     }
-  }, [isCompacting, loadSession]);
+  }, [isCompacting, loadSession, reportCompactFailure]);
 
   const loadModels = useCallback(async (signal?: AbortSignal) => {
     const modelCwd = newSessionCwd ?? session?.cwd ?? "";
@@ -2327,6 +2346,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (!sid || isCompacting) return complete({ handled: true, error: "No active session to compact" });
           setIsCompacting(true);
           setCompactError(null);
+          setCompactNotice(null);
           setCompactResult(null);
           const result = await sendAgentCommand<CompactCommandResult>(sid, {
             type: "compact",
@@ -2431,11 +2451,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           return { handled: false };
       }
     } catch (e) {
-      return complete({ handled: true, error: e instanceof Error ? e.message : String(e) });
+      const message = e instanceof Error ? e.message : String(e);
+      if (commandName === "compact" && compactNoopMessage(message)) {
+        // The composer banner already says why; an error toast on top would repeat it.
+        reportCompactFailure(message);
+        return { handled: true };
+      }
+      return complete({ handled: true, error: message });
     } finally {
       if (commandName === "compact") setIsCompacting(false);
     }
-  }, [activeLeafId, addNotice, ensureNewSession, isCompacting, loadModels, loadSession, loadSlashCommands, loadTools, promoteNewSession, onOpenSettings, onSessionForked, onSessionStatsPanelOpen, slashCommandsForMcp]);
+  }, [activeLeafId, addNotice, reportCompactFailure, ensureNewSession, isCompacting, loadModels, loadSession, loadSlashCommands, loadTools, promoteNewSession, onOpenSettings, onSessionForked, onSessionStatsPanelOpen, slashCommandsForMcp]);
 
   // Let AgentSession.prompt decide atomically whether to queue against the
   // current run or start a new turn if it settled while the request was in
@@ -2878,6 +2904,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     return () => clearTimeout(t);
   }, [compactResult]);
 
+  // A failed compaction is a one-off answer to the last attempt, not a standing
+  // state: without this the banner stayed above the composer until the next compact.
+  useEffect(() => {
+    if (!compactError) return;
+    const t = setTimeout(() => setCompactError(null), 8000);
+    return () => clearTimeout(t);
+  }, [compactError]);
+
+  useEffect(() => {
+    if (!compactNotice) return;
+    const t = setTimeout(() => setCompactNotice(null), 6000);
+    return () => clearTimeout(t);
+  }, [compactNotice]);
+
   // Pause notice expiry while hovered or focused.
   // The remainingMs/startedAt/oldestId refs implement a true pause-and-resume instead of resetting the 5s timer.
   const [pausedNoticeId, setPausedNoticeId] = useState<string | null>(null);
@@ -2950,7 +2990,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     data, loading, error, activeLeafId, messages, activeToolResults, entryIds, historyCursor, hasEarlierMessages, streamState,
     agentRunning, modelNames, modelList, modelError, modelScopeWarnings: visibleModelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, thinkingLevel,
     retryInfo, contextUsage, systemPrompt, forkingEntryId, retryLoad, dismissModelScopeWarnings,
-    isCompacting, compactError, compactResult, currentModel, displayModel, modelSwitching, sessionStats,
+    isCompacting, compactError, compactNotice, compactResult, currentModel, displayModel, modelSwitching, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,
     notices: noticeState.visible, addNotice, extensionDialog, waitingExtensionDialogCount, extensionCustomUi, waitingExtensionCustomUiCount, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
     isAutoModelSelection: isNew && newSessionModel === null,

@@ -78,6 +78,8 @@ interface Props {
   onAbortCompaction?: () => void;
   isCompacting?: boolean;
   compactError?: string | null;
+  /** A compact the SDK declined with nothing to do — informational, not a failure. */
+  compactNotice?: string | null;
   compactResult?: CompactResultInfo | null;
   /** Compaction/branch-summary generation is in retry backoff (attempt/max). */
   summarizationRetry?: { attempt: number; maxAttempts: number } | null;
@@ -727,7 +729,7 @@ export function ModelScopeWarningBanner({
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, onSteer, onFollowUp, isStreaming, model, isAutoModelSelection, modelNames, modelList, modelError, modelScopeWarnings, onDismissModelScopeWarnings, onOpenModelsConfig, onModelChange, modelSwitching,
   defaultModel, onSetDefaultModel,
-  onCompact, onAbortCompaction, isCompacting, compactError, compactResult, summarizationRetry, toolPreset, onToolPresetChange,
+  onCompact, onAbortCompaction, isCompacting, compactError, compactNotice, compactResult, summarizationRetry, toolPreset, onToolPresetChange,
   thinkingLevel, isAutoThinkingSelection = false, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   savedDefaultThinkingLevel, onSetDefaultThinkingLevel,
   retryInfo, onAbortRetry, automation, onSetAutomation, queuedMessages, inputHistory = [], onRecallQueue,
@@ -2149,6 +2151,21 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {compactResultText}
           </div>
         )}
+        {compactNotice && (
+          <div role="status" style={{
+            marginBottom: 8, padding: "5px 10px",
+            background: "var(--bg-panel)", border: "1px solid var(--border)",
+            borderRadius: 6, fontSize: 12, color: "var(--text-muted)",
+            display: "flex", alignItems: "center", gap: 6,
+          }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
+            {compactNotice}
+          </div>
+        )}
         {compactError && (
           <div
             role="alert"
@@ -3223,17 +3240,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
             {onCompact && (!isStreaming || isCompacting) && (
               <div style={{ position: "relative" }}>
-                {compactError && (
-                  <div style={{
-                    position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-                    background: "#1f2937", color: "var(--danger)",
-                    fontSize: 11, padding: "4px 8px", borderRadius: 5,
-                    whiteSpace: "nowrap", pointerEvents: "none",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.2)", zIndex: 50,
-                  }}>
-                    {compactError}
-                  </div>
-                )}
                 <button
                   className="native-toolbar-button"
                   onClick={isCompacting ? onAbortCompaction : onCompact}

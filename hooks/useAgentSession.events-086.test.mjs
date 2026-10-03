@@ -26,6 +26,16 @@ function compileHandler(name) {
 }
 
 const handleAgentEvent = compileHandler("handleAgentEvent");
+const reportCompactFailure = compileHandler("reportCompactFailure");
+
+function findFunction(node, name) {
+  if (ts.isFunctionDeclaration(node) && node.name?.getText(source) === name) return node;
+  return ts.forEachChild(node, (child) => findFunction(child, name));
+}
+const compactNoopMessage = new Script(`(${ts.transpileModule(
+  findFunction(source, "compactNoopMessage").getText(source).replace(/^export /, ""),
+  { compilerOptions: { target: ts.ScriptTarget.ES2020 } },
+).outputText})`).runInNewContext({});
 
 /** Drive handleAgentEvent with recorded state setters. */
 function harness() {
@@ -34,12 +44,14 @@ function harness() {
     summarizationRetry: null,
     isCompacting: false,
     compactError: null,
+    compactNotice: null,
     compactResult: null,
     liveThinkingLevel: null,
     loadedSessions: [],
   };
   const bashRunningRef = { current: true };
   const agentRunningRef = { current: false };
+  let compactFailure;
   const handler = handleAgentEvent.runInNewContext({
     dispatch() {},
     cancelEventStreamGrace() {},
@@ -51,7 +63,9 @@ function harness() {
     setAgentRunning() {}, setAgentPhase() {}, setRetryInfo() {},
     setIsCompacting(v) { state.isCompacting = v; },
     setCompactError(v) { state.compactError = v; },
+    setCompactNotice(v) { state.compactNotice = v; },
     setCompactResult(v) { state.compactResult = v; },
+    get reportCompactFailure() { return compactFailure; },
     setQueuedMessages() {},
     setExtensionDialog() {},
     setActiveToolResults() {},
@@ -76,6 +90,12 @@ function harness() {
     Date,
     console,
     window: undefined, document: undefined,
+  });
+  compactFailure = reportCompactFailure.runInNewContext({
+    compactNoopMessage,
+    setCompactError(v) { state.compactError = v; },
+    setCompactNotice(v) { state.compactNotice = v; },
+    setCompactResult(v) { state.compactResult = v; },
   });
   return { handler, state, bashRunningRef, agentRunningRef };
 }
@@ -120,6 +140,24 @@ test("compaction_end with willRetry keeps the retry counter for the countdown", 
 
   handler({ type: "compaction_end", reason: "manual", result: {}, aborted: false, willRetry: false });
   assert.equal(state.summarizationRetry, null);
+});
+
+test("a compact with nothing to fold is a notice, not an error", () => {
+  const { handler, state } = harness();
+  handler({ type: "compaction_start", reason: "manual" });
+  handler({ type: "compaction_end", reason: "manual", aborted: false, willRetry: false, errorMessage: "Compaction failed: Nothing to compact (session too small)" });
+  assert.equal(state.compactNotice, "Nothing to compact (session too small)");
+  assert.equal(state.compactError, null);
+
+  handler({ type: "compaction_start", reason: "manual" });
+  assert.equal(state.compactNotice, null);
+  handler({ type: "compaction_end", reason: "manual", aborted: false, willRetry: false, errorMessage: "Already compacted" });
+  assert.equal(state.compactNotice, "Already compacted");
+
+  handler({ type: "compaction_start", reason: "manual" });
+  handler({ type: "compaction_end", reason: "manual", aborted: false, willRetry: false, errorMessage: "Compaction failed: 401 Unauthorized" });
+  assert.equal(state.compactError, "Compaction failed: 401 Unauthorized");
+  assert.equal(state.compactNotice, null);
 });
 
 test("thinking_level_changed updates the live level immediately", () => {
