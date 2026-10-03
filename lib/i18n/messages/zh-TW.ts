@@ -180,8 +180,6 @@ export const zhTWLocale: LocalePlugin = {
     "tools.availableIndirectly": "可透過模型或其他工具間接呼叫。",
     "tools.source": "來源",
     "tools.mcpSource": "MCP 來源",
-    "mcp.label": "MCP",
-    "mcp.description": "伺服器與間接工具",
     "mcp.title": "MCP 伺服器",
     "mcp.summary": "{servers} 個伺服器 · {connected} 個已連線 · {tools} 個工具",
     "mcp.loading": "正在載入 MCP 狀態…",

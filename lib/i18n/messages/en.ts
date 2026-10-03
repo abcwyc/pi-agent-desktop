@@ -180,8 +180,6 @@ export const enLocale: LocalePlugin = {
     "tools.availableIndirectly": "Callable indirectly through the model or another tool.",
     "tools.source": "Source",
     "tools.mcpSource": "MCP source",
-    "mcp.label": "MCP",
-    "mcp.description": "Servers and indirect tools",
     "mcp.title": "MCP servers",
     "mcp.summary": "{servers} servers · {connected} connected · {tools} tools",
     "mcp.loading": "Loading MCP status…",
