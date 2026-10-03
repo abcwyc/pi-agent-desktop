@@ -145,7 +145,8 @@ test("trusting from Settings › MCP reloads, in place, the other mounted sectio
   // Agents: only the model list (GET /api/models leaves out an untrusted project's extensions).
   assert.match(agents, /const response = await fetch\(`\/api\/models\?cwd=\$\{encodeURIComponent\(cwd\)\}`[\s\S]*?\}, \[cwd, trustKey\]\);/);
   // Models reads models.json, auth and enabledModels, none of which follows trust.
-  assert.match(panelSource, /sectionHost\("models", <ModelsConfig embedded cwd=\{cwd\} onClose=\{onClose\} \/>\)/);
+  // Its only other prop links the Code mode note of "Classifier & image models" to Settings › MCP.
+  assert.match(panelSource, /sectionHost\("models", <ModelsConfig embedded cwd=\{cwd\} onClose=\{onClose\} onOpenMcp=\{\(\) => activateSection\("mcp"\)\} \/>\)/);
 });
 
 test("offers five palettes and system theme selection with native radios", () => {

@@ -50,6 +50,7 @@ import {
   useEnabledModels,
   type EnabledModelsController,
 } from "./EnabledModelsSection";
+import { NonChatModelsDetail } from "./NonChatModelsDetail";
 import { providerBadgeLabel } from "./enabled-models-helpers";
 import { OAuthPastePanel } from "./OAuthPastePanel";
 import { ProviderIcon } from "./ProviderIcon";
@@ -137,7 +138,9 @@ type Selection =
   | { type: "provider"; name: string }
   | { type: "model"; providerName: string; index: number }
   | { type: "oauth"; providerId: string }
-  | { type: "apikey"; providerId: string };
+  | { type: "apikey"; providerId: string }
+  /** Classifier and image models: listed by pi, reached only from codemode scripts. */
+  | { type: "nonchat" };
 
 function readRememberedSelection(): Selection | null {
   const raw = getLastSettingsSelection("models");
@@ -160,6 +163,7 @@ function readRememberedSelection(): Selection | null {
       && typeof selection.providerId === "string") {
       return { type: selection.type, providerId: selection.providerId };
     }
+    if (selection.type === "nonchat") return { type: "nonchat" };
   } catch {
     // Ignore malformed browser state.
   }
@@ -1839,8 +1843,10 @@ function AddProviderPicker({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function ModelsConfig({ onClose, embedded = false, cwd = null }: {
+export function ModelsConfig({ onClose, embedded = false, cwd = null, onOpenMcp }: {
   onClose: () => void; embedded?: boolean; cwd?: string | null;
+  /** Settings › MCP holds the Code mode choice the non-chat models depend on. */
+  onOpenMcp?: () => void;
 }) {
   const { t } = useI18n();
   // `enabledModels` lives in pi's settings, not models.json, so these switches
@@ -2075,6 +2081,7 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null }: {
 
   // Resolve current detail
   const detailContent = (() => {
+    if (selection?.type === "nonchat") return <NonChatModelsDetail onOpenMcp={onOpenMcp} />;
     if (!selection) return null;
     if (selection.type === "oauth") {
       const p = oauthProviders.find((p) => p.id === selection.providerId);
@@ -2224,6 +2231,21 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null }: {
                   </div>
                 );
               })}
+              {/* Classifier and image models never reach the model selector; this is where they show. */}
+              {!loading && (
+                <>
+                  <div style={{ margin: "4px 8px", borderTop: "1px solid var(--border)" }} />
+                  <ConfigSidebarItem
+                    active={selection?.type === "nonchat"}
+                    onClick={() => setSelection({ type: "nonchat" })}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
+                      <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
+                    </svg>
+                    <ConfigSidebarText className="is-grow">{t("models.nonChatTitle")}</ConfigSidebarText>
+                  </ConfigSidebarItem>
+                </>
+              )}
             </ConfigSidebarList>
 
             {/* Add provider */}
