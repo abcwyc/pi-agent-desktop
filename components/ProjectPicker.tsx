@@ -171,7 +171,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
       }
       setDropdownOpen(true);
     }
-  }, [commitCustomPath, closeDropdown]);
+  }, [commitCustomPath]);
 
   const trimmedFilter = projectFilter.trim();
   const showProjectFilter = shouldShowProjectFilter(recentProjects);
