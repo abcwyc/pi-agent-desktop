@@ -27,6 +27,49 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm test
 
+  # The desktop shell (src-tauri) is otherwise only compiled by the release
+  # workflow, so a Rust error would surface at publish time.
+  desktop-shell:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            libayatana-appindicator3-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev
+      # tauri-build refuses to run when a bundled resource path is missing.
+      # These are the generated, gitignored outputs of `npm run desktop:prepare`;
+      # empty placeholders are enough to compile and unit-test the shell.
+      - name: Create placeholder bundle resources
+        run: mkdir -p src-tauri/resources/server "src-tauri/resources/Pi Agent Server.app"
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib
+      - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+      # Advisory only: a high-severity finding may sit in a transitive
+      # dependency that only an upstream release can fix. Read the log, do not
+      # gate merges on it.
+      - run: npm audit --omit=dev --audit-level=high
+        continue-on-error: true
+
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 20
