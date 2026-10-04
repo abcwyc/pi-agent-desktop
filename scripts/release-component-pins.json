@@ -5,6 +5,6 @@
   },
   "pi-web": {
     "version": "0.10.0",
-    "reason": "Merged upstream pi-web through main@96966e5 (segments A-F); fork adaptations documented in AGENTS.md."
+    "reason": "Merged upstream pi-web through main@6fcd7d4 (segments A-G); fork adaptations documented in AGENTS.md."
   }
 }

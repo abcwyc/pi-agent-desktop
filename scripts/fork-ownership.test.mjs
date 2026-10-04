@@ -117,7 +117,7 @@ test("high and medium overlaps require review; low-only does not", () => {
 
   // BranchNavigator crossed into medium with the merged branch-locking work,
   // so the low example is a file still under the threshold.
-  const low = classifyIncomingChanges(["lib/file-access.ts"], manifest);
+  const low = classifyIncomingChanges(["lib/directory-browser.ts"], manifest);
   assert.equal(low.reviewRequired, false);
   assert.equal(low.highestRisk, "low");
 });
