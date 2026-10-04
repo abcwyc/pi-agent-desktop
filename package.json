@@ -59,7 +59,7 @@
   "dependencies": {
     "@earendil-works/pi-agent-core": "^1.0.2",
     "@earendil-works/pi-ai": "^1.0.2",
-    "@earendil-works/pi-coding-agent": "^1.0.1",
+    "@earendil-works/pi-coding-agent": "^1.0.2",
     "@earendil-works/pi-tui": "^1.0.2",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
