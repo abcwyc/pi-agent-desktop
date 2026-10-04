@@ -1,12 +1,12 @@
-import { access, chmod, copyFile, cp, mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { access, chmod, copyFile, cp, mkdir, readdir, rm } from "node:fs/promises";
 import { constants } from "node:fs";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { desktopTargetTriple } from "./desktop-platform.mjs";
 import { piPackageDirNames } from "./pi-packages.mjs";
-import { listPackageDirs, stageCompletePackage } from "./stage-package.mjs";
+import { dedupeNestedPackages, findNestedPiScopePackages, stageCompletePackage } from "./stage-package.mjs";
 
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const desktopBuildDir = join(rootDir, ".next-desktop");
@@ -56,16 +56,22 @@ async function assembleServer() {
   // Next's file tracer follows normal imports but intentionally omits files
   // reached through dynamic provider/export/plugin paths. These packages are
   // serverExternalPackages, so preserve their complete runtime `dist/` trees.
+  // package.json rides along so dedupeNestedPackages() can read the top-level
+  // version: without it a nested duplicate survives dedupe and ships (the
+  // 0.4.7 installer shipped exactly that, #72).
   for (const packageName of await piPackageDirNames()) {
-    const source = join(rootDir, "node_modules", "@earendil-works", packageName, "dist");
-    const destination = join(
+    const packageSource = join(rootDir, "node_modules", "@earendil-works", packageName);
+    const packageDestination = join(
       serverResourcesDir,
       "node_modules",
       "@earendil-works",
       packageName,
-      "dist",
     );
-    await cp(source, destination, { recursive: true, force: true });
+    await cp(join(packageSource, "dist"), join(packageDestination, "dist"), {
+      recursive: true,
+      force: true,
+    });
+    await copyFile(join(packageSource, "package.json"), join(packageDestination, "package.json"));
   }
 
   // node-pty loads its native binding through a runtime-computed path
@@ -142,56 +148,6 @@ async function assembleServer() {
   } catch {
     // `public/` is optional in Next.js projects.
   }
-}
-
-async function readPackageVersion(packageDir) {
-  try {
-    return JSON.parse(await readFile(join(packageDir, "package.json"), "utf8")).version ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Drop nested node_modules copies that duplicate a top-level package at the
- * exact same version.
- *
- * npm nests a dependency when versions conflict, but it also leaves redundant
- * copies behind. Each nesting level adds ~45 characters to every path inside
- * it, and NSIS cannot open a path over Windows' 260-character MAX_PATH — one
- * file in @mistralai took the whole Windows installer down that way.
- *
- * Only exact version matches are removed, so a genuine version conflict keeps
- * its nested copy and Node still resolves it correctly.
- */
-async function dedupeNestedPackages() {
-  const topLevelDir = join(serverResourcesDir, "node_modules");
-  const topLevelVersions = new Map();
-  for (const { name, dir } of await listPackageDirs(topLevelDir)) {
-    topLevelVersions.set(name, await readPackageVersion(dir));
-  }
-
-  let removed = 0;
-  for (const { dir } of await listPackageDirs(topLevelDir)) {
-    const nestedDir = join(dir, "node_modules");
-    for (const nested of await listPackageDirs(nestedDir)) {
-      const topVersion = topLevelVersions.get(nested.name);
-      if (!topVersion) continue;
-      if (topVersion !== (await readPackageVersion(nested.dir))) continue;
-
-      await rm(nested.dir, { recursive: true, force: true });
-      removed += 1;
-    }
-
-    // Removing @scope/name leaves the @scope directory behind. An empty
-    // directory is harmless to Node but confuses anyone auditing the bundle.
-    for (const entry of await readdir(nestedDir, { withFileTypes: true }).catch(() => [])) {
-      if (!entry.isDirectory() || !entry.name.startsWith("@")) continue;
-      const scopeDir = join(nestedDir, entry.name);
-      if ((await readdir(scopeDir)).length === 0) await rm(scopeDir, { recursive: true, force: true });
-    }
-  }
-  return removed;
 }
 
 /** Paths that would exceed Windows' MAX_PATH once staged on a runner. */
@@ -277,8 +233,24 @@ async function bundleNodeRuntime() {
 await runNextBuild();
 await assembleServer();
 
-const deduped = await dedupeNestedPackages();
+const deduped = await dedupeNestedPackages(serverResourcesDir);
 if (deduped > 0) console.log(`Removed ${deduped} redundant nested package cop${deduped === 1 ? "y" : "ies"}`);
+
+// #72 build gate: the app pins the whole @earendil-works scope to one version
+// line, so the staged tree must never contain a pi package nested under
+// another pi package. If one survives dedupe, shipping it breaks every
+// Windows user on the next overwrite install (Node's nearest-module
+// resolution loads the stale copy after the upgrade leaves it in place).
+const nestedPiScope = await findNestedPiScopePackages(join(serverResourcesDir, "node_modules"));
+if (nestedPiScope.length > 0) {
+  console.error(
+    `Staged node_modules contains @earendil-works packages nested under other @earendil-works packages:\n` +
+      nestedPiScope.map((dir) => `  ${relative(rootDir, dir)}`).join("\n"),
+  );
+  throw new Error(
+    "Refusing to package: a nested @earendil-works copy would shadow the top-level one after overwrite installs (#72).",
+  );
+}
 
 // Fail here rather than inside makensis, which reports a bare "failed opening
 // file" and takes an entire signed release build down with it.

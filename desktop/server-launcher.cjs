@@ -1,5 +1,10 @@
 "use strict";
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const fs = require("node:fs");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const path = require("node:path");
+
 const expectedParentPid = Number.parseInt(process.env.PI_WEB_PARENT_PID ?? "", 10);
 
 // A normal App quit is handled by the Rust shell. This small watchdog also
@@ -59,6 +64,36 @@ if (typeof process.dlopen === "function") {
       throw error;
     }
   };
+}
+
+// #72 self-heal: Tauri's NSIS overwrite installs only add files and never
+// delete the previous payload, so upgrading in place leaves a stale
+// `@earendil-works/*` package nested under another `@earendil-works/*`
+// package. Node resolves modules nearest-first, so the stale copy shadows the
+// current top-level one and the server dies at import time (e.g. "does not
+// provide an export named 'runToolCall'") with every API route returning 500.
+// The app pins the whole @earendil-works scope to one version line, so a build
+// never legitimately ships such a nested copy — any one found here is an
+// overwrite-install leftover and safe to delete. Nested non-pi dependencies
+// (chalk, undici, …) are a normal npm layout and are deliberately left alone.
+try {
+  const scopeDir = path.join(__dirname, "node_modules", "@earendil-works");
+  for (const pkg of fs.readdirSync(scopeDir, { withFileTypes: true })) {
+    if (!pkg.isDirectory()) continue;
+    const nestedScopeDir = path.join(scopeDir, pkg.name, "node_modules", "@earendil-works");
+    if (!fs.existsSync(nestedScopeDir)) continue;
+    for (const entry of fs.readdirSync(nestedScopeDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      fs.rmSync(path.join(nestedScopeDir, entry.name), { recursive: true, force: true });
+      console.error(
+        `[Pi Agent] removed stale ${pkg.name}/node_modules/@earendil-works/${entry.name} ` +
+          `left behind by an overwrite install (see issue #72)`,
+      );
+    }
+  }
+} catch (cleanupError) {
+  // Cleanup must never keep the server from starting.
+  console.error("[Pi Agent] stale-dependency cleanup failed:", cleanupError);
 }
 
 // The standalone Next.js entrypoint is CommonJS.

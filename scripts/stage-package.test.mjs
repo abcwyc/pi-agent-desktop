@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { findStagedCopies, stageCompletePackage } from "./stage-package.mjs";
+import { dedupeNestedPackages, findNestedPiScopePackages, findStagedCopies, stageCompletePackage } from "./stage-package.mjs";
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "stage-package-"));
@@ -90,6 +91,95 @@ test("uses the first readable source and refuses when none exists", async () => 
       stageCompletePackage({ name: "quickjs-wasi", sources: [missing], stagedNodeModulesDir: f.staged }),
       /quickjs-wasi not found under node_modules/,
     );
+  } finally {
+    await f.cleanup();
+  }
+});
+
+async function piFixture() {
+  const root = await mkdtemp(join(tmpdir(), "stage-package-pi-"));
+  const server = join(root, "resources", "server");
+  const staged = join(server, "node_modules");
+  await mkdir(staged, { recursive: true });
+  return { root, server, staged, cleanup: () => rm(root, { recursive: true, force: true }) };
+}
+
+async function stagedPiPackage(staged, name, version, files = ["dist/index.js"]) {
+  const dir = join(staged, "@earendil-works", name);
+  await mkdir(dir, { recursive: true });
+  if (version !== null) {
+    await writeFile(join(dir, "package.json"), `{"name":"@earendil-works/${name}","version":"${version}"}`);
+  }
+  for (const file of files) {
+    await mkdir(dirname(join(dir, file)), { recursive: true });
+    await writeFile(join(dir, file), "");
+  }
+  return dir;
+}
+
+test("dedupeNestedPackages removes a same-version nested copy", async () => {
+  const f = await piFixture();
+  try {
+    await stagedPiPackage(f.staged, "pi-agent-core", "1.0.2");
+    const agentDir = await stagedPiPackage(f.staged, "pi-coding-agent", "1.0.2");
+    const nested = await stagedPiPackage(
+      join(agentDir, "node_modules"),
+      "pi-agent-core",
+      "1.0.2",
+    );
+    const removed = await dedupeNestedPackages(f.server, () => {});
+    assert.equal(removed, 1);
+    assert.equal(await findStagedCopies(f.staged, "@earendil-works/pi-agent-core").then((c) => c.length), 1);
+    assert.ok(!existsSync(nested));
+    assert.equal((await findNestedPiScopePackages(f.staged)).length, 0);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("dedupeNestedPackages keeps a genuinely conflicting nested copy", async () => {
+  const f = await piFixture();
+  try {
+    await stagedPiPackage(f.staged, "pi-agent-core", "1.0.2");
+    const agentDir = await stagedPiPackage(f.staged, "pi-coding-agent", "1.0.2");
+    await stagedPiPackage(join(agentDir, "node_modules"), "pi-agent-core", "0.87.1");
+    const removed = await dedupeNestedPackages(f.server, () => {});
+    assert.equal(removed, 0);
+    // Kept — and therefore reported by the #72 build gate.
+    assert.deepEqual(await findNestedPiScopePackages(f.staged), [
+      join(agentDir, "node_modules", "@earendil-works", "pi-agent-core"),
+    ]);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("dedupeNestedPackages warns and keeps nested pi copies when the top-level version is unreadable", async () => {
+  const f = await piFixture();
+  try {
+    // The 0.4.7 payload shape: top-level pi-agent-core shipped dist/ only.
+    await stagedPiPackage(f.staged, "pi-agent-core", null);
+    const agentDir = await stagedPiPackage(f.staged, "pi-coding-agent", "0.87.1");
+    await stagedPiPackage(join(agentDir, "node_modules"), "pi-agent-core", "0.87.1");
+    const warnings = [];
+    const removed = await dedupeNestedPackages(f.server, (message) => warnings.push(message));
+    assert.equal(removed, 0);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /pi-agent-core/);
+    assert.deepEqual(await findNestedPiScopePackages(f.staged), [
+      join(agentDir, "node_modules", "@earendil-works", "pi-agent-core"),
+    ]);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("findNestedPiScopePackages ignores nested non-pi dependencies", async () => {
+  const f = await piFixture();
+  try {
+    const agentDir = await stagedPiPackage(f.staged, "pi-coding-agent", "1.0.2");
+    await mkdir(join(agentDir, "node_modules", "chalk"), { recursive: true });
+    assert.deepEqual(await findNestedPiScopePackages(f.staged), []);
   } finally {
     await f.cleanup();
   }
