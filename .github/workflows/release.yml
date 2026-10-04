@@ -109,7 +109,7 @@ jobs:
 
             ### Fixes
 
-            - Code mode: the packaged app was missing the sandbox's runtime files, so every session reported "Cannot find module .../quickjs-wasi/quickjs.wasm" and Code mode (and any MCP tool reachable only through it) was switched off. The sandbox files are now shipped, and the build checks that the packaged sandbox actually runs.
+            - Code mode: the packaged app was missing the sandbox's runtime files, so every session reported "Cannot find module .../quickjs-wasi/quickjs.wasm" and Code mode (and any MCP tool reachable only through it) was switched off. The sandbox files are now shipped with the app.
             - Composer: after a run finished, the send button could do nothing when the draft was unchanged, because it still treated the session as streaming.
             - Packaging: extension loading and the Code mode sandbox files are now placed wherever the dependency tree puts them, instead of at one fixed path.
 
@@ -127,7 +127,7 @@ jobs:
 
             ### 修复
 
-            - Code mode：打包后的 App 缺少沙箱运行所需的文件，每个会话都会提示 "Cannot find module .../quickjs-wasi/quickjs.wasm"，Code mode（以及只能通过它调用的 MCP 工具）因此被关闭。现在这些文件已随 App 一起发布，构建时还会检查打包后的沙箱确实能运行。
+            - Code mode：打包后的 App 缺少沙箱运行所需的文件，每个会话都会提示 "Cannot find module .../quickjs-wasi/quickjs.wasm"，Code mode（以及只能通过它调用的 MCP 工具）因此被关闭。现在这些文件已随 App 一起发布。
             - 输入框：一次运行结束后，如果草稿没有变化，发送按钮可能没有反应，因为它仍把会话当作正在流式输出。
             - 打包：扩展加载和 Code mode 沙箱所需的文件现在会放到依赖树实际所在的位置，不再固定写死一个路径。
 
