@@ -21,6 +21,6 @@ test("a plain click stays a plain switch; the summarized switch is its own actio
 test("the summary runs server-first, can be stopped, and holds the composer", () => {
   assert.match(hookSource, /type: "navigate_tree",\s*targetId: leafId,\s*summarize: true,/);
   assert.match(hookSource, /sendAgentCommand\(sid, \{ type: "abort_branch_summary" \}\)/);
-  assert.match(hookSource, /agentRunningRef\.current \|\| bashRunningRef\.current \|\| branchSummarySessionIdRef\.current\) \{\s*restoreSubmission/);
+  assert.match(hookSource, /agentRunningRef\.current \|\| bashRunningRef\.current \|\| branchSummaryHolds\(branchSummarySessionIdRef\.current, sessionIdRef\.current\)\) \{\s*restoreSubmission/);
   assert.match(chatInputSource, /\{branchSummaryPending && \([\s\S]*?chat\.branchSummarizing[\s\S]*?onClick=\{onAbortBranchSummary\}/);
 });
