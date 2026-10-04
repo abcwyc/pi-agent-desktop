@@ -103,37 +103,39 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.5.0
+            ## Pi Agent Desktop 0.5.1
 
-            A release about using more of Pi 1.0 from the desktop: MCP and Code mode now work the way the pi CLI does, extensions behave as they do in the terminal, abandoned branches can carry their work along, and what each model costs and where virtual models route is visible.
+            A fix release for 0.5.0. The main change: **Code mode did not work in the installed app** and now does.
 
-            ### Highlights
+            ### Fixes
 
-            - MCP and Code mode: sessions load pi's codemode, tool-search and MCP built-ins like the CLI, so MCP tools are actually callable (the "MCP tools are only reachable from the codemode or tool_search tool" warning is gone). Settings › MCP manages servers without a session: paste-import, per-server exposure, connection test, OAuth sign-in, project servers behind trust, and Code mode Automatic / Always on.
-            - Extensions: status text from `ctx.ui.setStatus` shows under the composer again, and extension commands that open, fork or switch sessions (`ctx.newSession`, `ctx.fork`, `ctx.switchSession`) now work instead of silently doing nothing.
-            - Branches: rows of other branches offer "Summarize & switch", which carries a summary of the branch you leave (optionally with a focus) and can be stopped; branch summaries render as a card instead of a fake user message.
-            - Cost and routing: under a virtual model the composer shows where each reply was routed (`→ model • level`); the session panel lists cost by model that answered and the prompt-cache warming status.
-            - Classifier and image models: Settings › Models lists them with sign-in state and prices, and says whether Code mode lets sessions call them; images in tool results (including generated ones) can be saved.
-            - Also: a context-usage ring next to the model selector, Open in File Manager in the project menu, "nothing to compact" shown as a notice instead of an error, and Linux fixes (system Node fallback, `PI_DESKTOP_NODE`, single-instance focus, quitting, theme switching, non-recursive file watching).
+            - Code mode: the packaged app was missing the sandbox's runtime files, so every session reported "Cannot find module .../quickjs-wasi/quickjs.wasm" and Code mode (and any MCP tool reachable only through it) was switched off. The sandbox files are now shipped, and the build checks that the packaged sandbox actually runs.
+            - Composer: after a run finished, the send button could do nothing when the draft was unchanged, because it still treated the session as streaming.
+            - Packaging: extension loading and the Code mode sandbox files are now placed wherever the dependency tree puts them, instead of at one fixed path.
 
-            Bundled components: pi 1.0.0, pi-web 0.10.0.
+            ### Updates
+
+            - Bundled pi is now 1.0.2, which also clears a known denial-of-service advisory in a dependency.
+
+            Bundled components: pi 1.0.2, pi-web 0.10.0.
 
             ---
 
-            ## Pi Agent Desktop 0.5.0
+            ## Pi Agent Desktop 0.5.1
 
-            本次版本让桌面端更充分地用上 Pi 1.0：MCP 与 Code mode 的行为与 pi CLI 一致，扩展的表现与终端里一致，离开的分支可以把工作带过来，每个模型的花费和虚拟模型的路由一目了然。
+            这是 0.5.0 的修复版本。最主要的变化：**已安装的 App 里 Code mode 无法使用，现已修复。**
 
-            ### 主要更新
+            ### 修复
 
-            - MCP 与 Code mode：会话像 CLI 一样加载 pi 内置的 codemode、tool-search 与 MCP，MCP 工具真正可调用（不再出现 "MCP tools are only reachable from the codemode or tool_search tool" 警告）。设置 › MCP 无需打开会话即可管理服务器：粘贴导入、按服务器设置暴露方式、连接测试、OAuth 登录、项目服务器受信任边界保护，以及 Code mode 自动 / 始终开启。
-            - 扩展：`ctx.ui.setStatus` 的状态文字重新显示在输入框下方；扩展命令中的新建、分叉、切换会话（`ctx.newSession`、`ctx.fork`、`ctx.switchSession`）现在真正生效，而不是静默无反应。
-            - 分支：其他分支的行提供「总结并切换」，把离开的分支总结带到新分支（可指定侧重点，可中途停止）；分支摘要以卡片显示，不再伪装成用户消息。
-            - 花费与路由：使用虚拟模型时，输入框旁显示每次回复实际路由到的模型（`→ 模型 • 档位`）；会话面板列出按实际作答模型的花费，以及提示缓存预热状态。
-            - 分类与图像模型：设置 › 模型列出这些模型及登录状态和价格，并说明 Code mode 是否允许会话调用；工具结果中的图片（包括生成的图片）可以保存。
-            - 其他：模型选择器旁新增上下文用量环；项目菜单支持「在文件管理器中打开」；「无可压缩内容」改为提示而非错误；Linux 修复（回退到系统 Node、`PI_DESKTOP_NODE`、单实例聚焦、退出、主题切换、非递归文件监听）。
+            - Code mode：打包后的 App 缺少沙箱运行所需的文件，每个会话都会提示 "Cannot find module .../quickjs-wasi/quickjs.wasm"，Code mode（以及只能通过它调用的 MCP 工具）因此被关闭。现在这些文件已随 App 一起发布，构建时还会检查打包后的沙箱确实能运行。
+            - 输入框：一次运行结束后，如果草稿没有变化，发送按钮可能没有反应，因为它仍把会话当作正在流式输出。
+            - 打包：扩展加载和 Code mode 沙箱所需的文件现在会放到依赖树实际所在的位置，不再固定写死一个路径。
 
-            内置组件版本：pi 1.0.0、pi-web 0.10.0。
+            ### 更新
+
+            - 内置 pi 升级到 1.0.2，同时清除了一个依赖中已知的拒绝服务公告。
+
+            内置组件版本：pi 1.0.2、pi-web 0.10.0。
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
