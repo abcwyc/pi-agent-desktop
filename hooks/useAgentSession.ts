@@ -1497,6 +1497,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // through the same settlement path used by non-streaming prompts.
   const reconcileAgentState = useCallback(async (sid: string) => {
     if (!agentRunningRef.current || sessionIdRef.current !== sid) return;
+    const sessionGeneration = sessionGenerationRef.current;
     const runId = promptRunIdRef.current;
     try {
       const res = await fetch(`/api/agent/${encodeURIComponent(sid)}`);
@@ -1505,9 +1506,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // A slow response can straddle a run boundary (previous run finished
       // and the user already started the next one while this request was in
       // flight) — everything in it is stale, drop it.
-      if (sessionIdRef.current !== sid || promptRunIdRef.current !== runId) return;
+      if (
+        sessionIdRef.current !== sid
+        || sessionGenerationRef.current !== sessionGeneration
+        || promptRunIdRef.current !== runId
+      ) return;
       const state = data.state;
       syncLiveModel(state);
+      // Usage advances between tool calls while the logical prompt is still busy.
+      // Sync before the busy return so the ring and stats panel follow the run.
+      if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
       // Mirror compaction state unconditionally: a missed compaction_end
       // would otherwise leave the "Stop compaction" UI stuck. No state
       // (wrapper destroyed) means nothing is compacting.
@@ -1523,7 +1531,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
       if (!agentRunningRef.current) return;
       if (state) {
-        if (state.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
         if (state.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt ?? null);
         if (state.extensionStatuses !== undefined) setExtensionStatuses(state.extensionStatuses ?? []);
         if (state.extensionWidgets !== undefined) setExtensionWidgets(state.extensionWidgets ?? []);
@@ -2486,9 +2493,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
         case "session": {
           if (!sid) return complete({ handled: true, error: "No active session" });
+          const sessionGeneration = sessionGenerationRef.current;
+          const runId = promptRunIdRef.current;
           const stats = await sendAgentCommand<SessionStatsInfo>(sid, { type: "get_session_stats" });
+          if (
+            sessionIdRef.current !== sid
+            || sessionGenerationRef.current !== sessionGeneration
+            || promptRunIdRef.current !== runId
+          ) return { handled: true };
           if (stats) {
             setSessionStatsOverride(stats);
+            if (stats.contextUsage !== undefined) setContextUsage(stats.contextUsage ?? null);
           }
           onSessionStatsPanelOpen?.();
           return complete({ handled: true, action: "openSessionStats" });
