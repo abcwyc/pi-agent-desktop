@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { desktopTargetTriple } from "./desktop-platform.mjs";
 import { piPackageDirNames } from "./pi-packages.mjs";
+import { listPackageDirs, stageCompletePackage } from "./stage-package.mjs";
 
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const desktopBuildDir = join(rootDir, ".next-desktop");
@@ -96,65 +97,33 @@ async function assembleServer() {
     }
   }
 
-  // Next's file tracer drops jiti's top-level entries (lib/jiti.cjs / lib/
-  // jiti.mjs): the pi-coding-agent bundle reaches jiti only through a lazy
-  // require("jiti") that tracing cannot follow, so only lib/jiti-static.mjs
-  // survives and extension loading fails with "Cannot find module
-  // .../jiti/lib/jiti.cjs". Ship the complete source package over it.
-  // (As of pi 0.87.1 npm nests a jiti copy under pi-coding-agent and the
-  // traced output happens to resolve — this copy keeps packaging deterministic
-  // instead of relying on that resolution, same policy as node-pty above.)
-  await cp(
-    join(rootDir, "node_modules", "jiti"),
-    join(
-      serverResourcesDir,
-      "node_modules",
-      "@earendil-works",
-      "pi-coding-agent",
-      "node_modules",
-      "jiti",
-    ),
-    { recursive: true, force: true },
-  );
-
-  // quickjs-wasi loads its sandbox through runtime `import.meta.resolve` —
-  // "quickjs-wasi/quickjs.wasm" plus the extensions' *.so — which Next's file
-  // tracer cannot follow: the traced output keeps only dist/ and the sandbox
-  // dies with "Cannot find module .../quickjs-wasi/quickjs.wasm", turning Code
-  // mode off for every packaged session. Ship the complete source package over
-  // it, same policy as jiti above. (npm nests it under pi-coding-agent; fall
-  // back to a hoisted top-level copy for other install shapes.)
-  const quickjsWasiSources = [
-    join(rootDir, "node_modules", "@earendil-works", "pi-coding-agent", "node_modules", "quickjs-wasi"),
-    join(rootDir, "node_modules", "quickjs-wasi"),
-  ];
-  let quickjsWasiSource = null;
-  for (const candidate of quickjsWasiSources) {
-    try {
-      await access(candidate, constants.R_OK);
-      quickjsWasiSource = candidate;
-      break;
-    } catch {
-      // Try the next install shape.
-    }
-  }
-  if (!quickjsWasiSource) {
-    throw new Error(
-      "quickjs-wasi not found under node_modules; the packaged Code mode sandbox would be broken.",
-    );
-  }
-  await cp(
-    quickjsWasiSource,
-    join(
-      serverResourcesDir,
-      "node_modules",
-      "@earendil-works",
-      "pi-coding-agent",
-      "node_modules",
-      "quickjs-wasi",
-    ),
-    { recursive: true, force: true },
-  );
+  // Next's file tracer drops files that a package loads through runtime
+  // `require` / `import.meta.resolve`, so jiti and quickjs-wasi arrive
+  // incomplete:
+  //  - jiti: only lib/jiti-static.mjs survives, the pi-coding-agent bundle
+  //    reaches lib/jiti.cjs only through a lazy require("jiti"), and extension
+  //    loading fails with "Cannot find module .../jiti/lib/jiti.cjs".
+  //  - quickjs-wasi: the sandbox loads "quickjs-wasi/quickjs.wasm" plus the
+  //    extensions' *.so through `import.meta.resolve`; without them Code mode
+  //    is off for every packaged session.
+  // Ship each complete source package over every staged copy of it. Where that
+  // copy lives depends on npm's layout (pi 1.0.0 nested quickjs-wasi under
+  // pi-coding-agent, pi 1.0.1 hoists it for pi-codemode) and the dedupe pass
+  // below deletes nested copies that match the top level, so see
+  // stage-package.mjs before assuming a path. `npm run desktop:verify`
+  // checks the result by running the packaged Code mode sandbox.
+  const stagedNodeModulesDir = join(serverResourcesDir, "node_modules");
+  const piCodingAgentModules = join(rootDir, "node_modules", "@earendil-works", "pi-coding-agent", "node_modules");
+  await stageCompletePackage({
+    name: "jiti",
+    sources: [join(rootDir, "node_modules", "jiti")],
+    stagedNodeModulesDir,
+  });
+  await stageCompletePackage({
+    name: "quickjs-wasi",
+    sources: [join(piCodingAgentModules, "quickjs-wasi"), join(rootDir, "node_modules", "quickjs-wasi")],
+    stagedNodeModulesDir,
+  });
 
   await copyFile(
     join(rootDir, "desktop", "server-launcher.cjs"),
@@ -181,33 +150,6 @@ async function readPackageVersion(packageDir) {
   } catch {
     return null;
   }
-}
-
-/** Package directories directly under a node_modules dir, resolving @scope/name. */
-async function listPackageDirs(nodeModulesDir) {
-  const packages = [];
-  let entries;
-  try {
-    entries = await readdir(nodeModulesDir, { withFileTypes: true });
-  } catch {
-    return packages;
-  }
-
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name === ".bin") continue;
-    const entryPath = join(nodeModulesDir, entry.name);
-
-    if (entry.name.startsWith("@")) {
-      for (const scoped of await readdir(entryPath, { withFileTypes: true })) {
-        if (scoped.isDirectory()) {
-          packages.push({ name: `${entry.name}/${scoped.name}`, dir: join(entryPath, scoped.name) });
-        }
-      }
-      continue;
-    }
-    packages.push({ name: entry.name, dir: entryPath });
-  }
-  return packages;
 }
 
 /**
