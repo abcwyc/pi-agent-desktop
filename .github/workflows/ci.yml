@@ -50,9 +50,17 @@ jobs:
             librsvg2-dev
       # tauri-build refuses to run when a bundled resource path is missing.
       # These are the generated, gitignored outputs of `npm run desktop:prepare`;
-      # empty placeholders are enough to compile and unit-test the shell.
+      # empty placeholders are enough to compile and unit-test the shell. The
+      # list is read from tauri.linux.conf.json, whose `bundle.resources`
+      # replaces the base config's macOS list; tracked files are left alone.
       - name: Create placeholder bundle resources
-        run: mkdir -p src-tauri/resources/server "src-tauri/resources/Pi Agent Server.app"
+        run: |
+          node -e "
+          const fs = require('fs');
+          for (const r of require('./src-tauri/tauri.linux.conf.json').bundle.resources) {
+            const p = 'src-tauri/' + r;
+            if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+          }"
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib
       - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
