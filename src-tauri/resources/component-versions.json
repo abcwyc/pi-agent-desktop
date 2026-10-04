@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "appVersion": "0.5.1",
+  "appVersion": "0.5.2",
   "components": [
     {
       "id": "pi-agent-desktop",
       "repository": "abcwyc/pi-agent-desktop",
-      "version": "0.5.1"
+      "version": "0.5.2"
     },
     {
       "id": "pi",
