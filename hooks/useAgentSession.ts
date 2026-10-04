@@ -248,6 +248,12 @@ const MODELS_RETRY_DELAYS_MS = [2_000, 5_000, 10_000];
 const MAX_NOTICES = 5;
 const NOTICE_VISIBLE_MS = 5000;
 const NOTICE_EXIT_ANIMATION_MS = 180;
+// The hook stays mounted across session switches, so a summarized branch switch
+// still running for the previous session must not hold sends or switches in the next.
+function branchSummaryHolds(pendingSessionId: string | null, sessionId: string | null): boolean {
+  return pendingSessionId !== null && pendingSessionId === sessionId;
+}
+
 function createNoticeId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -1896,7 +1902,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
     const trimmedMessage = message.trim();
     if (!trimmedMessage && !images?.length) return;
-    if (agentRunningRef.current || bashRunningRef.current || branchSummarySessionIdRef.current) {
+    if (agentRunningRef.current || bashRunningRef.current || branchSummaryHolds(branchSummarySessionIdRef.current, sessionIdRef.current)) {
       restoreSubmission(message, images, composerDraftKey);
       return;
     }
@@ -2211,7 +2217,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // pi refuses navigate_tree mid-run: it moves the one leaf the running agent
     // appends to. Switching only the view would render the live run under
     // another branch, so the switch waits for the run like the server does.
-    if (bashRunningRef.current || agentRunningRef.current || isCompacting || branchSummarySessionIdRef.current) return;
+    if (bashRunningRef.current || agentRunningRef.current || isCompacting || branchSummaryHolds(branchSummarySessionIdRef.current, sessionIdRef.current)) return;
     if (options?.summarize && leafId) {
       await summarizeAndNavigate(leafId, options.customInstructions);
       return;
@@ -2911,7 +2917,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     return () => onSystemInfoLoaderChange?.(null);
   }, [loadSystemInfoFor, onSystemInfoLoaderChange]);
 
-  const branchSummaryPending = branchSummarySessionId !== null && branchSummarySessionId === (session?.id ?? null);
+  const branchSummaryPending = branchSummaryHolds(branchSummarySessionId, session?.id ?? null);
   const branchSwitchLocked = agentRunning || bashRunning || isCompacting || branchSummaryPending;
   useEffect(() => {
     if (!onBranchDataChange) return;

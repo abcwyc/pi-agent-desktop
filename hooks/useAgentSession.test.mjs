@@ -207,7 +207,7 @@ test("forking stays available during a run while in-session branch switches wait
   assert.match(forkSource, /addNotice\(\{ type: "error", message:/);
 
   // A branch summary being generated holds the leaf too, like compaction.
-  assert.match(leafChangeSource, /if \(bashRunningRef\.current \|\| agentRunningRef\.current \|\| isCompacting \|\| branchSummarySessionIdRef\.current\) return;/);
+  assert.match(leafChangeSource, /if \(bashRunningRef\.current \|\| agentRunningRef\.current \|\| isCompacting \|\| branchSummaryHolds\(branchSummarySessionIdRef\.current, sessionIdRef\.current\)\) return;/);
   assert.match(source, /const branchSwitchLocked = agentRunning \|\| bashRunning \|\| isCompacting \|\| branchSummaryPending;/);
   assert.match(source, /onBranchDataChange\(data\?\.tree \?\? \[\], activeLeafId, handleLeafChange, branchSwitchLocked\)/);
   assert.match(appShellSource, /setBranchSwitchLocked\(locked\)/);
