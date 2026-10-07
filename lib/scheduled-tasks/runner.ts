@@ -1,5 +1,7 @@
 import { getToolNamesForPreset } from "../tool-presets";
-import { STOPPED_BY_USER, type RunStatus, type RunTrigger, type ScheduledTask } from "./types";
+import { isBlockingExtensionUiRequest } from "../browser-notifications";
+import type { ExtensionUiRequest } from "../types";
+import type { MessageParams, RunErrorCode, RunStatus, RunTrigger, ScheduledTask } from "./types";
 
 /** Custom session entry that marks a session as the output of a scheduled run. */
 export const SCHEDULED_RUN_ENTRY_TYPE = "pi-web:scheduled-run";
@@ -31,6 +33,8 @@ export interface RunnerDeps {
 export interface RunOutcome {
   status: Extract<RunStatus, "succeeded" | "failed" | "aborted">;
   error?: string;
+  errorCode?: RunErrorCode;
+  errorParams?: MessageParams;
   sessionId?: string;
   /** False when the failure says nothing about the task itself. */
   countsAsFailure: boolean;
@@ -61,6 +65,8 @@ export async function executeRun(
   info: { runId: string; trigger: RunTrigger; scheduledFor?: string },
   deps: RunnerDeps,
   onSessionReady?: (sessionId: string) => void,
+  /** Called once for each extension dialog that blocks the run until someone answers it. */
+  onAttention?: () => void,
 ): Promise<RunOutcome> {
   const toolNames = getToolNamesForPreset(task.toolPreset) ?? [];
   let sessionId: string | undefined;
@@ -94,8 +100,15 @@ export async function executeRun(
     const promptDone = new Promise<void>((resolve) => { resolveDone = resolve; });
     let lastAssistant: Record<string, unknown> | undefined;
     let promptError: string | undefined;
+    const askedFor = new Set<string>();
     unsubscribe = session.onEvent((event) => {
-      if (event.type === "message_end") {
+      if (event.type === "extension_ui_request") {
+        const request = event as unknown as ExtensionUiRequest;
+        if (isBlockingExtensionUiRequest(request) && !askedFor.has(request.id)) {
+          askedFor.add(request.id);
+          onAttention?.();
+        }
+      } else if (event.type === "message_end") {
         const message = event.message as Record<string, unknown> | undefined;
         if (message?.role === "assistant") lastAssistant = message;
       } else if (event.type === "prompt_error") {
@@ -123,6 +136,8 @@ export async function executeRun(
       return {
         status: "aborted",
         error: `Stopped after reaching the ${task.maxDurationMin} minute limit`,
+        errorCode: "time-limit",
+        errorParams: { minutes: task.maxDurationMin },
         sessionId,
         countsAsFailure: true,
       };
@@ -134,7 +149,7 @@ export async function executeRun(
       return { status: "failed", error: message, sessionId, countsAsFailure: true };
     }
     if (stopReason === "aborted") {
-      return { status: "aborted", error: STOPPED_BY_USER, sessionId, countsAsFailure: false };
+      return { status: "aborted", error: "Stopped by the user", errorCode: "stopped", sessionId, countsAsFailure: false };
     }
     return { status: "succeeded", sessionId, countsAsFailure: false };
   } catch (error) {

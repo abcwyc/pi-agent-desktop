@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { scheduledApi } from "@/lib/scheduled-tasks/client";
+import { openSharedEventStream } from "@/lib/scheduled-tasks/shared-stream";
 import type { ScheduledTaskEvent, ScheduledTaskView } from "@/lib/scheduled-tasks/types";
 
 export interface ScheduledTasksState {
@@ -29,8 +30,7 @@ const INITIAL: ScheduledTasksState = {
  */
 let state = INITIAL;
 const listeners = new Set<() => void>();
-let source: EventSource | null = null;
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let stopStream: (() => void) | null = null;
 let refetchTimer: ReturnType<typeof setTimeout> | null = null;
 let loadId = 0;
 /** Raw events, for consumers that act on them (notifications) rather than on the list. */
@@ -88,31 +88,18 @@ function handleEvent(event: ScheduledTaskEvent): void {
 }
 
 function connect(): void {
-  if (source || typeof EventSource === "undefined") return;
-  const stream = new EventSource("/api/scheduled-tasks/events");
-  source = stream;
-  stream.onopen = () => { void refreshScheduledTasks(); };
-  stream.onmessage = (message) => {
-    try { handleEvent(JSON.parse(message.data) as ScheduledTaskEvent); } catch { /* ignore a malformed frame */ }
-  };
-  stream.onerror = () => {
-    // EventSource retries by itself unless the browser closed it for good.
-    if (stream.readyState !== EventSource.CLOSED) return;
-    source = null;
-    if (listeners.size > 0 && !reconnectTimer) {
-      reconnectTimer = setTimeout(() => {
-        reconnectTimer = null;
-        if (listeners.size > 0) connect();
-      }, 3000);
-    }
-  };
+  if (stopStream) return;
+  stopStream = openSharedEventStream<ScheduledTaskEvent>({
+    url: "/api/scheduled-tasks/events",
+    name: "pi-web:scheduled-events",
+    onEvent: handleEvent,
+    onOpen: () => { void refreshScheduledTasks(); },
+  });
 }
 
 function disconnect(): void {
-  source?.close();
-  source = null;
-  if (reconnectTimer) clearTimeout(reconnectTimer);
-  reconnectTimer = null;
+  stopStream?.();
+  stopStream = null;
   if (refetchTimer) clearTimeout(refetchTimer);
   refetchTimer = null;
 }
@@ -156,7 +143,8 @@ export function useScheduledTasks(): ScheduledTasksState {
 export function summarizeScheduledTasks(tasks: readonly ScheduledTaskView[], running: ReadonlySet<string>) {
   return {
     unread: tasks.reduce((total, task) => total + task.unreadRuns, 0),
-    running: running.size > 0,
+    // Events only cover runs this window saw start; a run begun before it opened shows on the task.
+    running: running.size > 0 || tasks.some((task) => task.lastRun?.status === "running"),
     attention: tasks.some((task) => Boolean(task.autoPausedReason)),
   };
 }

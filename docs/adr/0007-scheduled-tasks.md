@@ -37,5 +37,23 @@ for this would slow every list. The sidebar leaves marked sessions out of the pr
 and the Scheduled page lists them under their task. The session also carries a
 `pi-web:scheduled-run` entry, the durable record the index can be rebuilt from.
 
+**Deleting a task returns its sessions to the project list.** The marker that hides a run is
+the run file, so deleting a task deletes its run history too; the sessions it made carry no
+marker afterwards and show up in the project tree like any other session. Keeping the history
+would leave them hidden with no page that lists them, and a checkbox to choose between the two
+only made the bad option reachable. Nothing a user wrote is deleted by deleting a task.
+
+**One event stream per browser, not per tab.** A browser allows about six connections to one host
+over HTTP/1.1 and a tab here already holds several long-lived ones, so a stream for every tab
+would leave a few tabs unable to load anything. `lib/scheduled-tasks/shared-stream.ts` elects a
+leader tab through the Web Locks API; only it opens the `EventSource` and it forwards events to the
+others over a `BroadcastChannel`. A tab with neither API opens its own.
+
+**Things a run cannot ask for are said up front, or reported.** A run has nobody to answer an
+extension dialog, so it waits for the time limit; the session stays open and a `run_attention`
+notification tells the user to open it. An untrusted folder starts runs without its project
+extensions and MCP servers, so the editor says so beside the folder field. Errors the module
+produces itself carry a code or an i18n key and parameters; the English text is only the fallback.
+
 Rejected: Thread mode (every run in one conversation), because its context grows without
 bound; event triggers and cloud execution, because this is a local-first app.

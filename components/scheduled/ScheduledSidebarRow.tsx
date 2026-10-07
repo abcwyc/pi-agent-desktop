@@ -27,13 +27,12 @@ export function ScheduledSidebarRow({ active, onOpen }: Props) {
         <polyline points="12 7 12 12 15.5 14" />
       </svg>
       <span className="sidebar-scheduled-label">{t("sidebar.scheduled")}</span>
+      {running && <span className="sidebar-scheduled-dot sidebar-scheduled-dot--running" aria-hidden="true" />}
       {unread > 0 ? (
         <span className="sidebar-scheduled-badge" aria-label={t("sidebar.scheduledUnread", { count: unread })}>
           {unread > 99 ? "99+" : unread}
         </span>
-      ) : running ? (
-        <span className="sidebar-scheduled-dot sidebar-scheduled-dot--running" aria-hidden="true" />
-      ) : attention ? (
+      ) : attention && !running ? (
         <span className="sidebar-scheduled-dot sidebar-scheduled-dot--attention" aria-hidden="true" />
       ) : null}
     </button>

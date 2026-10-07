@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { refreshScheduledTasks, useScheduledTasks } from "@/hooks/useScheduledTasks";
 import { useI18n } from "@/hooks/useI18n";
 import { formatRelativeTime } from "@/lib/i18n/format";
-import { scheduledApi } from "@/lib/scheduled-tasks/client";
+import { apiErrorText, scheduledApi } from "@/lib/scheduled-tasks/client";
 import type { ScheduledRun, ScheduledTaskView } from "@/lib/scheduled-tasks/types";
 import { ScheduledRunHistory } from "./ScheduledRunHistory";
 import { ScheduledTaskEditor } from "./ScheduledTaskEditor";
@@ -15,15 +15,11 @@ interface Props {
   /** Folder preselected for a new task. */
   defaultCwd: string | null;
   onBrowseFolder?: () => Promise<string | null>;
-  /** Open a run's session in the chat view. */
-  onOpenSession: (sessionId: string) => void;
+  /** Open a run's session in the chat view. Resolves false when the session no longer exists. */
+  onOpenSession: (sessionId: string) => Promise<boolean>;
 }
 
 type Mode = { kind: "list" } | { kind: "detail"; id: string } | { kind: "edit"; id: string | null };
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /** The Scheduled page: task list, a task's detail with its run history, and the editor. */
 export function ScheduledView({ projectRoots, defaultCwd, onBrowseFolder, onOpenSession }: Props) {
@@ -48,14 +44,19 @@ export function ScheduledView({ projectRoots, defaultCwd, onBrowseFolder, onOpen
       await action();
       await refreshScheduledTasks();
     } catch (caught) {
-      setActionError(errorText(caught));
+      setActionError(apiErrorText(caught, t));
     } finally {
       setBusy(null);
     }
   }
 
-  function openRun(sessionId: string, task: ScheduledTaskView, run: ScheduledRun) {
-    onOpenSession(sessionId);
+  async function openRun(sessionId: string, task: ScheduledTaskView, run: ScheduledRun) {
+    setActionError(null);
+    if (!(await onOpenSession(sessionId))) {
+      // Deleted from the sidebar's menu or on disk since the run; nothing to open.
+      setActionError(t("scheduled.sessionMissing"));
+      return;
+    }
     if (!run.seenAt) void scheduledApi.markSeen(task.id, run.runId).catch(() => undefined);
   }
 
@@ -152,7 +153,7 @@ export function ScheduledView({ projectRoots, defaultCwd, onBrowseFolder, onOpen
                 <button type="button" className="scheduled-button scheduled-button--primary" disabled={busy !== null || runningTaskIds.has(selected.id)} onClick={() => void act("run", () => scheduledApi.run(selected.id))}>
                   {busy === "run" ? t("scheduled.runStarting") : t("scheduled.runNow")}
                 </button>
-                {selected.schedule.kind !== "manual" && (
+                {selected.schedule.kind !== "manual" && taskStatus(selected, runningTaskIds) !== "done" && (
                   <button type="button" className="scheduled-button" disabled={busy !== null} onClick={() => void act("toggle", () => scheduledApi.update(selected.id, { enabled: !selected.enabled }))}>
                     {selected.enabled ? t("scheduled.pause") : t("scheduled.resume")}
                   </button>
@@ -193,10 +194,10 @@ export function ScheduledView({ projectRoots, defaultCwd, onBrowseFolder, onOpen
         <DeleteDialog
           task={confirmDelete}
           onCancel={() => setConfirmDelete(null)}
-          onConfirm={async (deleteHistory) => {
+          onConfirm={async () => {
             const task = confirmDelete;
             setConfirmDelete(null);
-            await act("delete", () => scheduledApi.remove(task.id, { deleteHistory }));
+            await act("delete", () => scheduledApi.remove(task.id));
             setMode({ kind: "list" });
           }}
         />
@@ -208,10 +209,9 @@ export function ScheduledView({ projectRoots, defaultCwd, onBrowseFolder, onOpen
 function DeleteDialog({ task, onCancel, onConfirm }: {
   task: ScheduledTaskView;
   onCancel: () => void;
-  onConfirm: (deleteHistory: boolean) => void;
+  onConfirm: () => void;
 }) {
   const { t } = useI18n();
-  const [deleteHistory, setDeleteHistory] = useState(false);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -227,13 +227,9 @@ function DeleteDialog({ task, onCancel, onConfirm }: {
       <div className="scheduled-dialog" role="alertdialog" aria-modal="true" aria-labelledby="scheduled-delete-title">
         <h3 id="scheduled-delete-title">{t("scheduled.deleteTitle", { name: task.name })}</h3>
         <p>{t("scheduled.deleteBody")}</p>
-        <label className="scheduled-check">
-          <input type="checkbox" checked={deleteHistory} onChange={(event) => setDeleteHistory(event.target.checked)} />
-          <span>{t("scheduled.deleteHistory")}</span>
-        </label>
         <div className="scheduled-actions">
           <button type="button" className="scheduled-button" autoFocus onClick={onCancel}>{t("scheduled.cancel")}</button>
-          <button type="button" className="scheduled-button scheduled-button--danger" onClick={() => onConfirm(deleteHistory)}>{t("scheduled.confirmDelete")}</button>
+          <button type="button" className="scheduled-button scheduled-button--danger" onClick={onConfirm}>{t("scheduled.confirmDelete")}</button>
         </div>
       </div>
     </div>

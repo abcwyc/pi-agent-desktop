@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { scheduledApi } from "@/lib/scheduled-tasks/client";
 import type { ScheduledRun, ScheduledTaskView } from "@/lib/scheduled-tasks/types";
+import { describeRunError } from "@/lib/scheduled-tasks/run-error";
 import { formatDateTime, formatDuration, isUnread, runDuration, runTime } from "./scheduled-helpers";
 
 interface Props {
@@ -75,7 +76,7 @@ export function ScheduledRunHistory({ task, onOpenSession }: Props) {
                 </div>
                 {run.skipReason && <p className="scheduled-hint">{t(`scheduled.run.skip.${run.skipReason}`)}</p>}
                 {run.skippedSlots ? <p className="scheduled-hint">{t("scheduled.run.skippedSlots", { count: run.skippedSlots })}</p> : null}
-                {run.error && <p className="scheduled-run-error">{run.error}</p>}
+                {(run.error || run.errorCode) && <p className="scheduled-run-error">{describeRunError(run, t)}</p>}
               </div>
               {run.sessionId && (
                 <button type="button" className="scheduled-button scheduled-button--small" onClick={() => onOpenSession(run.sessionId as string, run)}>

@@ -43,15 +43,16 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 }
 
-// DELETE /api/scheduled-tasks/[id]?deleteHistory=1 - remove the task. Its sessions stay;
-// the run history file goes only when deleteHistory is set.
+// DELETE /api/scheduled-tasks/[id] - remove the task and its run history. The sessions
+// it produced stay, as ordinary sessions: with the history gone nothing marks them as
+// scheduled runs any more, so they reappear in the project list instead of being left
+// hidden with no page that lists them.
 export async function DELETE(req: Request, { params }: Params) {
   const rejected = rejectUnsafeWrite(req, { json: false });
   if (rejected) return rejected;
   const { id } = await params;
   try {
-    const deleteHistory = new URL(req.url).searchParams.get("deleteHistory") === "1";
-    if (!deleteTask(id, { removeRuns: deleteHistory })) {
+    if (!deleteTask(id, { removeRuns: true })) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
     emitScheduledTaskEvent({ type: "task_changed", taskId: id });

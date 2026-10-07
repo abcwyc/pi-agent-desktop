@@ -213,6 +213,7 @@ export class Scheduler {
           status: "aborted",
           endedAt,
           error: "Interrupted: the app closed during the run",
+          errorCode: "interrupted",
         }), this.agentDir);
       }
     }
@@ -252,12 +253,22 @@ export class Scheduler {
     const done = (async (): Promise<ScheduledRun> => {
       let outcome: RunOutcome;
       if (!existsSync(task.cwd) || !statSync(task.cwd).isDirectory()) {
-        outcome = { status: "failed", error: `Directory does not exist: ${task.cwd}`, countsAsFailure: true };
+        outcome = {
+          status: "failed",
+          error: `Directory does not exist: ${task.cwd}`,
+          errorCode: "cwd-missing",
+          errorParams: { path: task.cwd },
+          countsAsFailure: true,
+        };
       } else {
         outcome = await executeRun(task, { runId, trigger: info.trigger, scheduledFor: info.scheduledFor }, this.options.runnerDeps, (sessionId) => {
           const withSession = updateRun(task.id, runId, (run) => ({ ...run, sessionId }), this.agentDir) ?? { ...record, sessionId };
           emitScheduledTaskEvent({ type: "run_started", taskId: task.id, taskName: task.name, runId, sessionId, trigger: info.trigger });
           announce(withSession);
+        }, () => {
+          // The session stays open, so the user can open it from the page and answer.
+          const sessionId = listRuns(task.id, this.agentDir).find((run) => run.runId === runId)?.sessionId;
+          emitScheduledTaskEvent({ type: "run_attention", taskId: task.id, taskName: task.name, runId, ...(sessionId ? { sessionId } : {}) });
         });
       }
       const finished = updateRun(task.id, runId, (run) => ({
@@ -266,6 +277,8 @@ export class Scheduler {
         endedAt: this.clock().toISOString(),
         ...(outcome.sessionId ? { sessionId: outcome.sessionId } : {}),
         ...(outcome.error ? { error: outcome.error } : {}),
+        ...(outcome.errorCode ? { errorCode: outcome.errorCode } : {}),
+        ...(outcome.errorParams ? { errorParams: outcome.errorParams } : {}),
       }), this.agentDir) ?? { ...record, status: outcome.status };
       const autoPaused = this.recordOutcome(task.id, outcome);
       announce(finished);
@@ -279,6 +292,8 @@ export class Scheduler {
         ...(autoPaused ? { autoPaused: true } : {}),
         ...(outcome.sessionId ? { sessionId: outcome.sessionId } : {}),
         ...(outcome.error ? { error: outcome.error } : {}),
+        ...(outcome.errorCode ? { errorCode: outcome.errorCode } : {}),
+        ...(outcome.errorParams ? { errorParams: outcome.errorParams } : {}),
       });
       emitScheduledTaskEvent({ type: "task_changed", taskId: task.id });
       return finished;
@@ -301,7 +316,7 @@ export class Scheduler {
           ...task,
           consecutiveFailures: failures,
           enabled: false,
-          autoPausedReason: `Paused after ${failures} failed runs in a row. Last error: ${outcome.error ?? "unknown"}`,
+          autoPausedReason: outcome.error ?? "unknown error",
         };
       }
       return { ...task, consecutiveFailures: failures };

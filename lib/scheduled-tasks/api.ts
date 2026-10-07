@@ -44,7 +44,11 @@ export function rejectUnsafeWrite(req: Request, options: { json?: boolean } = {}
 
 export function errorResponse(error: unknown): NextResponse {
   if (isValidationError(error)) {
-    return NextResponse.json({ error: error.message, code: "validation" }, { status: 400 });
+    return NextResponse.json({
+      error: error.message,
+      code: "validation",
+      ...(error.key ? { key: error.key, ...(error.params ? { params: error.params } : {}) } : {}),
+    }, { status: 400 });
   }
   return NextResponse.json(
     { error: error instanceof Error ? error.message : String(error) },

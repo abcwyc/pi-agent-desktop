@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "fs";
 import { join } from "path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { writePrivateFileAtomicSync } from "../atomic-file";
@@ -32,6 +32,18 @@ function runsFile(agentDir: string, taskId: string): string {
   if (!UUID_PATTERN.test(taskId)) throw new Error("Invalid task id");
   return join(scheduledTasksDir(agentDir), "runs", `${taskId}.jsonl`);
 }
+
+/**
+ * Runs pushed out of the capped history keep one line here: which session they made.
+ * That is all the session list needs to go on hiding them. Without it each new run
+ * would drop an old one from the history and an old session back into the project tree.
+ */
+function archiveFile(agentDir: string, taskId: string): string {
+  if (!UUID_PATTERN.test(taskId)) throw new Error("Invalid task id");
+  return join(scheduledTasksDir(agentDir), "runs", `${taskId}.archive.jsonl`);
+}
+
+const ARCHIVE_SUFFIX = ".archive.jsonl";
 
 function isTask(value: unknown): value is ScheduledTask {
   if (typeof value !== "object" || value === null) return false;
@@ -126,7 +138,10 @@ export function deleteTask(id: string, options: { removeRuns?: boolean } = {}, a
     const next = tasks.filter((task) => task.id !== id);
     return { tasks: next, result: next.length !== tasks.length };
   }, agentDir);
-  if (removed && options.removeRuns) rmSync(runsFile(agentDir, id), { force: true });
+  if (removed && options.removeRuns) {
+    rmSync(runsFile(agentDir, id), { force: true });
+    rmSync(archiveFile(agentDir, id), { force: true });
+  }
   return removed;
 }
 
@@ -150,7 +165,34 @@ function writeRuns(agentDir: string, taskId: string, runs: ScheduledRun[]): void
   const path = runsFile(agentDir, taskId);
   mkdirSync(join(path, ".."), { recursive: true });
   const kept = runs.slice(-MAX_RUNS_PER_TASK);
+  const dropped = runs.slice(0, runs.length - kept.length).filter((run) => run.sessionId);
+  if (dropped.length > 0) {
+    appendFileSync(
+      archiveFile(agentDir, taskId),
+      dropped.map((run) => JSON.stringify({ runId: run.runId, sessionId: run.sessionId })).join("\n") + "\n",
+      { mode: 0o600 },
+    );
+  }
   writePrivateFileAtomicSync(path, kept.map((run) => JSON.stringify(run)).join("\n") + (kept.length ? "\n" : ""));
+}
+
+function readArchive(agentDir: string, taskId: string): ScheduledRun[] {
+  const path = archiveFile(agentDir, taskId);
+  if (!existsSync(path)) return [];
+  const archived: ScheduledRun[] = [];
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const entry = JSON.parse(line) as { runId?: unknown; sessionId?: unknown };
+      if (typeof entry.runId === "string" && typeof entry.sessionId === "string") {
+        // Only the session link survives; the rest of the record is gone.
+        archived.push({ runId: entry.runId, taskId, trigger: "schedule", status: "succeeded", sessionId: entry.sessionId });
+      }
+    } catch {
+      // A torn line must not hide the rest.
+    }
+  }
+  return archived;
 }
 
 /** Runs of a task, oldest first. */
@@ -182,6 +224,11 @@ export function listAllRuns(agentDir = getAgentDir()): ScheduledRun[] {
   if (!existsSync(dir)) return [];
   const runs: ScheduledRun[] = [];
   for (const file of readdirSync(dir)) {
+    if (file.endsWith(ARCHIVE_SUFFIX)) {
+      const taskId = file.slice(0, -ARCHIVE_SUFFIX.length);
+      if (UUID_PATTERN.test(taskId)) runs.push(...readArchive(agentDir, taskId));
+      continue;
+    }
     const taskId = file.replace(/\.jsonl$/, "");
     if (!UUID_PATTERN.test(taskId)) continue;
     runs.push(...readRuns(agentDir, taskId));

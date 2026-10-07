@@ -17,8 +17,8 @@ import {
 const THINKING_LEVELS = new Set<string>(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 const WRITE_PRESETS = new Set<string>(["default", "full"]);
 
-function fail(message: string): never {
-  throw new ScheduledTaskValidationError(message);
+function fail(message: string, key?: string, params?: Record<string, string | number>): never {
+  throw new ScheduledTaskValidationError(message, key, params);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -30,7 +30,7 @@ function parseName(value: unknown, otherNames: readonly string[]): string {
   const name = value.trim();
   if (name.length > MAX_NAME_LENGTH) fail(`name must be at most ${MAX_NAME_LENGTH} characters`);
   if (otherNames.some((other) => other.trim().toLowerCase() === name.toLowerCase())) {
-    fail(`a task named "${name}" already exists`);
+    fail(`a task named "${name}" already exists`, "scheduled.error.nameTaken", { name });
   }
   return name;
 }
@@ -43,7 +43,9 @@ function parsePrompt(value: unknown): string {
 
 function parseCwd(value: unknown): string {
   if (typeof value !== "string" || !value || !isAbsolute(value)) fail("cwd must be an absolute path");
-  if (!existsSync(value) || !statSync(value).isDirectory()) fail(`Directory does not exist: ${value}`);
+  if (!existsSync(value) || !statSync(value).isDirectory()) {
+    fail(`Directory does not exist: ${value}`, "scheduled.error.cwdMissing", { path: value });
+  }
   return value;
 }
 
@@ -61,7 +63,7 @@ export function parseSchedule(value: unknown, now: Date): TaskSchedule {
   if (value.kind === "once") {
     const at = typeof value.at === "string" ? new Date(value.at) : null;
     if (!at || Number.isNaN(at.getTime())) fail("schedule.at must be an ISO date");
-    if (at.getTime() <= now.getTime()) fail("schedule.at must be in the future");
+    if (at.getTime() <= now.getTime()) fail("schedule.at must be in the future", "scheduled.error.oncePast");
     return { kind: "once", at: at.toISOString() };
   }
   return fail("schedule.kind must be manual, cron or once");
@@ -143,7 +145,10 @@ function parseEnabled(value: unknown): boolean {
 /** Unattended runs that can change files or run commands need an explicit yes. */
 function requireWriteAcknowledgement(preset: string, input: Record<string, unknown>): void {
   if (WRITE_PRESETS.has(preset) && input.acknowledgeUnattendedWrites !== true) {
-    fail("acknowledgeUnattendedWrites: true is required for a toolPreset that can change files or run commands");
+    fail(
+      "acknowledgeUnattendedWrites: true is required for a toolPreset that can change files or run commands",
+      "scheduled.error.writeAck",
+    );
   }
 }
 
@@ -192,6 +197,10 @@ export function applyTaskPatch(existing: ScheduledTask, patch: unknown, context:
   if (patch.schedule !== undefined) {
     next.schedule = parseSchedule(patch.schedule, context.now);
     restartWindow = true;
+    // A one-time task switches itself off once it has run. Giving it a new schedule is
+    // asking for it to run again, so it comes back on (unless the same edit says otherwise).
+    const finishedOnce = existing.schedule.kind === "once" && !existing.enabled && !existing.autoPausedReason;
+    if (finishedOnce && patch.enabled === undefined && next.schedule.kind !== "manual") next.enabled = true;
   }
   if (patch.enabled !== undefined) {
     const enabled = parseEnabled(patch.enabled);

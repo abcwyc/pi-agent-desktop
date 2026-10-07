@@ -11,6 +11,7 @@
 - Continue from any earlier message as a branch, or fork the conversation into an independent session.
 - Manage models, OAuth/API keys, custom model configuration, skills, and plugins.
 - Switch Git worktrees from the sidebar and browse project files.
+- Scheduled tasks: run a saved prompt in a new session on a schedule (hourly, daily, weekly, a custom cron expression, or once). They run while the app is open, even with its window hidden, default to read-only tools, catch up once after a sleep, and notify you when a run succeeds or fails.
 - Preview source code, diffs, Markdown, images, audio, PDF, and DOCX files.
 - Dark mode, automatic session naming, a completion sound, and restored run state.
 - A weekly check of the latest stable `pi-agent-desktop` GitHub Release, with an in-app notice only when the installed app is older.

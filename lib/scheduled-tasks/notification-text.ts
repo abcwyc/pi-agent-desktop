@@ -1,4 +1,5 @@
-import { STOPPED_BY_USER, type ScheduledTaskEvent } from "./types";
+import { describeRunError } from "./run-error";
+import type { ScheduledTaskEvent } from "./types";
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
@@ -37,6 +38,15 @@ export function describeRunNotification(event: ScheduledTaskEvent, t: Translate)
       sound: false,
     };
   }
+  if (event.type === "run_attention") {
+    return {
+      title: t("scheduled.notify.attention"),
+      body: event.taskName,
+      tag: `pi-scheduled:${event.runId}:attention`,
+      ...(event.sessionId ? { sessionId: event.sessionId } : {}),
+      sound: false,
+    };
+  }
   if (event.type !== "run_finished") return null;
 
   const base = {
@@ -44,7 +54,8 @@ export function describeRunNotification(event: ScheduledTaskEvent, t: Translate)
     ...(event.sessionId ? { sessionId: event.sessionId } : {}),
   };
   const withError = (name: string) => {
-    const detail = shortError(event.error);
+    // An error with a code is already a short sentence; a provider's message can be long.
+    const detail = event.errorCode ? describeRunError(event, t) : shortError(event.error);
     return detail ? `${name} — ${detail}` : name;
   };
   const pausedNote = event.autoPaused ? ` ${t("scheduled.notify.pausedNote")}` : "";
@@ -55,7 +66,7 @@ export function describeRunNotification(event: ScheduledTaskEvent, t: Translate)
     case "failed":
       return { ...base, title: t("scheduled.notify.failed"), body: `${withError(event.taskName)}${pausedNote}`, sound: false };
     case "aborted":
-      if (event.error === STOPPED_BY_USER) return null;
+      if (event.errorCode === "stopped") return null;
       return { ...base, title: t("scheduled.notify.stopped"), body: `${withError(event.taskName)}${pausedNote}`, sound: false };
     default:
       return null;

@@ -41,13 +41,20 @@ export interface ScheduledTask {
   /** Newest schedule slot already handled; the catch-up logic starts after it. */
   lastScheduledFor?: string;
   consecutiveFailures: number;
-  /** Why the task was switched off without the user asking. */
+  /** Set when repeated failures switched the task off: the error of the run that did. */
   autoPausedReason?: string;
 }
 
 export type RunTrigger = "schedule" | "catch-up" | "manual";
 export type RunStatus = "running" | "succeeded" | "failed" | "aborted" | "skipped";
 export type RunSkipReason = "app-asleep" | "overlap";
+/**
+ * Why a run ended the way it did, for the errors this module produces itself.
+ * The UI turns the code into the reader's language; `error` stays English as
+ * the fallback (and for errors that come from the model provider, which have no code).
+ */
+export type RunErrorCode = "time-limit" | "interrupted" | "stopped" | "cwd-missing";
+export type MessageParams = Record<string, string | number>;
 
 export interface ScheduledRun {
   runId: string;
@@ -62,6 +69,8 @@ export interface ScheduledRun {
   skippedSlots?: number;
   sessionId?: string;
   error?: string;
+  errorCode?: RunErrorCode;
+  errorParams?: MessageParams;
   /** Set once the user opens the run's session. */
   seenAt?: string;
   /** Process that owns a `running` record, to tell it from an orphaned one. */
@@ -78,7 +87,8 @@ export interface ScheduledTaskView extends ScheduledTask {
 
 export class ScheduledTaskValidationError extends Error {
   readonly code = "validation";
-  constructor(message: string) {
+  /** i18n key (`scheduled.error.*`) and parameters for the reader's language; `message` is the English fallback. */
+  constructor(message: string, readonly key?: string, readonly params?: MessageParams) {
     super(message);
     this.name = "ScheduledTaskValidationError";
   }
@@ -97,9 +107,6 @@ export function isValidationError(error: unknown): error is ScheduledTaskValidat
   return isNamedError(error, "ScheduledTaskValidationError");
 }
 
-/** The error text of a run the user stopped by hand; no notification is worth sending for it. */
-export const STOPPED_BY_USER = "Stopped by the user";
-
 export type ScheduledTaskEvent =
   | { type: "task_changed"; taskId: string }
   | { type: "run_started"; taskId: string; taskName: string; runId: string; sessionId?: string; trigger: RunTrigger }
@@ -112,8 +119,12 @@ export type ScheduledTaskEvent =
       trigger: RunTrigger;
       status: RunStatus;
       error?: string;
+      errorCode?: RunErrorCode;
+      errorParams?: MessageParams;
       /** This run's failure was the one that paused the task. */
       autoPaused?: boolean;
     }
   | { type: "run_skipped"; taskId: string; runId: string; skipReason: RunSkipReason }
+  /** The run is waiting for an answer to an extension dialog that nobody is there to give. */
+  | { type: "run_attention"; taskId: string; taskName: string; runId: string; sessionId?: string }
   | { type: "scheduler_owner"; owner: boolean };

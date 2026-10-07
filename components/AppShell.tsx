@@ -2583,7 +2583,16 @@ export function AppShell() {
             projectRoots={availableProjectRoots}
             defaultCwd={selectedSession?.cwd ?? newSessionCwd ?? activeCwd}
             onBrowseFolder={desktopMode ? handleBrowseScheduledFolder : undefined}
-            onOpenSession={(sessionId) => void handleOpenSession(sessionId)}
+            onOpenSession={async (sessionId) => {
+              // handleOpenSession only logs a failure; this page has to tell the user.
+              const known = sessionCatalog.some((s) => s.id === sessionId && !s.transient);
+              if (!known) {
+                const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, { cache: "no-store" }).catch(() => null);
+                if (!response?.ok) return false;
+              }
+              await handleOpenSession(sessionId);
+              return true;
+            }}
           />
         )}
       </div>

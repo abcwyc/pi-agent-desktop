@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { scheduledApi, type CronPreview, type TaskInput } from "@/lib/scheduled-tasks/client";
+import { apiErrorText, scheduledApi, type CronPreview, type TaskInput } from "@/lib/scheduled-tasks/client";
 import {
   DEFAULT_PRESET,
   cronFromPreset,
@@ -179,11 +179,34 @@ function useModelOptions(cwd: string): ModelOption[] {
   return models;
 }
 
+/**
+ * Whether the folder has project extensions or MCP servers that are not trusted yet.
+ * A run cannot ask, so it simply starts without them; the form says so up front.
+ */
+function useUntrustedProject(cwd: string): boolean {
+  const [untrusted, setUntrusted] = useState(false);
+  useEffect(() => {
+    if (!cwd.trim()) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      fetch(`/api/project-trust?cwd=${encodeURIComponent(cwd.trim())}`, { cache: "no-store" })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((status: { requiresTrust?: boolean; trusted?: boolean } | null) => {
+          if (!cancelled) setUntrusted(Boolean(status?.requiresTrust && !status.trusted));
+        })
+        .catch(() => { if (!cancelled) setUntrusted(false); });
+    }, 400);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [cwd]);
+  return untrusted && Boolean(cwd.trim());
+}
+
 export function ScheduledTaskEditor({ task, projectRoots, defaultCwd, onBrowseFolder, onSaved, onCancel }: EditorProps) {
   const { t, locale } = useI18n();
   const ids = useId();
   const [form, setForm] = useState(() => initialState(task, defaultCwd));
   const models = useModelOptions(form.cwd);
+  const untrustedProject = useUntrustedProject(form.cwd);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<CronPreview | null>(null);
@@ -225,7 +248,7 @@ export function ScheduledTaskEditor({ task, projectRoots, defaultCwd, onBrowseFo
       const { task: saved } = task ? await scheduledApi.update(task.id, input) : await scheduledApi.create(input);
       onSaved(saved);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      setError(apiErrorText(caught, t));
       setSaving(false);
     }
   }
@@ -266,15 +289,18 @@ export function ScheduledTaskEditor({ task, projectRoots, defaultCwd, onBrowseFo
         </div>
         <datalist id={`${ids}-roots`}>{projectRoots.map((root) => <option key={root} value={root} />)}</datalist>
         <p id={`${ids}-cwd-hint`} className="scheduled-hint">{t("scheduled.field.folderHint")}</p>
+        {untrustedProject && <p className="scheduled-notice" role="note">{t("scheduled.trust.notice")}</p>}
       </div>
 
       <fieldset className="scheduled-field scheduled-fieldset">
         <legend>{t("scheduled.field.schedule")}</legend>
         <div className="scheduled-chips" role="radiogroup" aria-label={t("scheduled.field.schedule")}>
           {SCHEDULE_KINDS.map((kind) => (
-            <button key={kind} type="button" role="radio" aria-checked={form.kind === kind} className={`scheduled-chip${form.kind === kind ? " is-selected" : ""}`} onClick={() => set("kind", kind)}>
+            // Native radios, so the arrow keys move between the choices and a screen reader announces them as a group.
+            <label key={kind} className={`scheduled-chip${form.kind === kind ? " is-selected" : ""}`}>
+              <input type="radio" className="scheduled-visually-hidden" name={`${ids}-kind`} checked={form.kind === kind} onChange={() => set("kind", kind)} />
               {t(`scheduled.schedule.${kind}`)}
-            </button>
+            </label>
           ))}
         </div>
 
@@ -317,7 +343,9 @@ export function ScheduledTaskEditor({ task, projectRoots, defaultCwd, onBrowseFo
         {expr && (
           <div className="scheduled-preview" aria-live="polite">
             <span className="scheduled-hint">{t("scheduled.schedule.timezone", { zone: timezone })}</span>
-            {shownPreview?.valid === false && <p className="scheduled-error" role="alert">{shownPreview.error}</p>}
+            {shownPreview?.valid === false && (
+              <p className="scheduled-error" role="alert">{shownPreview.key ? t(shownPreview.key, shownPreview.params) : shownPreview.error}</p>
+            )}
             {shownPreview?.valid && shownPreview.nextRuns && (
               <>
                 <span className="scheduled-preview-title">{t("scheduled.preview.title")}</span>

@@ -7,6 +7,9 @@ export class ScheduledApiError extends Error {
     message: string,
     readonly status: number,
     readonly code?: string,
+    /** i18n key and parameters for a validation error, so the page can show it in the reader's language. */
+    readonly key?: string,
+    readonly params?: Record<string, string | number>,
   ) {
     super(message);
     this.name = "ScheduledApiError";
@@ -21,9 +24,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: init?.body ? { "Content-Type": "application/json", ...init.headers } : init?.headers,
   });
-  const body = await response.json().catch(() => ({})) as { error?: string; code?: string } & Record<string, unknown>;
+  const body = await response.json().catch(() => ({})) as {
+    error?: string;
+    code?: string;
+    key?: string;
+    params?: Record<string, string | number>;
+  } & Record<string, unknown>;
   if (!response.ok) {
-    throw new ScheduledApiError(body.error ?? `HTTP ${response.status}`, response.status, body.code);
+    throw new ScheduledApiError(body.error ?? `HTTP ${response.status}`, response.status, body.code, body.key, body.params);
   }
   return body as T;
 }
@@ -48,6 +56,8 @@ export interface TaskInput {
 export interface CronPreview {
   valid: boolean;
   error?: string;
+  key?: string;
+  params?: Record<string, string | number>;
   timezone?: string;
   nextRuns?: string[];
 }
@@ -58,8 +68,7 @@ export const scheduledApi = {
     request<{ task: ScheduledTaskView }>("", { method: "POST", body: JSON.stringify(input) }),
   update: (id: string, patch: TaskInput) =>
     request<{ task: ScheduledTaskView }>(`/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(patch) }),
-  remove: (id: string, options: { deleteHistory?: boolean } = {}) =>
-    request<{ success: true }>(`/${encodeURIComponent(id)}${options.deleteHistory ? "?deleteHistory=1" : ""}`, { method: "DELETE" }),
+  remove: (id: string) => request<{ success: true }>(`/${encodeURIComponent(id)}`, { method: "DELETE" }),
   run: (id: string) => request<{ run: ScheduledRun }>(`/${encodeURIComponent(id)}/run`, { method: "POST" }),
   runs: (id: string, options: { before?: string; limit?: number } = {}) => {
     const query = new URLSearchParams();
@@ -74,3 +83,12 @@ export const scheduledApi = {
   preview: (expr: string, timezone?: string) =>
     request<CronPreview>("/preview", { method: "POST", body: JSON.stringify({ expr, ...(timezone ? { timezone } : {}) }) }),
 };
+
+/** An error from the API in the reader's language, falling back to the English message. */
+export function apiErrorText(
+  error: unknown,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
+  if (error instanceof ScheduledApiError && error.key) return t(error.key, error.params);
+  return error instanceof Error ? error.message : String(error);
+}

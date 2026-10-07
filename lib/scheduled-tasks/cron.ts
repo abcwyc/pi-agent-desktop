@@ -15,7 +15,7 @@ export function systemTimezone(): string {
 function build(expr: string, timezone: string): Cron {
   // Six and seven field patterns add seconds and years; the UI offers neither.
   if (expr.trim().split(/\s+/).length !== 5) {
-    throw new ScheduledTaskValidationError("cron expression must have exactly five fields");
+    throw new ScheduledTaskValidationError("cron expression must have exactly five fields", "scheduled.error.cronFields");
   }
   try {
     const cron = new Cron(expr.trim(), { timezone, paused: true });
@@ -25,9 +25,9 @@ function build(expr: string, timezone: string): Cron {
   } catch (error) {
     if (error instanceof ScheduledTaskValidationError) throw error;
     const message = error instanceof Error ? error.message : String(error);
-    throw new ScheduledTaskValidationError(
-      /timezone/i.test(message) ? `invalid timezone: ${timezone}` : `invalid cron expression: ${expr}`,
-    );
+    throw /timezone/i.test(message)
+      ? new ScheduledTaskValidationError(`invalid timezone: ${timezone}`, "scheduled.error.timezone", { zone: timezone })
+      : new ScheduledTaskValidationError(`invalid cron expression: ${expr}`, "scheduled.error.cronInvalid", { expr });
   }
 }
 
@@ -40,6 +40,8 @@ export function validateCron(expr: string, timezone: string, from: Date = new Da
     if (gapMinutes < MIN_INTERVAL_MINUTES) {
       throw new ScheduledTaskValidationError(
         `runs must be at least ${MIN_INTERVAL_MINUTES} minutes apart`,
+        "scheduled.error.interval",
+        { minutes: MIN_INTERVAL_MINUTES },
       );
     }
   }
