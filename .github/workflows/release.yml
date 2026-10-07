@@ -103,37 +103,43 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.5.1
+            ## Pi Agent Desktop 0.6.0
 
-            A fix release for 0.5.0. The main change: **Code mode did not work in the installed app** and now does.
+            New in this release: **scheduled tasks**. Run a saved prompt in a new session on a schedule.
 
-            ### Fixes
+            ### New
 
-            - Code mode: the packaged app was missing the sandbox's runtime files, so every session reported "Cannot find module .../quickjs-wasi/quickjs.wasm" and Code mode (and any MCP tool reachable only through it) was switched off. The sandbox files are now shipped with the app.
-            - Composer: after a run finished, the send button could do nothing when the draft was unchanged, because it still treated the session as streaming.
-            - Packaging: extension loading and the Code mode sandbox files are now placed wherever the dependency tree puts them, instead of at one fixed path.
+            - Scheduled tasks: a **Scheduled** entry under New Session opens a page to create, edit, pause, run and delete tasks. Pick hourly, daily, weekdays, weekly, a custom cron expression or a single time; each run opens its own session and keeps a run history.
+            - Tasks run while Pi is running, including when its window is hidden in the tray. If the computer slept or the app was closed through a slot, the newest missed run happens once when it is back.
+            - Runs are unattended, so a task starts with **read-only tools** by default. Choosing tools that can change files or run commands asks for an explicit confirmation.
+            - Notifications say how each run ended: finished, failed with the error, stopped at its time limit, or waiting for your input. A task that fails five times in a row pauses itself.
+            - The sessions a task creates are kept out of the project list and shown under Scheduled instead; deleting a task returns them to the project list.
 
-            ### Updates
+            ### Good to know
 
-            - Bundled pi is now 1.0.2, which also clears a known denial-of-service advisory in a dependency.
+            - Only one running copy of Pi starts scheduled tasks (for example the desktop app, not also a dev server on the same data).
+            - Old runs are not deleted automatically; remove sessions you no longer need.
 
             Bundled components: pi 1.0.2, pi-web 0.10.0.
 
             ---
 
-            ## Pi Agent Desktop 0.5.1
+            ## Pi Agent Desktop 0.6.0
 
-            这是 0.5.0 的修复版本。最主要的变化：**已安装的 App 里 Code mode 无法使用，现已修复。**
+            这个版本的新功能：**定时任务**，按计划在新会话里运行保存好的提示词。
 
-            ### 修复
+            ### 新增
 
-            - Code mode：打包后的 App 缺少沙箱运行所需的文件，每个会话都会提示 "Cannot find module .../quickjs-wasi/quickjs.wasm"，Code mode（以及只能通过它调用的 MCP 工具）因此被关闭。现在这些文件已随 App 一起发布。
-            - 输入框：一次运行结束后，如果草稿没有变化，发送按钮可能没有反应，因为它仍把会话当作正在流式输出。
-            - 打包：扩展加载和 Code mode 沙箱所需的文件现在会放到依赖树实际所在的位置，不再固定写死一个路径。
+            - 定时任务：New Session 下方新增 **Scheduled（定时任务）** 入口，可在页面中创建、编辑、暂停、立即运行和删除任务。支持每小时、每天、工作日、每周、自定义 cron 表达式或仅一次；每次运行都会开启独立的会话，并保留运行历史。
+            - 只要 Pi 在运行（包括窗口收起到托盘），任务就会执行。电脑睡眠或 App 关闭时错过的时间点，回来后会把最近的一次补跑一次。
+            - 运行时没有人在场，所以任务默认使用**只读工具**。选择可以修改文件或运行命令的工具时，需要你明确确认。
+            - 通知会说明每次运行的结果：已完成、失败（附带错误）、达到时间上限被停止，或在等待你的输入。连续失败五次的任务会自动暂停。
+            - 任务产生的会话不会出现在项目列表里，而是显示在定时任务页面中；删除任务后，这些会话会回到项目列表。
 
-            ### 更新
+            ### 需要了解
 
-            - 内置 pi 升级到 1.0.2，同时清除了一个依赖中已知的拒绝服务公告。
+            - 同一份数据同一时刻只有一个运行中的 Pi 会启动定时任务（例如桌面 App，而不是同时再开一个使用同一份数据的开发服务器）。
+            - 旧的运行不会被自动删除，不再需要的会话请自行清理。
 
             内置组件版本：pi 1.0.2、pi-web 0.10.0。
           releaseDraft: true
