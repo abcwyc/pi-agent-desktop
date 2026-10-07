@@ -1,6 +1,6 @@
 # Scheduled（定时任务）设计 Spec
 
-状态:**M1(服务端)、M2(界面)已实现并通过验证**,M3 进行中:通知区分成败已完成,Tauri 实机与打包验证未做。范围:P0 完整定义,P1 列出接口预留,P2 明确不做。
+状态:**M1(服务端)、M2(界面)已实现并通过验证**,M3 进行中:通知区分成败、打包路径验证已完成,Tauri 实机(托盘隐藏时的通知)未做。范围:P0 完整定义,P1 列出接口预留,P2 明确不做。
 
 > 本文按实现结果更新过。与最初草案不同的地方集中在 §11「M1 实现记录」。
 
@@ -106,7 +106,7 @@ instrumentation.ts  服务启动时拉起 scheduler
 
 仓库已有 `instrumentation.ts`,它把 Node 专用逻辑转交给 `instrumentation-node.ts`(HTTP dispatcher、SSE 关闭等,桌面包里已经在用)。调度器在 `registerNodeInstrumentation()` 里启动;设 `PI_WEB_DISABLE_SCHEDULER=1` 可关闭(测试、特殊环境用)。理由:route handler 是懒加载的,不能等有人打开页面才开始调度。
 
-已验证:`next dev` 启动后调度器自己拿到租约,早于任何 API 请求。standalone 打包路径依赖同一个 `register()`,桌面包里现有逻辑已在使用它,尚未单独跑一次打包验证。
+已验证:`next dev` 与 standalone 打包后的服务,启动时调度器都自己拿到租约,早于任何 API 请求。
 
 ### 4.3 调度循环
 
@@ -253,7 +253,7 @@ scheduler_owner   { owner: boolean }
 
 ## 10. 开放问题与待验证项
 
-1. ~~`instrumentation` 是否在服务启动时执行~~ — `next dev` 已验证通过;standalone 打包路径还差一次 `npm run desktop:prepare && npm run desktop:verify` 之后的实机确认(§4.2)。
+1. ~~`instrumentation` 是否在服务启动时执行~~ — `next dev` 与 standalone 打包路径都已验证通过(§14)。
 2. 隐藏到托盘后 WebView 的 SSE 与 JS 是否存活(决定 §5.4 用前端还是 Rust 侧通知)。**仍未验证**,需要在 Tauri 实机上做,无头环境做不了。
 3. 会话从项目树隐藏后,打开它时侧边栏没有可高亮的行,AppShell 对"选中但不在树里的会话"的处理需要确认。
 4. 会话重命名走哪个现有命令(§4.4 第 5 步),实现时核对。
@@ -319,4 +319,15 @@ scheduler_owner   { owner: boolean }
 **验证**:浏览器里用桩替换 `Notification`、让文档失焦后各触发一次成功和失败的运行,各收到恰好一条,标题、正文、`tag` 与预期一致。
 
 **已知的小重复**:用户正打开着某次定时运行的会话、窗口又在后台时,运行结束会收到本通知和通用的"会话完成"通知各一条。区分它们需要知道这一轮是不是定时运行本身,暂不处理。
+
+## 14. M3 · 打包路径验证
+
+`npm run desktop:prepare`(webpack 生产构建,输出到被 gitignore 的 `.next-desktop` 与 `src-tauri/resources/`)与 `npm run desktop:verify`(Code mode 沙箱自检)都通过;构建里 7 条 `/api/scheduled-tasks/**` 路由齐全。构建的一条 "Critical dependency" 警告来自 `sessions/[id]/export` 路由,与本功能无关。
+
+随后用打包出的服务(捆绑的 Node、`NODE_ENV=production`、隔离的 HOME 与 agent 目录、本地假模型,启动方式与 verify 脚本相同)验证:
+- 服务就绪时 `scheduler.lock` 已存在,pid 即服务进程,`/api/scheduled-tasks` 返回 `owner: true`。
+- 手动运行成功;`/api/sessions` 给该会话标上 `relation: scheduled`;模型收到的工具恰为 `read/grep/find/ls`。
+- 一次性任务在无人操作下于到点后 4 秒自动触发,运行成功,任务随后自动停用。
+
+**仍未验证**:托盘隐藏时的原生通知(需要 Tauri 实机)、睡眠唤醒后的真实补跑。
 
