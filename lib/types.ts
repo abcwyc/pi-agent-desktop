@@ -403,6 +403,9 @@ export interface SessionInfo {
    *  UI; only subagent relations form a visible parent/child tree. */
   relation?:
     | { kind: "fork"; originSessionId?: string }
+    /** Output of a scheduled task's run. Attached by /api/sessions from the run
+     *  index, hidden from the project tree and shown under Scheduled instead. */
+    | { kind: "scheduled"; taskId: string; runId: string }
     | {
         kind: "subagent";
         parentSessionId: string;

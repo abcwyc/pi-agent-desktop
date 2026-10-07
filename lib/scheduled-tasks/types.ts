@@ -68,6 +68,14 @@ export interface ScheduledRun {
   pid?: number;
 }
 
+/** A task as the API returns it: stored fields plus what is derived on read. */
+export interface ScheduledTaskView extends ScheduledTask {
+  nextRunAt: string | null;
+  lastRun: ScheduledRun | null;
+  /** Finished runs whose session the user has not opened yet. */
+  unreadRuns: number;
+}
+
 export class ScheduledTaskValidationError extends Error {
   readonly code = "validation";
   constructor(message: string) {

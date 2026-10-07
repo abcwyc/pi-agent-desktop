@@ -146,6 +146,31 @@ const FORK_FEATURES = [
     markers: ["file-tab-bar", "file-tab-label", "file-tab-close"],
   },
   {
+    name: "Scheduled entry in the sidebar",
+    file: "components/SessionSidebar.tsx",
+    // The row under New Session, and the filter that keeps scheduled runs out of the
+    // project tree. Losing the filter would bury a user's own sessions under every
+    // run of an hourly task; losing the row leaves the feature unreachable.
+    markers: ["ScheduledSidebarRow", "onOpenScheduled", 'relation?.kind !== "scheduled"'],
+  },
+  {
+    name: "Scheduled page in AppShell",
+    file: "components/AppShell.tsx",
+    // The page covers the chat without unmounting it. Picking a session or starting a
+    // new one must close it, and the cold-start restore must not.
+    markers: ["ScheduledView", "scheduledOpen", "scheduledOpenRef", "handleOpenScheduled", "setScheduledOpen(false)"],
+  },
+  {
+    name: "scheduled runs are tagged in the session list",
+    file: "app/api/sessions/route.ts",
+    markers: ["attachScheduledRelations"],
+  },
+  {
+    name: "scheduler starts with the server",
+    file: "instrumentation-node.ts",
+    markers: ["startScheduler"],
+  },
+  {
     name: "native theme layer",
     file: "app/layout.tsx",
     // Dropping this import silently reverts the entire restyle to upstream.

@@ -9,6 +9,7 @@ import { useNativeAppMenu } from "@/hooks/useNativeAppMenu";
 import { selectProjectDirectoryNative } from "./ProjectPicker";
 import { SessionSidebar } from "./SessionSidebar";
 import { ChatWindow } from "./ChatWindow";
+import { ScheduledView } from "./scheduled/ScheduledView";
 import type { ChatScrollPosition } from "@/lib/chat-scroll-position";
 import { clearDraft } from "@/lib/draft-store";
 import { TabBar, type Tab } from "./TabBar";
@@ -151,6 +152,11 @@ export function AppShell() {
     if (soundEnabledRef.current) playDoneSound();
   }, [playDoneSound, soundEnabledRef]);
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null);
+  // The Scheduled page covers the chat area without unmounting it, so the open session keeps its state.
+  const [scheduledOpen, setScheduledOpen] = useState(() => searchParams?.get("view") === "scheduled");
+  // Read by handleSelectSession, whose identity must not change when the page opens.
+  const scheduledOpenRef = useRef(scheduledOpen);
+  useEffect(() => { scheduledOpenRef.current = scheduledOpen; }, [scheduledOpen]);
   const [explorerUploadBusy, setExplorerUploadBusy] = useState(false);
   const fileExplorerRef = useRef<FileExplorerHandle>(null);
   const [fileTreeOpen, setFileTreeOpen] = useState(true);
@@ -934,6 +940,8 @@ export function AppShell() {
   }, [activeCwd, activeFileTabId, invalidateWorkspaceRestore, newSessionCwd, router, selectedSession, restoreWorkspaceContext]);
 
   const handleSelectSession = useCallback((session: SessionInfo, isRestore = false, entryId?: string, blockIndex?: number) => {
+    // Picking a session means leaving Scheduled; a cold-start restore must not.
+    if (!isRestore) setScheduledOpen(false);
     setSearchTarget(entryId ? { sessionId: session.id, entryId, blockIndex } : null);
     invalidateWorkspaceRestore();
     const activeDraftKey = activeNewSessionDraftKeyRef.current;
@@ -992,12 +1000,15 @@ export function AppShell() {
     // replace in production Next.js triggers a Suspense remount loop.
     // Tab-memory restore lands on `/` and must write `?session=` so reload
     // and copy-link keep this session.
-    if (!isRestore || new URLSearchParams(window.location.search).get("session") !== session.id) {
+    if (isRestore && scheduledOpenRef.current) {
+      // A cold-start restore behind the Scheduled page leaves `?view=scheduled` alone.
+    } else if (!isRestore || new URLSearchParams(window.location.search).get("session") !== session.id) {
       router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
     }
   }, [activeCwd, activeFileTabId, invalidateWorkspaceRestore, router, isMobile, newSessionCwd, selectedSession]);
 
   const handleNewSession = useCallback((sessionId: string, cwd: string) => {
+    setScheduledOpen(false);
     invalidateWorkspaceRestore();
     // "New task" is an explicit reset. A cwd-based blank-task draft would
     // otherwise be reloaded immediately when the composer remounts (legacy
@@ -1112,6 +1123,21 @@ export function AppShell() {
       console.error("[pi-web] failed to open session:", error instanceof Error ? error.message : error);
     }
   }, [handleSelectSession, sessionCatalog]);
+
+  const handleOpenScheduled = useCallback(() => {
+    setScheduledOpen(true);
+    if (isMobile) setSidebarOpen(false);
+    // Skip the replace when the URL already says so (see handleSelectSession).
+    if (new URLSearchParams(window.location.search).get("view") !== "scheduled") {
+      router.replace("?view=scheduled", { scroll: false });
+    }
+  }, [isMobile, router]);
+
+  // Validated and allow-listed like any project pick, which /api/models needs for the new folder.
+  const handleBrowseScheduledFolder = useCallback(
+    () => selectProjectDirectoryNative(selectedSession?.cwd ?? newSessionCwd ?? activeCwd, ""),
+    [selectedSession?.cwd, newSessionCwd, activeCwd],
+  );
 
   // Called by ChatWindow when a new session gets its real id from pi
   const handleSessionCreated = useCallback((session: SessionInfo, sourceDraftKey: string) => {
@@ -1524,12 +1550,14 @@ export function AppShell() {
   const activeFileTab = fileTabs.find((tab) => tab.id === activeFileTabId) ?? null;
   const activeCwdName = activeCwd ? getFileName(activeCwd) || activeCwd : null;
   const windowTitle = activeCwdName ? `${activeCwdName} - ${PRODUCT_NAME}` : PRODUCT_NAME;
-  const topBarTitle = selectedSession
-    ? selectedSession.name || selectedSession.firstMessage || translate("appshell.untitledTask")
-    : showChat
-      ? translate("appshell.newTask")
-      : PRODUCT_NAME;
-  const topBarSubtitle = activeCwdName ?? translate("appshell.subtitle");
+  const topBarTitle = scheduledOpen
+    ? translate("scheduled.title")
+    : selectedSession
+      ? selectedSession.name || selectedSession.firstMessage || translate("appshell.untitledTask")
+      : showChat
+        ? translate("appshell.newTask")
+        : PRODUCT_NAME;
+  const topBarSubtitle = scheduledOpen ? "" : activeCwdName ?? translate("appshell.subtitle");
 
   useEffect(() => {
     const syncWindowTitle = () => {
@@ -1592,6 +1620,8 @@ export function AppShell() {
         onBackgroundTaskDone={handleBackgroundTaskDone}
         onRunningSessionIdsChange={handleRunningSessionIdsChange}
         onSessionsChange={handleSessionsChange}
+        onOpenScheduled={handleOpenScheduled}
+        scheduledOpen={scheduledOpen}
       />
     </>
   );
@@ -1849,7 +1879,7 @@ export function AppShell() {
             <span>{topBarTitle}</span>
             <small>{topBarSubtitle}</small>
           </div>
-          {showChat && projectTrust?.requiresTrust && !projectTrust.trusted && (
+          {showChat && !scheduledOpen && projectTrust?.requiresTrust && !projectTrust.trusted && (
             <button
               type="button"
               onClick={() => {
@@ -1885,7 +1915,7 @@ export function AppShell() {
               {!isMobile && <span>{translate("trust.resourcesNotLoaded")}</span>}
             </button>
           )}
-          {showChat && (
+          {showChat && !scheduledOpen && (
             <div className="app-topbar-actions" style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
               <button
                 className="native-toolbar-button"
@@ -2440,11 +2470,11 @@ export function AppShell() {
         </div>
         <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
       {/* Center: chat */}
-      <div inert={rightPanelFullWidth} style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+      <div inert={rightPanelFullWidth} style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, position: "relative" }}>
         {isMobile && renderProjectTrustWarning(true)}
 
         {/* Chat content */}
-        <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+        <div inert={scheduledOpen} aria-hidden={scheduledOpen || undefined} style={{ flex: 1, overflow: "hidden", position: "relative" }}>
           {showChat ? (
             <ChatWindow
               key={sessionKey}
@@ -2527,6 +2557,15 @@ export function AppShell() {
             )
           ) : null}
         </div>
+
+        {scheduledOpen && (
+          <ScheduledView
+            projectRoots={availableProjectRoots}
+            defaultCwd={selectedSession?.cwd ?? newSessionCwd ?? activeCwd}
+            onBrowseFolder={desktopMode ? handleBrowseScheduledFolder : undefined}
+            onOpenSession={(sessionId) => void handleOpenSession(sessionId)}
+          />
+        )}
       </div>
 
       {/* Mobile keeps this fixed toggle (the desktop topbar renders its own);

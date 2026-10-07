@@ -4,16 +4,9 @@ import { nextCronRun } from "./cron";
 import { listRuns } from "./store";
 import {
   isValidationError,
-  type ScheduledRun,
   type ScheduledTask,
+  type ScheduledTaskView,
 } from "./types";
-
-/** A task as the API returns it: stored fields plus what is derived on read. */
-export interface ScheduledTaskView extends ScheduledTask {
-  nextRunAt: string | null;
-  lastRun: ScheduledRun | null;
-  unreadRuns: number;
-}
 
 export function toTaskView(task: ScheduledTask, now = new Date()): ScheduledTaskView {
   const runs = listRuns(task.id);

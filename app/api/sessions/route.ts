@@ -13,6 +13,7 @@ import {
   getRunningRpcSessionIds,
 } from "@/lib/rpc-manager";
 import { startServerPerf } from "@/lib/perf";
+import { attachScheduledRelations } from "@/lib/scheduled-tasks/run-index";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export async function GET(req: Request) {
       attachSessionProjectInfo(getRpcSessionInfos()),
     ]);
     perf?.span("scan+projects");
-    const sessions = mergeSessionLists(persistedSessions, runtimeSessions);
+    const sessions = attachScheduledRelations(mergeSessionLists(persistedSessions, runtimeSessions));
     return perf?.attach(jsonResponse(
       req,
       {
