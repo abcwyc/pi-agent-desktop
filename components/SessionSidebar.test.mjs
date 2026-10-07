@@ -151,3 +151,34 @@ test("session rows swap a compact time for the action button in one fixed-width 
   // Transient runtime rows have neither actions nor a reliable time.
   assert.match(sessionItemSource, /\{!session\.transient && \(\s*<div\s+className="session-item-trailing"/);
 });
+
+test("project header shows a session count and chips only while folded", () => {
+  // A folded project hides its rows, so the header carries the count.
+  assert.match(source, /\{isCollapsed && \(\s*<span className="sidebar-project-tree-count"[^>]*>\s*\(\{groupTree\.length\}\)/);
+  assert.match(source, /\{isCollapsed && \(\s*<span className="sidebar-project-tree-meta">/);
+  // The branch moved from the row into its tooltip.
+  assert.doesNotMatch(source, /className="sidebar-project-tree-branch"/);
+  assert.match(source, /title=\{rowTitle\}/);
+});
+
+test("project header keeps its actions hover-only with a chevron on the right", async () => {
+  const css = await readFile(new URL("../app/native-theme.css", import.meta.url), "utf8");
+  assert.match(source, /className="sidebar-project-tree-chevron-button"/);
+  assert.match(css, /\.sidebar-project-tree-row-actions \{[^}]*opacity: 0;[^}]*pointer-events: none;/);
+  assert.match(css, /\.sidebar-project-tree-row\.is-menu-open \.sidebar-project-tree-row-actions/);
+  assert.match(css, /@media \(hover: none\) \{\s*\.sidebar-project-tree-row-actions \{\s*opacity: 1;/);
+});
+
+test("folded projects persist across reloads", () => {
+  assert.match(source, /getPrefJson<unknown>\(APP_PREF_KEYS\.collapsedProjects\)/);
+  assert.match(source, /setPrefJson\(APP_PREF_KEYS\.collapsedProjects, \[\.\.\.collapsedProjects\]\)/);
+  // "Collapse all" must look at the visible projects, not the stored set's size.
+  assert.match(source, /allProjects\.some\(\(g\) => !collapsedProjects\.has\(g\.projectRoot\)\)/);
+});
+
+test("the row menu shows the compaction count only when the session was compacted", () => {
+  assert.match(
+    sessionItemSource,
+    /\{\(session\.compactionCount \?\? 0\) > 0 && \(\s*<div>\{t\("sidebar\.compactionCount", \{ count: session\.compactionCount \?\? 0 \}\)\}<\/div>/,
+  );
+});

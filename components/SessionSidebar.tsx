@@ -237,7 +237,12 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [wtPollTick, setWtPollTick] = useState(0);
   const wtDropdownRef = useRef<HTMLDivElement>(null);
   const wtNewInputRef = useRef<HTMLInputElement>(null);
-  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => new Set());
+  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => {
+    const stored = getPrefJson<unknown>(APP_PREF_KEYS.collapsedProjects);
+    return Array.isArray(stored)
+      ? new Set(stored.filter((root): root is string => typeof root === "string"))
+      : new Set();
+  });
   const [expandedProjectSessions, setExpandedProjectSessions] = useState<Set<string>>(() => new Set());
   const [archivedProjectRoots, setArchivedProjectRoots] = useState<Set<string>>(() => {
     const stored = getPrefJson<unknown>(APP_PREF_KEYS.archivedProjects);
@@ -410,6 +415,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   useEffect(() => {
     setPrefJson(APP_PREF_KEYS.archivedProjects, [...archivedProjectRoots]);
   }, [archivedProjectRoots]);
+
+  useEffect(() => {
+    if (collapsedProjects.size === 0) removePref(APP_PREF_KEYS.collapsedProjects);
+    else setPrefJson(APP_PREF_KEYS.collapsedProjects, [...collapsedProjects]);
+  }, [collapsedProjects]);
 
   useEffect(() => {
     // Live running status via SSE — no polling. The server pushes the current
@@ -1137,44 +1147,59 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       if (!isActive) setSelectedCwd(group.projectRoot);
     };
 
+    const isMenuOpen = projectMenu?.root === group.projectRoot;
+    const rowTitle = branchSubtitle ? `${group.projectRoot} · ${branchSubtitle}` : group.projectRoot;
+
     return (
       <div key={group.projectRoot} className={`sidebar-project-tree-group${isCollapsed ? " is-collapsed" : ""}${isActive ? " is-active" : ""}`}>
-        <div className="sidebar-project-tree-row">
+        <div className={`sidebar-project-tree-row${isMenuOpen ? " is-menu-open" : ""}`}>
           <button
             type="button"
             className="sidebar-project-tree-row-main"
             onClick={toggleCollapse}
             aria-expanded={!isCollapsed}
-            title={group.projectRoot}
+            title={rowTitle}
           >
             <span className="sidebar-project-tree-folder" aria-hidden="true">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+              {/* Closed folder vs. folder with its flap lifted; the closed one
+                  carries a faint fill so the pair reads as shut / open. */}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                 {isCollapsed ? (
-                  <path d="M3.5 6.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5Z" />
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                    fill="currentColor"
+                    fillOpacity="0.1"
+                  />
                 ) : (
-                  <path d="M3.5 7.5h6l2 2H21l-2 9.5H5a1.5 1.5 0 0 1-1.5-1.5Z" />
+                  <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />
                 )}
               </svg>
             </span>
             <span className="sidebar-project-tree-name">{group.displayName}</span>
-            {branchSubtitle && (
-              <span className="sidebar-project-tree-branch" title={branchSubtitle}>
-                {branchSubtitle}
+            {/* A folded project hides its rows, so the count (and any running
+                or unread chips) must stay readable on the header itself. */}
+            {isCollapsed && (
+              <span className="sidebar-project-tree-count" title={t("sidebar.sessionCount", { count: groupTree.length })}>
+                ({groupTree.length})
               </span>
             )}
-            <span className="sidebar-project-tree-meta">
-              {runningCount > 0 && (
-                <span className="sidebar-project-tree-chip is-running" title={t("sidebar.runningCount", { count: runningCount })}>
-                  {runningCount}
-                </span>
-              )}
-              {unreadCount > 0 && (
-                <span className="sidebar-project-tree-chip is-unread" title={t("sidebar.unreadCount", { count: unreadCount })}>
-                  {unreadCount}
-                </span>
-              )}
-            </span>
+            {isCollapsed && (
+              <span className="sidebar-project-tree-meta">
+                {runningCount > 0 && (
+                  <span className="sidebar-project-tree-chip is-running" title={t("sidebar.runningCount", { count: runningCount })}>
+                    {runningCount}
+                  </span>
+                )}
+                {unreadCount > 0 && (
+                  <span className="sidebar-project-tree-chip is-unread" title={t("sidebar.unreadCount", { count: unreadCount })}>
+                    {unreadCount}
+                  </span>
+                )}
+              </span>
+            )}
           </button>
+          {/* Hover-only overlay, left of the chevron: it covers the tail of a
+              long name instead of reserving width the rest of the time. */}
           <div className="sidebar-project-tree-row-actions" data-no-drag>
             <button
               type="button"
@@ -1194,7 +1219,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               onClick={(e) => openProjectMenu(e, group.projectRoot)}
               title={t("sidebar.moreActions")}
               aria-label={t("sidebar.moreActions")}
-              aria-expanded={projectMenu?.root === group.projectRoot}
+              aria-expanded={isMenuOpen}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <circle cx="5" cy="12" r="1.6" />
@@ -1203,6 +1228,18 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               </svg>
             </button>
           </div>
+          {/* Redundant with the row button for keyboards and screen readers. */}
+          <button
+            type="button"
+            className="sidebar-project-tree-chevron-button"
+            onClick={toggleCollapse}
+            tabIndex={-1}
+            aria-hidden="true"
+          >
+            <svg className="sidebar-project-tree-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
         </div>
         {!isCollapsed && (
           <div className="sidebar-project-tree-children">
@@ -1885,7 +1922,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 title={t("sidebar.moreActions")}
                 aria-label={t("sidebar.moreActions")}
                 onClick={() => {
-                  if (collapsedProjects.size === 0) {
+                  if (allProjects.some((g) => !collapsedProjects.has(g.projectRoot))) {
                     setCollapsedProjects(new Set(allProjects.map((g) => g.projectRoot)));
                   } else {
                     setCollapsedProjects(new Set());
@@ -2667,6 +2704,9 @@ function SessionItem({
                 <div title={session.created}>
                   {formatRelativeTime(session.modified, locale)} · {t("sidebar.messagesCount", { count: session.messageCount })}
                 </div>
+                {(session.compactionCount ?? 0) > 0 && (
+                  <div>{t("sidebar.compactionCount", { count: session.compactionCount ?? 0 })}</div>
+                )}
                 {session.worktreeBranch && (
                   <div title={`Worktree: ${session.cwd}`} style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--accent)", minWidth: 0 }}>
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>

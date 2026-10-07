@@ -20,6 +20,8 @@ export interface ScannedSessionInfo {
 	created: Date;
 	modified: Date;
 	messageCount: number;
+	/** Number of `compaction` entries in the file; absent when zero. */
+	compactionCount?: number;
 	firstMessage: string;
 	parentSessionPath?: string;
 	/** True when only header/stat metadata was available for this listing. */
@@ -44,7 +46,8 @@ function isRecord(value: unknown): value is RawEntry {
 	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-const INDEX_FORMAT_VERSION = 1;
+// 2: entries carry compactionCount; v1 entries would silently report none.
+const INDEX_FORMAT_VERSION = 2;
 
 declare global {
 	var __piWebScanIndex: Map<string, IndexEntry> | undefined;
@@ -163,6 +166,7 @@ export async function scanSessionFileInfo(
 		let header: RawEntry | null = null;
 		let name: string | undefined;
 		let messageCount = 0;
+		let compactionCount = 0;
 		let firstMessage = "";
 		let lastActivityTime: number | undefined;
 
@@ -187,6 +191,7 @@ export async function scanSessionFileInfo(
 						? entry.name.trim()
 						: undefined;
 			}
+			if (entry.type === "compaction") compactionCount++;
 			if (entry.type !== "message") continue;
 			messageCount++;
 
@@ -236,6 +241,7 @@ export async function scanSessionFileInfo(
 			created: new Date(header.timestamp as string),
 			modified,
 			messageCount,
+			...(compactionCount > 0 ? { compactionCount } : {}),
 			firstMessage: firstMessage || "(no messages)",
 		};
 	} catch {
@@ -314,6 +320,7 @@ function loadPersistedIndex(): void {
 				(info.name !== undefined && typeof info.name !== "string") ||
 				(info.parentSessionPath !== undefined && typeof info.parentSessionPath !== "string") ||
 				typeof info.messageCount !== "number" || !Number.isSafeInteger(info.messageCount) || info.messageCount < 0 ||
+				(info.compactionCount !== undefined && (typeof info.compactionCount !== "number" || !Number.isSafeInteger(info.compactionCount) || info.compactionCount <= 0)) ||
 				typeof info.created !== "string" || typeof info.modified !== "string"
 			) continue;
 			const created = new Date(info.created);
@@ -329,6 +336,7 @@ function loadPersistedIndex(): void {
 					parentSessionPath: info.parentSessionPath,
 					firstMessage: info.firstMessage,
 					messageCount: info.messageCount,
+					...(typeof info.compactionCount === "number" ? { compactionCount: info.compactionCount } : {}),
 					created,
 					modified,
 				},

@@ -1915,8 +1915,8 @@ html.dark .sidebar-view-switcher-thumb {
 
 .sidebar-project-tree-folder {
   display: flex;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
@@ -1977,6 +1977,91 @@ html.dark .sidebar-view-switcher-thumb {
 .sidebar-project-tree-chip.is-unread {
   color: #0891b2;
   background: color-mix(in srgb, #0891b2 14%, transparent);
+}
+
+/* Project header: name + chevron at rest; "+" and "…" fade in over the row's
+   right end on hover/focus. A folded project also shows its session count. */
+.sidebar-project-tree-row {
+  position: relative;
+}
+
+.sidebar-project-tree-row:has(:focus-visible),
+.sidebar-project-tree-row.is-menu-open {
+  background: var(--bg-hover);
+}
+
+.sidebar-project-tree-name {
+  color: inherit;
+}
+
+.sidebar-project-tree-count {
+  flex: 0 0 auto;
+  margin-left: -2px;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar-project-tree-row-actions {
+  position: absolute;
+  top: 50%;
+  /* 10px row padding + 22px chevron button + 2px gap */
+  right: 34px;
+  flex-direction: row;
+  gap: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 100ms ease;
+}
+
+.sidebar-project-tree-row:hover .sidebar-project-tree-row-actions,
+.sidebar-project-tree-row:has(:focus-visible) .sidebar-project-tree-row-actions,
+.sidebar-project-tree-row.is-menu-open .sidebar-project-tree-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* The overlay has no backdrop of its own, so make room for it instead: a long
+   name truncates earlier while the buttons are showing. */
+.sidebar-project-tree-row:hover .sidebar-project-tree-row-main,
+.sidebar-project-tree-row:has(:focus-visible) .sidebar-project-tree-row-main,
+.sidebar-project-tree-row.is-menu-open .sidebar-project-tree-row-main {
+  padding-right: 52px;
+}
+
+/* No hover on touch: keep the actions reachable. */
+@media (hover: none) {
+  .sidebar-project-tree-row-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .sidebar-project-tree-row-main {
+    padding-right: 52px;
+  }
+}
+
+.sidebar-project-tree-chevron-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin-right: -2px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.sidebar-project-tree-row:hover .sidebar-project-tree-chevron-button {
+  color: var(--text-muted);
 }
 
 .sidebar-project-tree-children {
