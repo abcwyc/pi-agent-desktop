@@ -256,7 +256,7 @@ export class Scheduler {
       } else {
         outcome = await executeRun(task, { runId, trigger: info.trigger, scheduledFor: info.scheduledFor }, this.options.runnerDeps, (sessionId) => {
           const withSession = updateRun(task.id, runId, (run) => ({ ...run, sessionId }), this.agentDir) ?? { ...record, sessionId };
-          emitScheduledTaskEvent({ type: "run_started", taskId: task.id, runId, sessionId, trigger: info.trigger });
+          emitScheduledTaskEvent({ type: "run_started", taskId: task.id, taskName: task.name, runId, sessionId, trigger: info.trigger });
           announce(withSession);
         });
       }
@@ -267,13 +267,16 @@ export class Scheduler {
         ...(outcome.sessionId ? { sessionId: outcome.sessionId } : {}),
         ...(outcome.error ? { error: outcome.error } : {}),
       }), this.agentDir) ?? { ...record, status: outcome.status };
-      this.recordOutcome(task.id, outcome);
+      const autoPaused = this.recordOutcome(task.id, outcome);
       announce(finished);
       emitScheduledTaskEvent({
         type: "run_finished",
         taskId: task.id,
+        taskName: task.name,
         runId,
+        trigger: info.trigger,
         status: outcome.status,
+        ...(autoPaused ? { autoPaused: true } : {}),
         ...(outcome.sessionId ? { sessionId: outcome.sessionId } : {}),
         ...(outcome.error ? { error: outcome.error } : {}),
       });
@@ -285,12 +288,15 @@ export class Scheduler {
     return { done, sessionKnown };
   }
 
-  private recordOutcome(taskId: string, outcome: RunOutcome): void {
+  /** Update the failure count. Returns whether this outcome paused the task. */
+  private recordOutcome(taskId: string, outcome: RunOutcome): boolean {
+    let paused = false;
     updateTask(taskId, (task) => {
       if (outcome.status === "succeeded") return { ...task, consecutiveFailures: 0 };
       if (!outcome.countsAsFailure) return task;
       const failures = task.consecutiveFailures + 1;
       if (failures >= MAX_CONSECUTIVE_FAILURES && task.enabled) {
+        paused = true;
         return {
           ...task,
           consecutiveFailures: failures,
@@ -300,5 +306,6 @@ export class Scheduler {
       }
       return { ...task, consecutiveFailures: failures };
     }, this.agentDir);
+    return paused;
   }
 }

@@ -1601,5 +1601,10 @@ export const zhTWLocale: LocalePlugin = {
     "scheduled.run.skip.overlap": "上一次執行尚未結束",
     "scheduled.run.skippedSlots": "已略過的更早執行:{count}",
     "scheduled.run.unread": "尚未檢視",
+    "scheduled.notify.succeeded": "定時任務已完成",
+    "scheduled.notify.failed": "定時任務失敗",
+    "scheduled.notify.stopped": "定時任務已停止",
+    "scheduled.notify.catchUp": "定時任務正在補跑",
+    "scheduled.notify.pausedNote": "連續失敗後已自動暫停。",
   },
 };

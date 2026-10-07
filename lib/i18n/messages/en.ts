@@ -1601,5 +1601,10 @@ export const enLocale: LocalePlugin = {
     "scheduled.run.skip.overlap": "The previous run was still going",
     "scheduled.run.skippedSlots": "Earlier runs skipped: {count}",
     "scheduled.run.unread": "Not opened yet",
+    "scheduled.notify.succeeded": "Scheduled task finished",
+    "scheduled.notify.failed": "Scheduled task failed",
+    "scheduled.notify.stopped": "Scheduled task stopped",
+    "scheduled.notify.catchUp": "Scheduled task is catching up",
+    "scheduled.notify.pausedNote": "It was paused after repeated failures.",
   },
 };

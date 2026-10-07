@@ -1,5 +1,5 @@
 import { getToolNamesForPreset } from "../tool-presets";
-import type { RunStatus, RunTrigger, ScheduledTask } from "./types";
+import { STOPPED_BY_USER, type RunStatus, type RunTrigger, type ScheduledTask } from "./types";
 
 /** Custom session entry that marks a session as the output of a scheduled run. */
 export const SCHEDULED_RUN_ENTRY_TYPE = "pi-web:scheduled-run";
@@ -134,7 +134,7 @@ export async function executeRun(
       return { status: "failed", error: message, sessionId, countsAsFailure: true };
     }
     if (stopReason === "aborted") {
-      return { status: "aborted", error: "Stopped by the user", sessionId, countsAsFailure: false };
+      return { status: "aborted", error: STOPPED_BY_USER, sessionId, countsAsFailure: false };
     }
     return { status: "succeeded", sessionId, countsAsFailure: false };
   } catch (error) {

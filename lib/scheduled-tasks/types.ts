@@ -97,9 +97,23 @@ export function isValidationError(error: unknown): error is ScheduledTaskValidat
   return isNamedError(error, "ScheduledTaskValidationError");
 }
 
+/** The error text of a run the user stopped by hand; no notification is worth sending for it. */
+export const STOPPED_BY_USER = "Stopped by the user";
+
 export type ScheduledTaskEvent =
   | { type: "task_changed"; taskId: string }
-  | { type: "run_started"; taskId: string; runId: string; sessionId?: string; trigger: RunTrigger }
-  | { type: "run_finished"; taskId: string; runId: string; sessionId?: string; status: RunStatus; error?: string }
+  | { type: "run_started"; taskId: string; taskName: string; runId: string; sessionId?: string; trigger: RunTrigger }
+  | {
+      type: "run_finished";
+      taskId: string;
+      taskName: string;
+      runId: string;
+      sessionId?: string;
+      trigger: RunTrigger;
+      status: RunStatus;
+      error?: string;
+      /** This run's failure was the one that paused the task. */
+      autoPaused?: boolean;
+    }
   | { type: "run_skipped"; taskId: string; runId: string; skipReason: RunSkipReason }
   | { type: "scheduler_owner"; owner: boolean };

@@ -1,6 +1,6 @@
 # Scheduled（定时任务）设计 Spec
 
-状态:**M1(服务端)、M2(界面)已实现并通过验证**,M3(通知细化与打包验证)未开始。范围:P0 完整定义,P1 列出接口预留,P2 明确不做。
+状态:**M1(服务端)、M2(界面)已实现并通过验证**,M3 进行中:通知区分成败已完成,Tauri 实机与打包验证未做。范围:P0 完整定义,P1 列出接口预留,P2 明确不做。
 
 > 本文按实现结果更新过。与最初草案不同的地方集中在 §11「M1 实现记录」。
 
@@ -300,3 +300,23 @@ scheduler_owner   { owner: boolean }
 - 实测中发现并修掉的问题:输入框盖在页面上方(层级);冷加载后 URL 被恢复逻辑改回 `?session=`;模型接口缺少 `cwd` 导致 403;`AppShell` 里不应引入 `@/lib/desktop-window`(哨兵拦截,改用已有的目录选择函数);恢复路径的 `router.replace` 条件被另一条哨兵固定了原文(改成 `else if` 保留原语句)。
 
 **未做,留给 M3 或之后**:成功/失败区分的通知;会话内的来源提示条;批量清理旧运行;Tauri 实机上托盘隐藏时的通知验证;standalone 打包路径验证。
+
+## 13. M3 · 通知
+
+**行为**
+- 成功:"Scheduled task finished",正文是任务名,播放完成提示音。
+- 失败:"Scheduled task failed",正文是"任务名 — 错误首行"(最多 140 字);若这次失败正是触发自动暂停的第 5 次,追加一句"连续失败后已自动暂停"。
+- 超时被停止:"Scheduled task stopped",同样带错误首行。
+- 补跑开始:"Scheduled task is catching up",正文是任务名。
+- 不通知:普通的运行开始、被跳过的时间点、用户自己在会话里按 Stop 的运行。
+- 同一次运行的同一类通知共用 `tag`,重复触发会替换而不是叠加。
+
+**实现**
+- 服务端的 `run_started`/`run_finished` 事件增加 `taskName`、`trigger`,`run_finished` 增加 `autoPaused`;用户手动停止用 `STOPPED_BY_USER` 常量标记,客户端据此静默。
+- 文案由纯函数 `describeRunNotification()` 生成并有单测;`useScheduledRunNotifications` 订阅共享事件流;桌面版走 `notifyDesktop`(窗口聚焦时本来就不弹),浏览器走 AppShell 现有的 `deliverSessionNotification`(点击后打开该会话)。
+- 侧边栏原有的"后台会话结束 → Finished"对定时会话静音,否则每次运行会通知两次。判断来源有两个:会话列表里的 `scheduled` 关系,以及事件里听到的会话 id(列表尚未刷新时用)。
+
+**验证**:浏览器里用桩替换 `Notification`、让文档失焦后各触发一次成功和失败的运行,各收到恰好一条,标题、正文、`tag` 与预期一致。
+
+**已知的小重复**:用户正打开着某次定时运行的会话、窗口又在后台时,运行结束会收到本通知和通用的"会话完成"通知各一条。区分它们需要知道这一轮是不是定时运行本身,暂不处理。
+

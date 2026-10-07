@@ -151,14 +151,16 @@ const FORK_FEATURES = [
     // The row under New Session, and the filter that keeps scheduled runs out of the
     // project tree. Losing the filter would bury a user's own sessions under every
     // run of an hourly task; losing the row leaves the feature unreachable.
-    markers: ["ScheduledSidebarRow", "onOpenScheduled", 'relation?.kind !== "scheduled"'],
+    // The completion notification skips scheduled sessions: they report through
+    // useScheduledRunNotifications instead, so losing the guard doubles every notification.
+    markers: ["ScheduledSidebarRow", "onOpenScheduled", 'relation?.kind !== "scheduled"', "isScheduledRunSession"],
   },
   {
     name: "Scheduled page in AppShell",
     file: "components/AppShell.tsx",
     // The page covers the chat without unmounting it. Picking a session or starting a
     // new one must close it, and the cold-start restore must not.
-    markers: ["ScheduledView", "scheduledOpen", "scheduledOpenRef", "handleOpenScheduled", "setScheduledOpen(false)"],
+    markers: ["ScheduledView", "scheduledOpen", "scheduledOpenRef", "handleOpenScheduled", "setScheduledOpen(false)", "useScheduledRunNotifications"],
   },
   {
     name: "scheduled runs are tagged in the session list",

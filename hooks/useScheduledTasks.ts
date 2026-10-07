@@ -33,6 +33,10 @@ let source: EventSource | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let refetchTimer: ReturnType<typeof setTimeout> | null = null;
 let loadId = 0;
+/** Raw events, for consumers that act on them (notifications) rather than on the list. */
+const eventHandlers = new Set<(event: ScheduledTaskEvent) => void>();
+/** Sessions known to be produced by a scheduled run, from events and from each task's latest run. */
+const scheduledSessionIds = new Set<string>();
 
 function setState(next: Partial<ScheduledTasksState>): void {
   state = { ...state, ...next };
@@ -44,6 +48,9 @@ export async function refreshScheduledTasks(): Promise<void> {
   try {
     const data = await scheduledApi.list();
     if (id !== loadId) return;
+    for (const task of data.tasks) {
+      if (task.lastRun?.sessionId) scheduledSessionIds.add(task.lastRun.sessionId);
+    }
     setState({ tasks: data.tasks, loaded: true, error: null, schedulerOwner: data.scheduler.owner });
   } catch (error) {
     if (id !== loadId) return;
@@ -60,6 +67,12 @@ function scheduleRefetch(): void {
 }
 
 function handleEvent(event: ScheduledTaskEvent): void {
+  if ((event.type === "run_started" || event.type === "run_finished") && event.sessionId) {
+    scheduledSessionIds.add(event.sessionId);
+  }
+  for (const handler of eventHandlers) {
+    try { handler(event); } catch { /* one consumer failing must not starve the others */ }
+  }
   if (event.type === "scheduler_owner") {
     setState({ schedulerOwner: event.owner });
     return;
@@ -114,6 +127,22 @@ function subscribe(listener: () => void): () => void {
     listeners.delete(listener);
     if (listeners.size === 0) disconnect();
   };
+}
+
+/** Listen to every event. The stream must be held open separately; see retainScheduledTaskStream(). */
+export function onScheduledTaskEvent(handler: (event: ScheduledTaskEvent) => void): () => void {
+  eventHandlers.add(handler);
+  return () => { eventHandlers.delete(handler); };
+}
+
+/** Keep the event stream open without subscribing to list state. Returns the release function. */
+export function retainScheduledTaskStream(): () => void {
+  return subscribe(() => undefined);
+}
+
+/** Whether a session is the output of a scheduled run, as far as this window has heard. */
+export function isScheduledRunSession(sessionId: string): boolean {
+  return scheduledSessionIds.has(sessionId);
 }
 
 const getSnapshot = () => state;

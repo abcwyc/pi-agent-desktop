@@ -20,6 +20,7 @@ import { getDesktopPlatform, type DesktopPlatform } from "@/lib/desktop-window";
 import { useWindowDrag } from "./desktop";
 import { SessionSearch } from "./SessionSearch";
 import { ScheduledSidebarRow } from "./scheduled/ScheduledSidebarRow";
+import { isScheduledRunSession } from "@/hooks/useScheduledTasks";
 import { prefetchSessionData } from "@/lib/session-data-cache";
 import { isImeComposing } from "@/lib/ime";
 
@@ -498,8 +499,17 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         .filter((session) => session.relation?.kind === "subagent")
         .map((session) => session.id),
     );
+    // A scheduled run says how it ended (and what failed) through its own notification.
+    const knownScheduledIds = new Set(
+      allSessions
+        .filter((session) => session.relation?.kind === "scheduled")
+        .map((session) => session.id),
+    );
     const completedWithNotifications = completedInBackground.filter(
-      (id) => !previousSuppressedCompletionSessionIdsRef.current.has(id) && !knownSubagentIds.has(id),
+      (id) => !previousSuppressedCompletionSessionIdsRef.current.has(id)
+        && !knownSubagentIds.has(id)
+        && !knownScheduledIds.has(id)
+        && !isScheduledRunSession(id),
     );
     const newlyRunning = [...runningSessionIds].filter((id) => !previous.has(id));
 

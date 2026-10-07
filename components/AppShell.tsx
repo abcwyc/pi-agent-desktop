@@ -10,6 +10,7 @@ import { selectProjectDirectoryNative } from "./ProjectPicker";
 import { SessionSidebar } from "./SessionSidebar";
 import { ChatWindow } from "./ChatWindow";
 import { ScheduledView } from "./scheduled/ScheduledView";
+import { useScheduledRunNotifications } from "@/hooks/useScheduledRunNotifications";
 import type { ChatScrollPosition } from "@/lib/chat-scroll-position";
 import { clearDraft } from "@/lib/draft-store";
 import { TabBar, type Tab } from "./TabBar";
@@ -1206,6 +1207,25 @@ export function AppShell() {
       tag: targetSession ? `pi-session-complete:${targetSession.id}` : "pi-session-complete",
     });
   }, [deliverSessionNotification, hydrateSelectedSession, selectedSession, translate]);
+
+  // Scheduled runs have their own notification (success or failure, which task, why).
+  // The desktop app shows it natively; a browser tab uses the same path as session completion.
+  useScheduledRunNotifications({
+    onSound: handleBackgroundTaskDone,
+    deliverInBrowser: (notification) => {
+      if (!shouldShowBrowserNotification()) return;
+      void (async () => {
+        const { sessionId } = notification;
+        let targetSession: SessionInfo | null = sessionId ? sessionCatalog.find((s) => s.id === sessionId) ?? null : null;
+        if (!targetSession && sessionId) {
+          const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, { cache: "no-store" }).catch(() => null);
+          const data = response?.ok ? await response.json().catch(() => null) as { info?: SessionInfo } | null : null;
+          targetSession = data?.info ?? null;
+        }
+        deliverSessionNotification({ targetSession, title: notification.title, body: notification.body, tag: notification.tag });
+      })();
+    },
+  });
 
   const handleAttentionNeeded = useCallback((request: BlockingExtensionUiRequest) => {
     if (selectedSession?.relation?.kind === "subagent") return;

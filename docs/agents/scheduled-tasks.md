@@ -42,8 +42,16 @@ Design record: [ADR 0007](../adr/0007-scheduled-tasks.md). Full spec and impleme
   starting a new one closes it; the cold-start restore does not (`scheduledOpenRef`), and does not
   rewrite the URL. The page marks Esc as handled, or the global shortcut would stop the agent
   that is running behind it.
-- Completion notifications are the existing background-completion ones (`SessionSidebar`): a
-  scheduled run reads as "Finished: <task> · <time>", success or failure alike.
+- Notifications: `lib/scheduled-tasks/notification-text.ts` turns a run event into text (pure, tested),
+  `hooks/useScheduledRunNotifications.ts` listens to the shared event stream and delivers it, and
+  AppShell supplies the browser delivery (the same `deliverSessionNotification` that session completion
+  uses; the desktop app uses `notifyDesktop`, which stays quiet while its window is focused). A run
+  that succeeded names the task and plays the completion sound; a failed or timed-out one carries the
+  first line of its error and says when it paused the task; a catch-up start is announced; a run the
+  user stopped by hand (`STOPPED_BY_USER`), skipped slots and ordinary starts are not. `SessionSidebar`'s
+  generic "Finished" notification skips scheduled sessions (by relation, or by `isScheduledRunSession()`
+  when the list has not caught up yet), or every run would notify twice. A scheduled session the user
+  has open still gets the generic notification when its run ends, in addition to this one.
 
 ## Pitfalls
 - Never compare errors from the scheduler with `instanceof` in a route; see the ADR.
