@@ -75,3 +75,32 @@ export function formatUpdatedTime(timestamp: number, locale: Locale, now = new D
   if (isToday) return target.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
   return formatRelativeTime(target, locale, now);
 }
+
+const COMPACT_UNITS: ReadonlyArray<readonly [Intl.NumberFormatOptions["unit"], number]> = [
+  ["minute", 60_000],
+  ["hour", 3_600_000],
+  ["day", 86_400_000],
+  ["week", 7 * 86_400_000],
+  ["month", 30 * 86_400_000],
+  ["year", 365 * 86_400_000],
+];
+
+/**
+ * 侧边栏窄列用的紧凑相对时间（"3m"、"2h"、"3天"），一分钟内显示"现在"。
+ * @param date 要格式化的时间
+ * @param locale 当前语言
+ * @param now 用于测试或特殊场景的当前时间
+ * @returns 不带"前"的短文本；无效时间返回空串
+ */
+export function formatCompactRelativeTime(date: Date | string, locale: Locale, now = new Date()): string {
+  const target = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(target.getTime())) return "";
+  const ageMs = Math.max(0, now.getTime() - target.getTime());
+  if (ageMs < 60_000) {
+    return new Intl.RelativeTimeFormat(locale, { numeric: "auto", style: "narrow" }).format(0, "second");
+  }
+  let index = 0;
+  while (index + 1 < COMPACT_UNITS.length && ageMs >= COMPACT_UNITS[index + 1][1]) index++;
+  const [unit, size] = COMPACT_UNITS[index];
+  return new Intl.NumberFormat(locale, { style: "unit", unit, unitDisplay: "narrow" }).format(Math.floor(ageMs / size));
+}

@@ -7,7 +7,7 @@ import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { skillExpansionToCommand } from "@/lib/slash-display";
 import { workspaceKeyOf } from "@/lib/workspace-memory";
 import { useI18n } from "@/hooks/useI18n";
-import { formatRelativeTime } from "@/lib/i18n/format";
+import { formatCompactRelativeTime, formatRelativeTime } from "@/lib/i18n/format";
 import { createPortal } from "react-dom";
 import { ProjectPicker, selectProjectDirectoryNative } from "./ProjectPicker";
 import { AnimatedDropdown, PathLabel, displayCwd, getRecentProjects } from "./path-ui";
@@ -2554,34 +2554,59 @@ function SessionItem({
             </button>
           )}
 
-          {/* Action buttons — shown on hover (or always on touch devices,
-              which have no hover); transient runtime rows expose no
-              disk-backed actions. Also stays up for selection/open menu. */}
-          {(hovered || touchMode) && !session.transient && (
-            <button
-              ref={menuButtonRef}
-              onClick={toggleMenu}
-              title={t("sidebar.moreActions")}
-              aria-label={t("sidebar.moreActions")}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
+          {/* Trailing slot: the row's last-activity time at rest, swapped in
+              place for the "…" action button on hover (always the button on
+              touch devices, which have no hover, and while its menu is open,
+              since the pointer then sits on the portal). Transient runtime
+              rows expose no disk-backed actions and have no reliable time.
+              The slot keeps one fixed width so the title never reflows. */}
+          {!session.transient && (
+            <div
+              className="session-item-trailing"
               style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 24, height: 24, padding: 0, flexShrink: 0,
-                background: menuOpen ? "var(--bg-selected)" : "none",
-                border: "none", borderRadius: 6,
-                color: "var(--text-muted)", cursor: "pointer",
-                transition: "background 0.12s, color 0.12s",
+                display: "flex", alignItems: "center", justifyContent: "flex-end",
+                width: 28, height: 24, flexShrink: 0,
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-selected)"; e.currentTarget.style.color = "var(--text)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = menuOpen ? "var(--bg-selected)" : "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <circle cx="5" cy="12" r="1.7" />
-                <circle cx="12" cy="12" r="1.7" />
-                <circle cx="19" cy="12" r="1.7" />
-              </svg>
-            </button>
+              {hovered || touchMode || menuOpen ? (
+                <button
+                  ref={menuButtonRef}
+                  onClick={toggleMenu}
+                  title={t("sidebar.moreActions")}
+                  aria-label={t("sidebar.moreActions")}
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 24, height: 24, padding: 0, flexShrink: 0,
+                    background: menuOpen ? "var(--bg-selected)" : "none",
+                    border: "none", borderRadius: 6,
+                    color: "var(--text-muted)", cursor: "pointer",
+                    transition: "background 0.12s, color 0.12s",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-selected)"; e.currentTarget.style.color = "var(--text)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = menuOpen ? "var(--bg-selected)" : "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <circle cx="5" cy="12" r="1.7" />
+                    <circle cx="12" cy="12" r="1.7" />
+                    <circle cx="19" cy="12" r="1.7" />
+                  </svg>
+                </button>
+              ) : (
+                <span
+                  className="session-item-time"
+                  title={formatRelativeTime(session.modified, locale)}
+                  style={{
+                    fontSize: 11, lineHeight: 1, color: "var(--text-dim)",
+                    whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
+                    paddingRight: 2,
+                  }}
+                >
+                  {formatCompactRelativeTime(session.modified, locale)}
+                </span>
+              )}
+            </div>
           )}
 
           {menuOpen && menuPos && createPortal(
