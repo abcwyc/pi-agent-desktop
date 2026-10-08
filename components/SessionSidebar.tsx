@@ -19,6 +19,8 @@ import { isTauriDesktop } from "@/lib/desktop-updater";
 import { getDesktopPlatform, type DesktopPlatform } from "@/lib/desktop-window";
 import { useWindowDrag } from "./desktop";
 import { SessionSearch } from "./SessionSearch";
+import { ScheduledSidebarRow } from "./scheduled/ScheduledSidebarRow";
+import { isScheduledRunSession } from "@/hooks/useScheduledTasks";
 import { prefetchSessionData } from "@/lib/session-data-cache";
 import { isImeComposing } from "@/lib/ime";
 
@@ -50,6 +52,9 @@ interface Props {
   onSessionsChange?: (sessions: SessionInfo[]) => void;
   onProjectsChange?: (projectRoots: string[]) => void;
   headerControls?: ReactNode;
+  /** Opens the Scheduled page; the row under New Session is absent without it. */
+  onOpenScheduled?: () => void;
+  scheduledOpen?: boolean;
 }
 
 interface WorktreeEntry {
@@ -166,7 +171,7 @@ function buildSessionTree(sessions: SessionInfo[]): SessionTreeNode[] {
   return roots;
 }
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onProjectsChange, onBackgroundTaskDone, onRunningSessionIdsChange, onSessionsChange, headerControls, onOpenTerminal }: Props) {
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onProjectsChange, onBackgroundTaskDone, onRunningSessionIdsChange, onSessionsChange, headerControls, onOpenTerminal, onOpenScheduled, scheduledOpen = false }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   // Tracked in a ref only: the version is compared against the polled value to
@@ -494,8 +499,17 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         .filter((session) => session.relation?.kind === "subagent")
         .map((session) => session.id),
     );
+    // A scheduled run says how it ended (and what failed) through its own notification.
+    const knownScheduledIds = new Set(
+      allSessions
+        .filter((session) => session.relation?.kind === "scheduled")
+        .map((session) => session.id),
+    );
     const completedWithNotifications = completedInBackground.filter(
-      (id) => !previousSuppressedCompletionSessionIdsRef.current.has(id) && !knownSubagentIds.has(id),
+      (id) => !previousSuppressedCompletionSessionIdsRef.current.has(id)
+        && !knownSubagentIds.has(id)
+        && !knownScheduledIds.has(id)
+        && !isScheduledRunSession(id),
     );
     const newlyRunning = [...runningSessionIds].filter((id) => !previous.has(id));
 
@@ -1052,11 +1066,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
   // Phase A: project tree — groups sessions by project root. Sorting is
   const trimmedSessionQuery = sessionQuery.trim().toLowerCase();
+  // Runs of scheduled tasks live under Scheduled, not in the project tree: an
+  // hourly task would otherwise bury the sessions the user started themselves.
+  const treeSessions = allSessions.filter((session) => session.relation?.kind !== "scheduled");
   const filteredSessions = trimmedSessionQuery
-    ? allSessions.filter((session) =>
+    ? treeSessions.filter((session) =>
         (session.name ?? "").toLowerCase().includes(trimmedSessionQuery)
         || session.firstMessage.toLowerCase().includes(trimmedSessionQuery))
-    : allSessions;
+    : treeSessions;
   const sessionFamilies = listSessionFamilies(filteredSessions);
   const allProjects = groupByProject(filteredSessions, { runningIds: runningSessionIds, unreadIds: unreadSessionIds });
   const activeProjects = allProjects.filter((group) => !archivedProjectRoots.has(group.projectRoot));
@@ -1283,6 +1300,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           </span>
           {t("sidebar.newChat")}
         </button>
+
+        {onOpenScheduled && <ScheduledSidebarRow active={scheduledOpen} onOpen={onOpenScheduled} />}
 
         {/* Row 2: current folder — flat row */}
         <div className="sidebar-folder-row" data-no-drag style={{ display: showLegacyHeaderProjectRows ? "flex" : "none", alignItems: "center", gap: 2 }}>
