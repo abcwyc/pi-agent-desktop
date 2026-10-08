@@ -694,6 +694,7 @@ test("handleSend lets a handled /mcp through while streaming and sends an unowne
       attachedImages: [],
       onAudioUnlock() {},
       isStreaming,
+      workspaceUnavailable: null,
       offersBuiltinSlashCommandWhileStreaming,
       resolveSessionReferences: async (message) => message,
       sessionMentionTargetsRef: { current: new Map() },
@@ -929,12 +930,12 @@ test("handleSend sends exactly once and routes builtin commands through the pend
     compilerOptions: { target: ts.ScriptTarget.ES2020 },
   }).outputText);
 
-  function run({ value = "hello", attachedImages = [], builtinHandled = false, resolved = null }) {
+  function run({ value = "hello", attachedImages = [], builtinHandled = false, resolved = null, workspaceUnavailable = null }) {
     let sends = 0;
     let cleared = 0;
     let builtinCalls = 0;
     const handler = script.runInNewContext({
-      value, attachedImages, isStreaming: false,
+      value, attachedImages, isStreaming: false, workspaceUnavailable,
       onAudioUnlock() {},
       runBuiltinCommand: async () => {
         builtinCalls += 1;
@@ -966,6 +967,21 @@ test("handleSend sends exactly once and routes builtin commands through the pend
   assert.equal(builtin.cleared, 0);
   const passthrough = await run({ value: "/unknown", builtinHandled: false });
   assert.equal(passthrough.sends, 1);
+
+  // A deleted workspace blocks the prompt and keeps the draft; local commands still run.
+  const gone = { cwd: "/gone", availability: "missing" };
+  const blocked = await run({ value: "hello", workspaceUnavailable: gone });
+  assert.equal(blocked.sends, 0);
+  assert.equal(blocked.cleared, 0);
+  const local = await run({ value: "/copy", builtinHandled: true, workspaceUnavailable: gone });
+  assert.equal(local.builtinCalls, 1);
+});
+
+test("a missing workspace replaces the model error and disables Send", () => {
+  const source = readFileSync(new URL("./ChatInput.tsx", import.meta.url), "utf8");
+  assert.match(source, /workspaceUnavailable\s*\?\s*<WorkspaceUnavailableBanner[\s\S]*?:\s*<ModelErrorBanner error=\{modelError\} \/>/);
+  assert.match(source, /const canSend = canQueueStreamingMessage && !workspaceUnavailable;/);
+  assert.match(source, /onClick=\{handleSend\}\s*disabled=\{!canSend\}/);
 });
 test("only the chat composer offers saving a default model or reasoning level", () => {
   const chatInputSource = readFileSync(new URL("./ChatInput.tsx", import.meta.url), "utf8");
