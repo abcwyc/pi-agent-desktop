@@ -1,7 +1,7 @@
 {
   "pi": {
-    "version": "1.0.2",
-    "reason": "Upgrade the bundled SDK to pi 1.0.2; packaged Code mode re-verified (quickjs-wasi is now hoisted, see scripts/stage-package.mjs)."
+    "version": "1.0.4",
+    "reason": "Upgrade the bundled SDK to pi 1.0.4; packaged Code mode re-verified (quickjs-wasi is hoisted, see scripts/stage-package.mjs)."
   },
   "pi-web": {
     "version": "0.10.0",
