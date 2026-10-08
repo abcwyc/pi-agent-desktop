@@ -54,3 +54,11 @@ On mount `useAgentSession` loads the history, then `GET /api/sessions/[id]/state
 
 ## Exported session HTML
 - `/api/sessions/[id]/export` delegates to pi's export helper, then makes the generated HTML's recursive tree helpers iterative, so very deep linear sessions do not overflow the browser call stack.
+
+## Submitted sessions in the sidebar
+The RPC wrapper advertises a pending prompt preview before MCP preparation or SDK
+preflight. `getRpcSessionInfos()` uses it until the first user entry exists; an
+idle composer-only runtime stays hidden. Completion, rejection and cancellation
+clear the preview through `finishPrompt`. Running notifications compare both ids
+and the session-list version, so all windows refresh even when only list metadata
+changes. The sidebar continues to read the server catalogue without a local overlay.
