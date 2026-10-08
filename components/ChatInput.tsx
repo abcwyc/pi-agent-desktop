@@ -4,6 +4,7 @@ import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, useMe
 import type { BuiltinSlashCommandResult, CompactResultInfo, QueuedMessages, SlashCommandInfo } from "@/hooks/useAgentSession";
 import type { SkillsResponse } from "@/lib/api-types";
 import type { ModelScopeWarning } from "@/lib/model-scope-warnings";
+import type { UnavailableWorkspace } from "@/lib/workspace-availability";
 import type { TextContent, UserMessage } from "@/lib/types";
 import {
   clearDraft,
@@ -62,6 +63,10 @@ interface Props {
   modelNames?: Record<string, string>;
   modelList?: { id: string; name: string; provider: string; input?: string[] }[];
   modelError?: string | null;
+  /** The cwd can no longer host a run (deleted, replaced by a file, unreadable): sending is blocked and the draft stays. */
+  workspaceUnavailable?: UnavailableWorkspace | null;
+  /** Probe the cwd again, e.g. after the folder was restored. */
+  onRecheckWorkspace?: () => void;
   /** Diagnostics from resolving `enabledModels`, e.g. a pattern that matched nothing. */
   modelScopeWarnings?: ModelScopeWarning[];
   /** Dismiss the current scope warnings for this conversation only. */
@@ -657,6 +662,46 @@ function ModelNoticeBanner({ tone, title, body, action, onClose, dismissLabel }:
   );
 }
 
+/** Shown instead of the model error that a missing cwd would otherwise cause (#1061). */
+export function WorkspaceUnavailableBanner({ workspace, onRecheck }: { workspace?: UnavailableWorkspace | null; onRecheck?: () => void }) {
+  const { t } = useI18n();
+  if (!workspace) return null;
+  const body = workspace.availability === "missing"
+    ? t("chat.workspaceMissing", { cwd: workspace.cwd })
+    : workspace.availability === "not-directory"
+      ? t("chat.workspaceNotDirectory", { cwd: workspace.cwd })
+      : t("chat.workspaceUnreadable", { cwd: workspace.cwd });
+  return (
+    <div data-workspace-unavailable={workspace.availability}>
+      <ModelNoticeBanner
+        tone="error"
+        title={t("chat.workspaceUnavailable")}
+        body={body}
+        action={onRecheck ? (
+          <button
+            type="button"
+            onClick={onRecheck}
+            style={{
+              flexShrink: 0,
+              padding: "2px 8px",
+              border: "1px solid rgba(239,68,68,0.45)",
+              borderRadius: 5,
+              background: "transparent",
+              color: "inherit",
+              cursor: "pointer",
+              fontSize: 11,
+              lineHeight: 1.4,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {t("chat.workspaceRecheck")}
+          </button>
+        ) : undefined}
+      />
+    </div>
+  );
+}
+
 export function ModelErrorBanner({ error }: { error?: string | null }) {
   const { t } = useI18n();
   if (!error) return null;
@@ -732,7 +777,7 @@ export function ModelScopeWarningBanner({
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
-  onSend, onAbort, onSteer, onFollowUp, isStreaming, model, isAutoModelSelection, modelNames, modelList, modelError, modelScopeWarnings, onDismissModelScopeWarnings, onOpenModelsConfig, onModelChange, modelSwitching,
+  onSend, onAbort, onSteer, onFollowUp, isStreaming, model, isAutoModelSelection, modelNames, modelList, modelError, workspaceUnavailable, onRecheckWorkspace, modelScopeWarnings, onDismissModelScopeWarnings, onOpenModelsConfig, onModelChange, modelSwitching,
   defaultModel, onSetDefaultModel,
   onCompact, onAbortCompaction, isCompacting, compactError, compactNotice, compactResult, summarizationRetry, toolPreset, onToolPresetChange,
   thinkingLevel, isAutoThinkingSelection = false, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
@@ -1228,10 +1273,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     const builtinAllowed = !isStreaming || offersBuiltinSlashCommandWhileStreaming(msg);
     if (builtinAllowed && await runBuiltinCommand(msg)) return;
     if (isStreaming) return;
+    // A run cannot start in a cwd that is gone; keep the draft until it is back or another project is picked.
+    if (workspaceUnavailable) return;
     const resolvedMessage = await resolveSessionReferences(msg, sessionMentionTargetsRef.current);
     onSend(resolvedMessage, attachedImages.length ? attachedImages : undefined);
     clearInput();
-  }, [value, attachedImages, isStreaming, runBuiltinCommand, onSend, clearInput, onAudioUnlock]);
+  }, [value, attachedImages, workspaceUnavailable, isStreaming, runBuiltinCommand, onSend, clearInput, onAudioUnlock]);
 
   const slashQuery = !compact && value.startsWith("/") && !/\s/.test(value.slice(1))
     ? value.slice(1).toLowerCase()
@@ -1267,6 +1314,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     : t(slashQuery ? "chat.matches" : "chat.commands", { count: filteredSlashCommands.length });
   const hasInputText = Boolean(value.trim());
   const canQueueStreamingMessage = hasInputText || attachedImages.length > 0;
+  const canSend = canQueueStreamingMessage && !workspaceUnavailable;
   // Warn when images are attached but the selected model is known not to accept
   // image input (#584), including a resolved default. Unknown models stay silent.
   const showImageUnsupportedWarning = (
@@ -2038,7 +2086,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }}
       />}
       <div style={{ maxWidth: "var(--chat-content-max-width, 820px)", margin: "0 auto" }}>
-        <ModelErrorBanner error={modelError} />
+        {workspaceUnavailable
+          ? <WorkspaceUnavailableBanner workspace={workspaceUnavailable} onRecheck={onRecheckWorkspace} />
+          : <ModelErrorBanner error={modelError} />}
         <ModelScopeWarningBanner
           warnings={modelScopeWarnings}
           onDismiss={onDismissModelScopeWarnings}
@@ -2808,7 +2858,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             <button
               className="native-primary-button composer-send-button"
               onClick={handleSend}
-              disabled={!value.trim() && !attachedImages.length}
+              disabled={!canSend}
               title={t("chat.send")}
               aria-label={t("chat.send")}
               style={{
@@ -2817,15 +2867,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                 // Mobile: icon-only so the placeholder and draft keep the width.
                 ...(isMobile ? { width: 36, height: 36, padding: 0 } : { padding: "7px 14px" }),
-                background: (value.trim() || attachedImages.length) ? "var(--accent)" : "var(--bg-panel)",
+                background: canSend ? "var(--accent)" : "var(--bg-panel)",
                 border: "none",
                 borderRadius: 8,
-                color: (value.trim() || attachedImages.length) ? "var(--accent-contrast)" : "var(--text-dim)",
-                cursor: (value.trim() || attachedImages.length) ? "pointer" : "not-allowed",
+                color: canSend ? "var(--accent-contrast)" : "var(--text-dim)",
+                cursor: canSend ? "pointer" : "not-allowed",
                 fontSize: 13,
                 fontWeight: 600,
                 letterSpacing: "-0.01em",
-                boxShadow: (value.trim() || attachedImages.length) ? "0 1px 3px color-mix(in srgb, var(--accent) 25%, transparent)" : "none",
+                boxShadow: canSend ? "0 1px 3px color-mix(in srgb, var(--accent) 25%, transparent)" : "none",
                 transition: "background 0.15s, box-shadow 0.15s",
               }}
             >

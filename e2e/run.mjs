@@ -13,6 +13,7 @@ import { checkFilePanel, filePanelFixture, filePanelStylesheet } from "./file-pa
 import { checkExtensionDialogs, extensionSource } from "./extension-dialog.mjs";
 import { checkChatAppearance } from "./chat-appearance.mjs";
 import { checkMcpManager } from "./mcp-manager.mjs";
+import { checkMissingWorkspace, MISSING_WORKSPACE, missingWorkspaceReply } from "./missing-workspace.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const mode = process.env.E2E_SERVER_MODE || "dev";
@@ -41,8 +42,11 @@ function message(id, parentId, role, content) {
   return { type: "message", id, parentId, timestamp, message: { role, content } };
 }
 
-function writeSession(id, entries) {
-  const header = { type: "session", version: 3, id, timestamp, cwd: project };
+const missingProject = join(agentDir, "missing-project");
+mkdirSync(missingProject);
+
+function writeSession(id, entries, cwd = project) {
+  const header = { type: "session", version: 3, id, timestamp, cwd };
   writeFileSync(join(sessionDir, `2026-08-23T00-00-00-000Z_${id}.jsonl`),
     [header, ...entries].map((entry) => JSON.stringify(entry)).join("\n") + "\n");
 }
@@ -127,6 +131,10 @@ try {
     message("root", null, "user", "E2E wrapper root"),
     message("reply", "root", "assistant", "E2E wrapper reply"),
   ]);
+  writeSession(MISSING_WORKSPACE, [
+    message("root", null, "user", "E2E missing workspace prompt"),
+    message("reply", "root", "assistant", missingWorkspaceReply),
+  ], missingProject);
 
   const probe = createServer();
   probe.listen(0, "127.0.0.1");
@@ -168,7 +176,7 @@ try {
     const response = await fetch(`${base}/api/sessions`, { signal: AbortSignal.timeout(5000) }).catch(() => null);
     if (response?.ok) {
       const { sessions } = await response.json();
-      assert.deepEqual(sessions.map((session) => session.id).sort(), [LONG, BRANCH, RICH, COMPACTED, APPEND].sort());
+      assert.deepEqual(sessions.map((session) => session.id).sort(), [LONG, BRANCH, RICH, COMPACTED, APPEND, MISSING_WORKSPACE].sort());
       break;
     }
     assert.ok(Date.now() < deadline, "Server readiness timed out; see server.log");
@@ -465,6 +473,7 @@ try {
     context = undefined;
     page = undefined;
   }
+  await checkMissingWorkspace(browser, base, missingProject);
 } catch (error) {
   console.error(error);
   process.exitCode = 1;

@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
+import type { UnavailableWorkspace, WorkspaceAvailability } from "@/lib/workspace-availability";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -258,6 +259,10 @@ export function AppShell() {
   const topMoreMenuRef = useRef<HTMLDivElement>(null);
   const [topMorePos, setTopMorePos] = useState<{ top: number; right: number } | null>(null);
   const [projectTrust, setProjectTrust] = useState<ProjectTrustStatus | null>(null);
+  // "unknown": the probe itself failed, so nothing is blocked on its account.
+  const [workspaceStatus, setWorkspaceStatus] = useState<{ cwd: string; availability: WorkspaceAvailability | "unknown" } | null>(null);
+  const workspaceStatusRef = useRef(workspaceStatus);
+  const [workspaceStatusCheck, setWorkspaceStatusCheck] = useState(0);
   const [projectTrustDialogOpen, setProjectTrustDialogOpen] = useState(false);
   const [projectTrustBusy, setProjectTrustBusy] = useState(false);
   const [projectTrustError, setProjectTrustError] = useState<ProjectTrustFailure | null>(null);
@@ -1457,11 +1462,53 @@ export function AppShell() {
     rightPanelOpen,
   ]);
 
+  // A workspace deleted outside the app keeps its history, but every cwd-scoped
+  // request then fails and the composer reported it as a model error (#1061).
+  // Probe the folder itself so the chat can say what happened and hold new runs.
+  useEffect(() => {
+    if (!projectTrustCwd) return;
+    const cwd = projectTrustCwd;
+    const controller = new AbortController();
+    fetch(`/api/cwd/status?cwd=${encodeURIComponent(cwd)}`, { signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json() as { availability?: WorkspaceAvailability };
+        return response.ok && data.availability ? data.availability : "unknown" as const;
+      })
+      .catch((error) => (error instanceof DOMException && error.name === "AbortError" ? null : "unknown" as const))
+      .then((availability) => {
+        if (!availability || controller.signal.aborted) return;
+        const previous = workspaceStatusRef.current;
+        const recovered = availability === "available"
+          && previous?.cwd === cwd
+          && previous.availability !== "available"
+          && previous.availability !== "unknown";
+        workspaceStatusRef.current = { cwd, availability };
+        setWorkspaceStatus({ cwd, availability });
+        // The model list loaded while the folder was gone only holds its error.
+        if (recovered) setModelsRefreshKey((key) => key + 1);
+      });
+    return () => controller.abort();
+  }, [projectTrustCwd, workspaceStatusCheck]);
+
+  const workspaceAvailability = projectTrustCwd && workspaceStatus?.cwd === projectTrustCwd
+    ? workspaceStatus.availability
+    : null;
+  const unavailableWorkspace = useMemo<UnavailableWorkspace | null>(() => (
+    projectTrustCwd && workspaceAvailability && workspaceAvailability !== "available" && workspaceAvailability !== "unknown"
+      ? { cwd: projectTrustCwd, availability: workspaceAvailability }
+      : null
+  ), [projectTrustCwd, workspaceAvailability]);
+  const recheckWorkspace = useCallback(() => setWorkspaceStatusCheck((check) => check + 1), []);
+
   useEffect(() => {
     setProjectTrust(null);
     setProjectTrustDialogOpen(false);
     setProjectTrustError(null);
     if (!projectTrustCwd) return;
+    // Wait for the folder check: a cwd that is gone is refused here as `cwd-denied`,
+    // which is not a trust problem worth reporting.
+    if (workspaceAvailability === null) return;
+    if (workspaceAvailability !== "available" && workspaceAvailability !== "unknown") return;
 
     const controller = new AbortController();
     // The answer also lists the project's MCP servers (`mcpFile`, `mcpServers`), unused here: the
@@ -1479,7 +1526,7 @@ export function AppShell() {
         console.error("Failed to load project trust:", error);
       });
     return () => controller.abort();
-  }, [projectTrustCwd]);
+  }, [projectTrustCwd, workspaceAvailability]);
 
   const handleTrustProject = useCallback(async () => {
     if (!projectTrustCwd || projectTrustBusy) return;
@@ -2461,6 +2508,8 @@ export function AppShell() {
               onSessionCreated={handleSessionCreated}
               onSessionForked={handleSessionForked}
               modelsRefreshKey={modelsRefreshKey}
+              workspaceUnavailable={unavailableWorkspace}
+              onRecheckWorkspace={recheckWorkspace}
               chatInputRef={chatInputRef}
               onBranchDataChange={handleBranchDataChange}
               onSystemPromptChange={handleSystemPromptChange}
