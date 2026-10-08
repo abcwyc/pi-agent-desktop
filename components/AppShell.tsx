@@ -1698,6 +1698,10 @@ export function AppShell() {
   };
 
 
+  // The file panel shows a project's files, which the Scheduled page has none of, so its
+  // toggle is hidden there. An already open panel keeps it: on desktop it is the only way to close it.
+  const showFilePanelToggle = !scheduledOpen || rightPanelOpen;
+
   const renderMainFileToggle = () => {
     return (
       <button
@@ -2214,7 +2218,7 @@ export function AppShell() {
             </div>
           )}
           {!isMobile && renderProjectTrustWarning(false)}
-          {!isMobile && renderMainFileToggle()}
+          {!isMobile && showFilePanelToggle && renderMainFileToggle()}
           {isMobile && sessionHasBranches && (
             <BranchNavigator
               tree={branchTree}
@@ -2600,7 +2604,7 @@ export function AppShell() {
       {/* Mobile keeps this fixed toggle (the desktop topbar renders its own);
           rendering both on desktop stacks two overlapping icons whose clicks
           intercept each other. */}
-      {isMobile && (
+      {isMobile && showFilePanelToggle && (
         <button
           type="button"
           className={`right-panel-toggle-button${rightPanelOpen ? " is-open" : ""}`}
