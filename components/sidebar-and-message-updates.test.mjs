@@ -7,7 +7,7 @@ const messageSource = readFileSync(new URL("./MessageView.tsx", import.meta.url)
 
 test("session rows keep the action menu reachable on touch devices", () => {
   assert.match(sidebarSource, /matchMedia\?\.\("\(hover: none\)"\)/);
-  assert.match(sidebarSource, /\{\(hovered \|\| touchMode\) && !session\.transient && \(/);
+  assert.match(sidebarSource, /hovered \|\| touchMode \|\| menuOpen \?/);
 });
 
 test("rename and delete failures surface an error instead of being swallowed", () => {

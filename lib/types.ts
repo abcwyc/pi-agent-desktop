@@ -393,6 +393,8 @@ export interface SessionInfo {
   created: string;
   modified: string;
   messageCount: number;
+  /** How many times the session was compacted; absent when never. */
+  compactionCount?: number;
   firstMessage: string;
   /** Branch checked out in the session's worktree (fork sidebar display). */
   worktreeBranch?: string;
