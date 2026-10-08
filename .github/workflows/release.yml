@@ -115,12 +115,24 @@ jobs:
             - Notifications say how each run ended: finished, failed with the error, stopped at its time limit, or waiting for your input. A task that fails five times in a row pauses itself.
             - The sessions a task creates are kept out of the project list and shown under Scheduled instead; deleting a task returns them to the project list.
 
+            ### Improved
+
+            - The sidebar shows each session's last activity time, has a redesigned project header, and shows how many times a session was compacted.
+            - A session you just sent now appears in the list immediately instead of after the first reply.
+            - Context usage refreshes while a run is still active.
+            - Updated the bundled pi SDK to 1.1.0, the Tauri desktop shell to 2.12, and several dependencies with security advisories.
+
+            ### Fixed
+
+            - A deleted project folder is now reported clearly instead of surfacing as a model error.
+            - The branch summary lock no longer leaks into other sessions.
+
             ### Good to know
 
             - Only one running copy of Pi starts scheduled tasks (for example the desktop app, not also a dev server on the same data).
             - Old runs are not deleted automatically; remove sessions you no longer need.
 
-            Bundled components: pi 1.0.2, pi-web 0.10.0.
+            Bundled components: pi 1.1.0, pi-web 0.10.0.
 
             ---
 
@@ -136,12 +148,24 @@ jobs:
             - 通知会说明每次运行的结果：已完成、失败（附带错误）、达到时间上限被停止，或在等待你的输入。连续失败五次的任务会自动暂停。
             - 任务产生的会话不会出现在项目列表里，而是显示在定时任务页面中；删除任务后，这些会话会回到项目列表。
 
+            ### 改进
+
+            - 侧边栏显示每个会话的最近活动时间，项目标题重新设计，并显示会话被压缩的次数。
+            - 刚发送的会话会立即出现在列表里，不再等到第一条回复之后。
+            - 运行进行中时，上下文用量会实时刷新。
+            - 内置 pi SDK 升级到 1.1.0，桌面外壳 Tauri 升级到 2.12，并更新了若干存在安全公告的依赖。
+
+            ### 修复
+
+            - 项目文件夹被删除时，现在会明确提示，而不是显示成模型错误。
+            - 分支摘要的锁定状态不再影响其他会话。
+
             ### 需要了解
 
             - 同一份数据同一时刻只有一个运行中的 Pi 会启动定时任务（例如桌面 App，而不是同时再开一个使用同一份数据的开发服务器）。
             - 旧的运行不会被自动删除，不再需要的会话请自行清理。
 
-            内置组件版本：pi 1.0.2、pi-web 0.10.0。
+            内置组件版本：pi 1.1.0、pi-web 0.10.0。
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
