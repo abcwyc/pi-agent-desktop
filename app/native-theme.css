@@ -798,7 +798,9 @@
   --surface-muted: rgba(255, 255, 255, 0.64);
   --surface-elevated: #ffffff;
   --text: #1d1d1f;
-  --text-muted: #68686d;
+  /* #66666b rather than #68686d: the old value measured 4.42:1 on the
+     --bg-selected overlay, just under the 4.5:1 AA floor for body text. */
+  --text-muted: #66666b;
   /* #7a7a7a rather than the visually lighter #94949a: text-dim carries real
      labels (timestamps, code-block language tags), and #94949a only cleared
      ~2.8:1 contrast against --bg — under the 3:1 floor for UI text. This
