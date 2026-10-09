@@ -103,35 +103,33 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.6.2
+            ## Pi Agent Desktop 0.6.3
 
-            A fix for the app freezing when you open Settings.
+            The file right-click menu is back.
 
             ### Fixed
 
-            - Opening **Settings** could freeze the whole app. The Settings button and the other popup menus (top bar **More**, session and project menus, the composer's project switcher) now use the in-app menus instead of native popups.
-            - Menus that ignored clicks on their items in 0.6.1 work again.
+            - Right-clicking a file Pi wrote, a link to a local file, or a file name in inline code shows **Open**, **Open With** (macOS), **Reveal in Finder / Explorer** and **Copy Path** again. It had been paused in 0.6.2 while the native popup menus were switched off; it now uses an in-app menu with keyboard support (arrow keys, Enter, Esc).
 
             ### Good to know
 
-            - The file right-click menu (Open With, Reveal, Copy Path) is paused for now; right-click shows the standard menu instead. It returns once the underlying issue is fixed.
+            - Settings, top bar **More**, and the session and project menus keep using in-app menus, as in 0.6.2.
 
             Bundled components: pi 1.1.0, pi-web 0.10.0.
 
             ---
 
-            ## Pi Agent Desktop 0.6.2
+            ## Pi Agent Desktop 0.6.3
 
-            修复打开设置时应用卡死的问题。
+            文件右键菜单回来了。
 
             ### 修复
 
-            - 打开**设置**时整个应用可能卡死。设置按钮以及其他弹出菜单（顶栏**更多**、会话和项目菜单、输入区的项目切换）现在改用应用内菜单，不再使用系统原生弹出菜单。
-            - 0.6.1 中点击菜单项没有反应的问题一并解决。
+            - 在 Pi 写出的文件、指向本地文件的链接，或行内代码里的文件名上点右键，又能看到**打开**、**用其他应用打开**（macOS）、**在 Finder / 资源管理器中显示**和**复制路径**了。0.6.2 因为暂停了原生弹出菜单而一并停用了它；现在改用应用内菜单，并支持键盘操作（方向键、回车、Esc）。
 
             ### 需要了解
 
-            - 文件右键菜单（打开方式、在文件管理器中显示、复制路径）暂时停用，右键会显示系统默认菜单；待底层问题修复后恢复。
+            - 设置、顶栏**更多**以及会话和项目菜单继续使用应用内菜单，与 0.6.2 相同。
 
             内置组件版本：pi 1.1.0、pi-web 0.10.0。
           releaseDraft: true
