@@ -1,6 +1,6 @@
 [package]
 name = "pi-agent-desktop"
-version = "0.6.1"
+version = "0.6.2"
 description = "Desktop shell for Pi Agent"
 authors = ["pi-agent-desktop contributors"]
 license = "MIT"

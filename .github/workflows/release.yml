@@ -103,39 +103,35 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.6.1
+            ## Pi Agent Desktop 0.6.2
 
-            This release gives the desktop app a more native look and feel on macOS, and tidies the composer.
+            A fix for the app freezing when you open Settings.
 
-            ### New
+            ### Fixed
 
-            - Right-click a file Pi wrote, a link to a local file, or a file name in inline code to **Open**, **Open With** (macOS), **Reveal in Finder / Explorer** or **Copy Path**.
-            - macOS: a translucent sidebar that blends with the desktop, native menus, and desktop-style cursor and text-selection behavior.
+            - Opening **Settings** could freeze the whole app. The Settings button and the other popup menus (top bar **More**, session and project menus, the composer's project switcher) now use the in-app menus instead of native popups.
+            - Menus that ignored clicks on their items in 0.6.1 work again.
 
-            ### Improved
+            ### Good to know
 
-            - A refined type scale, hairline borders and native-feeling hover motion across the app.
-            - The session controls (model, thinking level, tools) now sit below the input card instead of crowding it.
-            - The new-session screen no longer shows the update chip; update status stays in Settings › General.
+            - The file right-click menu (Open With, Reveal, Copy Path) is paused for now; right-click shows the standard menu instead. It returns once the underlying issue is fixed.
 
             Bundled components: pi 1.1.0, pi-web 0.10.0.
 
             ---
 
-            ## Pi Agent Desktop 0.6.1
+            ## Pi Agent Desktop 0.6.2
 
-            这个版本让桌面 App 在 macOS 上更有原生质感，并整理了输入区。
+            修复打开设置时应用卡死的问题。
 
-            ### 新增
+            ### 修复
 
-            - 在 Pi 写出的文件、指向本地文件的链接，或行内代码里的文件名上点右键，可以**打开**、**用其他应用打开**（macOS）、**在 Finder / 资源管理器中显示**或**复制路径**。
-            - macOS：侧边栏改为半透明并与桌面融合，菜单改用原生菜单，光标和文本选择行为也更接近桌面应用。
+            - 打开**设置**时整个应用可能卡死。设置按钮以及其他弹出菜单（顶栏**更多**、会话和项目菜单、输入区的项目切换）现在改用应用内菜单，不再使用系统原生弹出菜单。
+            - 0.6.1 中点击菜单项没有反应的问题一并解决。
 
-            ### 改进
+            ### 需要了解
 
-            - 全应用统一了字号层级、细线边框和更自然的悬停动效。
-            - 会话控制（模型、思考强度、工具）移到输入卡片下方，不再挤在输入框里。
-            - 新会话页面不再显示更新提示；更新状态保留在 设置 › 通用。
+            - 文件右键菜单（打开方式、在文件管理器中显示、复制路径）暂时停用，右键会显示系统默认菜单；待底层问题修复后恢复。
 
             内置组件版本：pi 1.1.0、pi-web 0.10.0。
           releaseDraft: true
