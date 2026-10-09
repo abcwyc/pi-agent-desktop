@@ -541,6 +541,128 @@ fn reveal_item_in_dir(path: String) -> Result<(), String> {
     reveal_path_in_file_manager(Path::new(&path))
 }
 
+/// Launch Services' answer to Finder's "Open With": every application that can
+/// open `argv[0]`, the default one first. Nested bundles (Xcode's Instruments)
+/// and cache copies (Playwright's Chrome for Testing) are noise in a context
+/// menu, so they are dropped here rather than in the UI. The path travels as
+/// an argument, never spliced into the script.
+#[cfg(target_os = "macos")]
+const LIST_APPS_FOR_FILE_JXA: &str = r#"
+ObjC.import("AppKit");
+function run(argv) {
+  const url = $.NSURL.fileURLWithPath(argv[0]);
+  const workspace = $.NSWorkspace.sharedWorkspace;
+  const fileManager = $.NSFileManager.defaultManager;
+  const preferred = workspace.URLForApplicationToOpenURL(url);
+  const preferredPath = preferred ? ObjC.unwrap(preferred.path) : null;
+  const urls = workspace.URLsForApplicationsToOpenURL(url);
+  const seen = {};
+  const apps = [];
+  for (let i = 0; i < urls.count; i++) {
+    const appPath = ObjC.unwrap(urls.objectAtIndex(i).path);
+    if (seen[appPath]) continue;
+    seen[appPath] = true;
+    if (appPath.slice(0, -4).indexOf(".app/") !== -1) continue;
+    if (appPath.indexOf("/Library/Caches/") !== -1) continue;
+    apps.push({
+      name: ObjC.unwrap(fileManager.displayNameAtPath(appPath)),
+      path: appPath,
+      isDefault: appPath === preferredPath,
+    });
+  }
+  apps.sort((a, b) => (b.isDefault - a.isDefault) || a.name.localeCompare(b.name));
+  return JSON.stringify(apps.slice(0, 40));
+}
+"#;
+
+#[cfg(target_os = "macos")]
+fn list_apps_for_file_macos(path: &Path) -> Result<serde_json::Value, String> {
+    if !path.is_absolute() {
+        return Err("An absolute path is required".into());
+    }
+    if !path.exists() {
+        return Err(format!("Path does not exist: {}", path.display()));
+    }
+    let output = Command::new("/usr/bin/osascript")
+        .args(["-l", "JavaScript", "-e", LIST_APPS_FOR_FILE_JXA])
+        .arg(path)
+        .output()
+        .map_err(|error| error.to_string())?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    serde_json::from_slice(&output.stdout).map_err(|error| error.to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn open_path_with_app_macos(path: &Path, app: &Path) -> Result<(), String> {
+    if !path.is_absolute() {
+        return Err("An absolute path is required".into());
+    }
+    if !path.exists() {
+        return Err(format!("Path does not exist: {}", path.display()));
+    }
+    let is_app_bundle = app.is_absolute()
+        && app.is_dir()
+        && app
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("app"));
+    if !is_app_bundle {
+        return Err(format!("Not an application bundle: {}", app.display()));
+    }
+    let output = Command::new("/usr/bin/open")
+        .arg("-a")
+        .arg(app)
+        .arg(path)
+        .output()
+        .map_err(|error| error.to_string())?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+    }
+}
+
+/// Applications that can open `path`, default first. Empty off macOS, where the
+/// UI offers no "Open With" menu yet.
+#[tauri::command]
+async fn list_apps_for_file(path: String) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "macos")]
+    {
+        // osascript takes ~150ms; keep it off the IPC thread.
+        return tauri::async_runtime::spawn_blocking(move || {
+            list_apps_for_file_macos(Path::new(&path))
+        })
+        .await
+        .map_err(|error| error.to_string())?;
+    }
+
+    #[allow(unreachable_code)]
+    {
+        let _ = path;
+        Ok(serde_json::Value::Array(Vec::new()))
+    }
+}
+
+/// Opens `path` with the application bundle at `app` (Finder's "Open With").
+#[tauri::command]
+async fn open_path_with(path: String, app: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        return tauri::async_runtime::spawn_blocking(move || {
+            open_path_with_app_macos(Path::new(&path), Path::new(&app))
+        })
+        .await
+        .map_err(|error| error.to_string())?;
+    }
+
+    #[allow(unreachable_code)]
+    {
+        let _ = (path, app);
+        Err("Open With is only supported on macOS".into())
+    }
+}
+
 #[tauri::command]
 fn set_close_quits(app: AppHandle, quit: bool) -> Result<(), String> {
     if let Some(state) = app.try_state::<CloseQuits>() {
@@ -1187,6 +1309,45 @@ mod tests {
     use super::{visible_linux_tray_item, LinuxTray, LINUX_TRAY_QUIT_LABEL, LINUX_TRAY_SHOW_LABEL};
     use std::path::{Path, PathBuf};
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn lists_applications_that_can_open_a_text_file() {
+        let file = std::env::temp_dir().join(format!("pi-open-with-{}.txt", std::process::id()));
+        std::fs::write(&file, "hello").unwrap();
+        let apps = super::list_apps_for_file_macos(&file);
+        let _ = std::fs::remove_file(&file);
+
+        let apps = apps.unwrap();
+        let apps = apps.as_array().expect("an array of apps");
+        assert!(!apps.is_empty(), "TextEdit at least can open a .txt file");
+        for app in apps {
+            let path = app["path"].as_str().expect("path");
+            assert!(path.ends_with(".app"), "{path}");
+            assert!(!app["name"].as_str().expect("name").is_empty());
+            assert!(app["isDefault"].is_boolean());
+        }
+        let defaults = apps.iter().filter(|app| app["isDefault"] == true).count();
+        assert!(defaults <= 1);
+        if defaults == 1 {
+            assert_eq!(apps[0]["isDefault"], true, "default app is listed first");
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn open_with_refuses_relative_missing_and_non_bundle_targets() {
+        let file = std::env::temp_dir().join(format!("pi-open-with-guard-{}.txt", std::process::id()));
+        std::fs::write(&file, "hello").unwrap();
+        let bundle = Path::new("/System/Applications/TextEdit.app");
+
+        assert!(super::open_path_with_app_macos(Path::new("relative.txt"), bundle).is_err());
+        assert!(super::open_path_with_app_macos(&file.with_extension("missing"), bundle).is_err());
+        // A regular file, or a folder that is not an .app bundle, is never launched.
+        assert!(super::open_path_with_app_macos(&file, &file).is_err());
+        assert!(super::open_path_with_app_macos(&file, Path::new("/usr/bin")).is_err());
+        let _ = std::fs::remove_file(&file);
+    }
+
     #[cfg(windows)]
     #[test]
     fn simplifies_verbatim_windows_path_before_launching_node() {
@@ -1445,6 +1606,8 @@ pub fn run() {
             open_external_url,
             open_path,
             reveal_item_in_dir,
+            list_apps_for_file,
+            open_path_with,
             set_close_quits,
             quit_app,
             show_main_window_cmd,

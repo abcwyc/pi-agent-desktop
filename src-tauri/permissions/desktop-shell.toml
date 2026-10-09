@@ -14,6 +14,16 @@ description = "Allows revealing a local filesystem path in the OS file manager."
 commands.allow = ["reveal_item_in_dir"]
 
 [[permission]]
+identifier = "allow-list-apps-for-file"
+description = "Allows listing the applications that can open a local file (macOS Open With)."
+commands.allow = ["list_apps_for_file"]
+
+[[permission]]
+identifier = "allow-open-path-with"
+description = "Allows opening a local file with a chosen application bundle (macOS Open With)."
+commands.allow = ["open_path_with"]
+
+[[permission]]
 identifier = "allow-set-close-quits"
 description = "Allows the UI to choose whether closing the window quits or hides."
 commands.allow = ["set_close_quits"]
