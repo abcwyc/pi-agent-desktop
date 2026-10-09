@@ -2,6 +2,8 @@
 
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ComponentProps, type MouseEvent } from "react";
 import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
+import { useFileContextMenu } from "@/hooks/useFileContextMenu";
+import { inlineCodeFilePath } from "@/lib/file-context-menu";
 import { parsePdfPageFragment, resolveLocalFileHref, shouldOpenLocalFileInApp } from "@/lib/file-links";
 import { encodeFilePathForApi } from "@/lib/file-paths";
 import { markdownRehypePlugins, markdownRemarkPlugins, markdownUrlTransform, markdownUserRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
@@ -45,6 +47,66 @@ function MarkdownImage({
   );
 }
 
+/** Inline code that may name a file: right-click offers the file menu once the server confirms it exists. */
+function MarkdownInlineCode({
+  cwd,
+  onOpenFile,
+  children,
+  ...props
+}: ComponentProps<"code"> & ExtraProps & {
+  cwd: string | undefined;
+  onOpenFile: ((filePath: string, page?: number) => void) | undefined;
+}) {
+  delete props.node;
+  const showFileMenu = useFileContextMenu(onOpenFile);
+  return (
+    <code
+      className="markdown-inline-code"
+      {...props}
+      onContextMenu={onOpenFile ? (event) => {
+        const filePath = inlineCodeFilePath(String(children), cwd);
+        if (filePath) showFileMenu(event, { filePath, verify: true });
+      } : undefined}
+    >
+      {children}
+    </code>
+  );
+}
+
+/** A markdown link to a local file; right-click offers the file menu. */
+function MarkdownLocalFileLink({
+  filePath,
+  page,
+  onOpenFile,
+  children,
+  ...props
+}: ComponentProps<"a"> & ExtraProps & {
+  filePath: string;
+  page: number | undefined;
+  onOpenFile: (filePath: string, page?: number) => void;
+}) {
+  delete props.node;
+  const showFileMenu = useFileContextMenu(onOpenFile);
+  const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!shouldOpenLocalFileInApp(event)) return;
+    const target = event.currentTarget.getAttribute("target");
+    if (target && target !== "_self") return;
+    event.preventDefault();
+    onOpenFile(filePath, page);
+  };
+  return (
+    <MarkdownLinkContext.Provider value={true}>
+      <a
+        {...props}
+        onClick={handleClick}
+        onContextMenu={(event) => showFileMenu(event, { filePath, page })}
+      >
+        {children}
+      </a>
+    </MarkdownLinkContext.Provider>
+  );
+}
+
 function buildComponents(
   isStreaming: boolean | undefined,
   cwd: string | undefined,
@@ -68,12 +130,9 @@ function buildComponents(
         return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} isStreaming={isStreaming} />;
       }
       return (
-        <code
-          className="markdown-inline-code"
-          {...props}
-        >
+        <MarkdownInlineCode cwd={cwd} onOpenFile={onOpenFile} {...props}>
           {children}
-        </code>
+        </MarkdownInlineCode>
       );
     },
     pre({ children }) {
@@ -100,20 +159,16 @@ function buildComponents(
         );
       }
 
-      const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
-        if (!shouldOpenLocalFileInApp(event)) return;
-        const target = event.currentTarget.getAttribute("target");
-        if (target && target !== "_self") return;
-        event.preventDefault();
-        openFile(filePath, parsePdfPageFragment(href) ?? undefined);
-      };
-
       return (
-        <MarkdownLinkContext.Provider value={true}>
-          <a href={href} {...props} onClick={handleClick}>
-            {children}
-          </a>
-        </MarkdownLinkContext.Provider>
+        <MarkdownLocalFileLink
+          href={href}
+          {...props}
+          filePath={filePath}
+          page={parsePdfPageFragment(href) ?? undefined}
+          onOpenFile={openFile}
+        >
+          {children}
+        </MarkdownLocalFileLink>
       );
     },
     img(props) {

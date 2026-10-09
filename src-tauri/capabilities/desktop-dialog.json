@@ -16,6 +16,8 @@
     "allow-open-external-url",
     "allow-open-path",
     "allow-reveal-item-in-dir",
+    "allow-list-apps-for-file",
+    "allow-open-path-with",
     "allow-set-close-quits",
     "allow-quit-app",
     "allow-show-main-window-cmd",

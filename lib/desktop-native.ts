@@ -171,6 +171,42 @@ export async function revealItemInDirNative(path: string): Promise<void> {
   await invoke("reveal_item_in_dir", { path });
 }
 
+/** An application that can open a given file (Finder's "Open With" list). */
+export type FileOpenApp = {
+  name: string;
+  /** Absolute path of the `.app` bundle. */
+  path: string;
+  isDefault: boolean;
+};
+
+/** Applications that can open `path`, default first. Empty where the shell cannot tell (non-macOS). */
+export async function listAppsForFileNative(path: string): Promise<FileOpenApp[]> {
+  if (!isTauriDesktop()) return [];
+  const { invoke } = await import("@tauri-apps/api/core");
+  const apps = await invoke<FileOpenApp[]>("list_apps_for_file", { path });
+  return Array.isArray(apps) ? apps : [];
+}
+
+/** Open a local path with a specific application bundle. */
+export async function openPathWithNative(path: string, appPath: string): Promise<void> {
+  if (!isTauriDesktop()) {
+    throw new Error("Open With is only available in the desktop app.");
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("open_path_with", { path, app: appPath });
+}
+
+/** Native picker for an application bundle (macOS). Resolves null when cancelled. */
+export async function selectApplicationNative(): Promise<string | null> {
+  const [path] = await selectFilesNative({
+    multiple: false,
+    defaultPath: "/Applications",
+    title: "Choose Application",
+    filters: [{ name: "Applications", extensions: ["app"] }],
+  });
+  return path ?? null;
+}
+
 function triggerBrowserDownload(url: string, fileName?: string): void {
   const anchor = document.createElement("a");
   anchor.href = url;
