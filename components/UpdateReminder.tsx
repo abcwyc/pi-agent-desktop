@@ -109,7 +109,7 @@ export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void 
         bottom: 16,
         zIndex: 1200,
         width: "min(380px, calc(100vw - 32px))",
-        border: "1px solid var(--border)",
+        border: "var(--hairline) solid var(--border)",
         borderRadius: 10,
         background: "var(--bg-panel)",
         boxShadow: "0 14px 40px rgba(0, 0, 0, 0.24)",
@@ -152,7 +152,7 @@ export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void 
               justifyContent: "space-between",
               gap: 12,
               padding: "9px 10px",
-              border: "1px solid var(--border)",
+              border: "var(--hairline) solid var(--border)",
               borderRadius: 7,
               background: "var(--bg)",
             }}

@@ -1275,7 +1275,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
             <div style={{ maxWidth: 320, color: "var(--text)", fontSize: 13, fontWeight: 550, lineHeight: 1.35 }}>
               {t("chat.dropFilesHint")}
             </div>
-            <div style={{ maxWidth: 360, color: "var(--text-muted)", fontSize: 11.5, lineHeight: 1.4 }}>
+            <div style={{ maxWidth: 360, color: "var(--text-muted)", fontSize: 12, lineHeight: 1.4 }}>
               {t("chat.dropFilesDetail")}
             </div>
           </div>
@@ -1583,7 +1583,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
             maxHeight: "calc(var(--app-viewport-height, 100dvh) - 16px)",
             overflowY: "auto",
             padding: quoteInputOpen ? 12 : 3,
-            border: "1px solid var(--border)",
+            border: "var(--hairline) solid var(--border)",
             borderRadius: 6,
             background: "var(--bg)",
             boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
@@ -1766,7 +1766,7 @@ function NoticeShelf({ notices, floating = false, onPauseChange }: { notices: No
               marginBottom: index === notices.length - 1 ? 0 : 6,
               overflow: "hidden",
               borderRadius: 10,
-              border: "1px solid color-mix(in srgb, var(--border) 70%, transparent)",
+              border: "var(--hairline) solid color-mix(in srgb, var(--border) 70%, transparent)",
               background: "var(--bg)",
               color: "var(--text-muted)",
               width: "fit-content",
@@ -1916,7 +1916,7 @@ function ExtensionDialog({
             maxWidth: "min(560px, 100%)",
             width: "100%",
             padding: "10px 12px",
-            border: "1px solid var(--border)",
+            border: "var(--hairline) solid var(--border)",
             borderRadius: 8,
             background: "var(--bg)",
             boxShadow: "0 12px 32px rgba(0,0,0,0.18)",
@@ -1952,14 +1952,14 @@ function ExtensionDialog({
           maxHeight: "min(760px, 100%)",
           display: "flex",
           flexDirection: "column",
-          border: "1px solid var(--border)",
+          border: "var(--hairline) solid var(--border)",
           borderRadius: 8,
           background: "var(--bg)",
           boxShadow: "0 20px 60px rgba(0,0,0,0.28)",
           overflow: "hidden",
         }}
       >
-        <div style={{ flexShrink: 1, minHeight: 0, display: "flex", alignItems: "flex-start", gap: 8, padding: "12px 14px", borderBottom: "1px solid var(--border)", maxHeight: "50vh", overflowY: "auto" }}>
+        <div style={{ flexShrink: 1, minHeight: 0, display: "flex", alignItems: "flex-start", gap: 8, padding: "12px 14px", borderBottom: "var(--hairline) solid var(--border)", maxHeight: "50vh", overflowY: "auto" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             {/* Pi's TUI shows the title verbatim, newlines included; select/input have no
                 separate message field, so extensions put multi-line text here. */}
@@ -1982,7 +1982,7 @@ function ExtensionDialog({
               width: 28,
               height: 28,
               borderRadius: 6,
-              border: "1px solid var(--border)",
+              border: "var(--hairline) solid var(--border)",
               background: "var(--bg-panel)",
               color: "var(--text-muted)",
               cursor: "pointer",
@@ -2038,7 +2038,7 @@ function ExtensionDialog({
                     width: "100%",
                     padding: "9px 10px",
                     borderRadius: 7,
-                    border: "1px solid var(--border)",
+                    border: "var(--hairline) solid var(--border)",
                     background: "var(--bg-panel)",
                     color: "var(--text)",
                     cursor: "pointer",
@@ -2071,7 +2071,7 @@ function ExtensionDialog({
                     alignItems: "center",
                     gap: 7,
                     padding: "7px 10px",
-                    border: "1px solid color-mix(in srgb, var(--accent) 42%, transparent)",
+                    border: "var(--hairline) solid color-mix(in srgb, var(--accent) 42%, transparent)",
                     borderRadius: 7,
                     background: "color-mix(in srgb, var(--accent) 10%, transparent)",
                     color: "var(--accent)",
@@ -2105,7 +2105,7 @@ function ExtensionDialog({
                 width: "100%",
                 padding: "9px 10px",
                 borderRadius: 7,
-                border: "1px solid var(--border)",
+                border: "var(--hairline) solid var(--border)",
                 background: "var(--bg-panel)",
                 color: "var(--text)",
                 outline: "none",
@@ -2126,7 +2126,7 @@ function ExtensionDialog({
                 minHeight: 220,
                 padding: 10,
                 borderRadius: 7,
-                border: "1px solid var(--border)",
+                border: "var(--hairline) solid var(--border)",
                 background: "var(--bg-panel)",
                 color: "var(--text)",
                 outline: "none",
@@ -2139,14 +2139,14 @@ function ExtensionDialog({
           )}
         </div>
 
-        <div style={{ flexShrink: 0, display: "flex", justifyContent: "flex-end", gap: 8, padding: "10px 14px", borderTop: "1px solid var(--border)", background: "var(--bg-panel)" }}>
+        <div style={{ flexShrink: 0, display: "flex", justifyContent: "flex-end", gap: 8, padding: "10px 14px", borderTop: "var(--hairline) solid var(--border)", background: "var(--bg-panel)" }}>
           <button
             autoFocus={request.method === "confirm" || (request.method === "select" && request.options.length === 0)}
             onClick={() => onRespond(request, { cancelled: true })}
             style={{
               padding: "6px 10px",
               borderRadius: 6,
-              border: "1px solid var(--border)",
+              border: "var(--hairline) solid var(--border)",
               background: "var(--bg)",
               color: "var(--text-muted)",
               cursor: "pointer",
@@ -2160,7 +2160,7 @@ function ExtensionDialog({
               style={{
                 padding: "6px 10px",
                 borderRadius: 6,
-                border: "1px solid var(--accent)",
+                border: "var(--hairline) solid var(--accent)",
                 background: "var(--accent)",
                 color: "var(--accent-contrast)",
                 cursor: "pointer",
@@ -2174,7 +2174,7 @@ function ExtensionDialog({
               style={{
                 padding: "6px 10px",
                 borderRadius: 6,
-                border: "1px solid var(--accent)",
+                border: "var(--hairline) solid var(--accent)",
                 background: "var(--accent)",
                 color: "var(--accent-contrast)",
                 cursor: "pointer",
@@ -2240,7 +2240,7 @@ function ExtensionCustomPanel({
             maxWidth: "min(920px, 100%)",
             width: "100%",
             padding: "10px 12px",
-            border: "1px solid var(--border)",
+            border: "var(--hairline) solid var(--border)",
             borderRadius: 8,
             background: "var(--bg)",
             boxShadow: "0 12px 32px rgba(0,0,0,0.18)",
@@ -2278,7 +2278,7 @@ function ExtensionCustomPanel({
           maxHeight: "min(760px, 100%)",
           display: "flex",
           flexDirection: "column",
-          border: "1px solid var(--border)",
+          border: "var(--hairline) solid var(--border)",
           borderRadius: 8,
           background: "var(--bg)",
           boxShadow: "0 20px 60px rgba(0,0,0,0.28)",
@@ -2334,7 +2334,7 @@ function ExtensionCustomPanel({
             pointerEvents: "none",
           }}
         />
-        <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderBottom: "var(--hairline) solid var(--border)" }}>
            <div style={{ color: "var(--text)", fontSize: 13, fontWeight: 650 }}>{t("chat.extensionPanel")}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <ExtensionWaitingCount count={waitingCount} />
@@ -2350,7 +2350,7 @@ function ExtensionCustomPanel({
                 width: 28,
                 height: 28,
                 borderRadius: 6,
-                border: "1px solid var(--border)",
+                border: "var(--hairline) solid var(--border)",
                 background: "var(--bg-panel)",
                 color: "var(--text-muted)",
                 cursor: "pointer",
@@ -2366,7 +2366,7 @@ function ExtensionCustomPanel({
               style={{
                 padding: "5px 9px",
                 borderRadius: 6,
-                border: "1px solid var(--border)",
+                border: "var(--hairline) solid var(--border)",
                 background: "var(--bg-panel)",
                 color: "var(--text-muted)",
                 cursor: "pointer",

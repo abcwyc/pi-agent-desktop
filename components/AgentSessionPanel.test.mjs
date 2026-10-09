@@ -22,7 +22,7 @@ test("sorts running subagents first and enables search only for larger families"
 });
 
 test("renders as a compact left-positioned dropdown without a centered inner width", () => {
-  assert.match(source, /borderLeft: "1px solid var\(--border\)"/);
+  assert.match(source, /borderLeft: "var\(--hairline\) solid var\(--border\)"/);
   assert.match(source, /borderRadius: "0 0 6px 6px"/);
   assert.doesNotMatch(source, /maxWidth: 680/);
 });

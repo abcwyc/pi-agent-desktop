@@ -33,7 +33,7 @@ export function SessionStatsPanel({ sessionStats, contextUsage, isMobile }: Sess
   return (
     <div className="session-info-popover" style={{
       background: "var(--surface-elevated)",
-      borderBottom: "1px solid var(--border)",
+      borderBottom: "var(--hairline) solid var(--border)",
       boxShadow: "var(--shadow-popover)",
       padding: "12px 16px",
     }}>
@@ -110,7 +110,7 @@ export function SessionStatsPanel({ sessionStats, contextUsage, isMobile }: Sess
                 marginTop: -2,
                 color: copied ? "var(--accent)" : "var(--text-dim)",
                 background: "transparent",
-                border: "1px solid var(--border)",
+                border: "var(--hairline) solid var(--border)",
                 borderRadius: 4,
                 cursor: "pointer",
                 flex: "0 0 auto",

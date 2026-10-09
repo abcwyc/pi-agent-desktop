@@ -37,7 +37,7 @@ export function TurnWrittenFiles({ files, onOpenFile }: {
               fontFamily: "var(--font-mono)",
               color: "var(--text)",
               background: "var(--bg-subtle)",
-              border: "1px solid var(--border)",
+              border: "var(--hairline) solid var(--border)",
               borderRadius: 6,
               cursor: "pointer",
             }}
