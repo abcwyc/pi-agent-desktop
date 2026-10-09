@@ -4,6 +4,9 @@ import { useCallback, type MouseEvent } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { copyText } from "@/lib/clipboard";
 import { canUseNativeMenu, showNativeMenu } from "@/lib/desktop-menu";
+import { openDomMenu } from "@/lib/dom-menu-store";
+import type { NativeMenuEntry } from "@/lib/desktop-menu-model";
+import { isTauriDesktop } from "@/lib/desktop-updater";
 import {
   listAppsForFileNative,
   openPathWithNative,
@@ -48,6 +51,18 @@ async function fileExists(filePath: string): Promise<boolean> {
   }
 }
 
+/**
+ * The native popup while those are on, otherwise the in-app menu
+ * (components/DomContextMenuHost.tsx), which draws the same entries.
+ */
+async function showMenu(entries: NativeMenuEntry[], at: { x: number; y: number }): Promise<void> {
+  if (canUseNativeMenu()) {
+    await showNativeMenu(entries, at);
+    return;
+  }
+  openDomMenu(entries, at);
+}
+
 function reportFailure(action: string, error: unknown): void {
   console.error(`File menu: ${action} failed`, error);
 }
@@ -65,8 +80,9 @@ export interface FileMenuTarget {
 }
 
 /**
- * Returns a `contextmenu` handler that shows the native file menu in the
- * desktop shell. In a browser it does nothing, so the browser's own menu stays.
+ * Returns a `contextmenu` handler that shows the file menu in the desktop
+ * shell: the native popup while those are on, otherwise the in-app menu. In a
+ * browser it does nothing, so the browser's own menu stays.
  */
 export function useFileContextMenu(
   onOpenFile?: (filePath: string, page?: number) => void,
@@ -74,7 +90,7 @@ export function useFileContextMenu(
   const { t } = useI18n();
 
   return useCallback((event, { filePath, page, verify }) => {
-    if (!canUseNativeMenu()) return;
+    if (!isTauriDesktop()) return;
     // Claim the right-click now: the checks below are async, and the document
     // fallback in useNativeContextMenu only respects a prevented event.
     event.preventDefault();
@@ -82,12 +98,16 @@ export function useFileContextMenu(
 
     void (async () => {
       if (verify && !(await fileExists(filePath))) {
-        if ((window.getSelection()?.toString() ?? "") !== "") {
-          await showNativeMenu([
-            { kind: "predefined", item: "Copy" },
-            { kind: "separator" },
-            { kind: "predefined", item: "SelectAll" },
-          ], at);
+        const selection = window.getSelection()?.toString() ?? "";
+        if (selection !== "") {
+          await showMenu(canUseNativeMenu()
+            ? [
+                { kind: "predefined", item: "Copy" },
+                { kind: "separator" },
+                { kind: "predefined", item: "SelectAll" },
+              ]
+            : [{ label: t("fileMenu.copy"), onSelect: () => { copyText(selection).catch((error) => reportFailure("copy", error)); } }],
+          at);
         }
         return;
       }
@@ -98,7 +118,7 @@ export function useFileContextMenu(
         openPathWithNative(filePath, appPath).catch((error) => reportFailure("open with", error));
       };
 
-      await showNativeMenu(buildFileMenuEntries(
+      await showMenu(buildFileMenuEntries(
         {
           open: t("fileMenu.open"),
           openWith: t("fileMenu.openWith"),

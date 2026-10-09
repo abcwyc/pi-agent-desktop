@@ -463,6 +463,7 @@ export const enLocale: LocalePlugin = {
     "fileMenu.revealInExplorer": "Show in Explorer",
     "fileMenu.revealInFileManager": "Show in file manager",
     "fileMenu.copyPath": "Copy Path",
+    "fileMenu.copy": "Copy",
     "chat.loadEarlier": "Scroll up to load earlier messages",
     "chat.scrollToLatest": "Scroll to latest",
     "chat.extensionRequest": "extension request",

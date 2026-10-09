@@ -423,6 +423,7 @@ export const zhTWLocale: LocalePlugin = {
     "fileMenu.revealInExplorer": "在檔案總管中顯示",
     "fileMenu.revealInFileManager": "在檔案管理員中顯示",
     "fileMenu.copyPath": "複製路徑",
+    "fileMenu.copy": "複製",
     "chat.loadEarlier": "向上捲動以載入較早的訊息",
     "chat.scrollToLatest": "回到最新訊息",
     "chat.extensionRequest": "擴充功能請求",

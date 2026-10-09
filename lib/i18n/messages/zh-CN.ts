@@ -463,6 +463,7 @@ export const zhCNLocale: LocalePlugin = {
     "fileMenu.revealInExplorer": "在资源管理器中显示",
     "fileMenu.revealInFileManager": "在文件管理器中显示",
     "fileMenu.copyPath": "复制路径",
+    "fileMenu.copy": "复制",
     "chat.loadEarlier": "向上滚动以加载更早的消息",
     "chat.scrollToLatest": "回到最新消息",
     "chat.extensionRequest": "扩展请求",
