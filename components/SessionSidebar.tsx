@@ -16,6 +16,7 @@ import { groupByProject } from "@/lib/project-group";
 import { notifyDesktop } from "@/lib/desktop-notify";
 import { revealItemInDirNative } from "@/lib/desktop-native";
 import { isTauriDesktop } from "@/lib/desktop-updater";
+import { menuPointBelow, showNativeMenu, type NativeMenuPoint } from "@/lib/desktop-menu";
 import { getDesktopPlatform, type DesktopPlatform } from "@/lib/desktop-window";
 import { useWindowDrag } from "./desktop";
 import { SessionSearch } from "./SessionSearch";
@@ -842,9 +843,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     }
   }, []);
 
-  const handleSwitchProjectBranch = useCallback(async (projectRoot: string, branch: string) => {
+  const handleSwitchProjectBranch = useCallback(async (projectRoot: string, branch: string, loaded?: ProjectBranchMenuState) => {
     if (wtSwitchingBranch) return;
-    const branchData = projectBranchMenu?.root === projectRoot ? projectBranchMenu : null;
+    const branchData = loaded ?? (projectBranchMenu?.root === projectRoot ? projectBranchMenu : null);
     const checkout = branchData?.worktrees.find((w) => w.path === selectedCwd)
       ?? branchData?.worktrees.find((w) => w.isMain)
       ?? null;
@@ -1053,8 +1054,76 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     setProjectMenuPos(null);
   }, []);
 
+  // Desktop shell: native popup versions of the project menu and its branch
+  // list. `projectMenu` stays set while one is up (it keeps the row's "…"
+  // visible) but `projectMenuPos` stays null, so the DOM menu never renders.
+  const showNativeBranchMenu = useCallback(async (projectRoot: string, at: NativeMenuPoint) => {
+    let data: ProjectBranchMenuState;
+    try {
+      const res = await fetch(`/api/worktrees?cwd=${encodeURIComponent(projectRoot)}&branches=1`);
+      const body = await res.json().catch(() => ({})) as {
+        projectRoot?: string;
+        branches?: string[];
+        remoteBranches?: string[];
+        worktrees?: WorktreeEntry[];
+      };
+      if (!res.ok || body.projectRoot !== projectRoot) throw new Error(`HTTP ${res.status}`);
+      data = {
+        root: projectRoot,
+        branches: Array.isArray(body.branches) ? body.branches : [],
+        remoteBranches: Array.isArray(body.remoteBranches) ? body.remoteBranches : [],
+        worktrees: Array.isArray(body.worktrees) ? body.worktrees : [],
+        loaded: true,
+      };
+    } catch {
+      data = { root: projectRoot, branches: [], remoteBranches: [], worktrees: [], loaded: true };
+    }
+    const checkout = data.worktrees.find((w) => w.path === selectedCwd) ?? data.worktrees.find((w) => w.isMain);
+    const names = [
+      ...data.branches.map((name) => ({ name, remote: false })),
+      ...data.remoteBranches.map((name) => ({ name, remote: true })),
+    ];
+    await showNativeMenu(
+      names.length === 0
+        ? [{ label: t("sidebar.noOtherBranches"), disabled: true }]
+        : names.map(({ name, remote }) => {
+            const holder = data.worktrees.find((w) => w.branch === name && w.path !== checkout?.path);
+            const tag = holder ? "worktree" : remote ? t("sidebar.remoteBranchTag") : "";
+            return {
+              label: tag ? `${name}  ·  ${tag}` : name,
+              checked: checkout?.branch === name,
+              disabled: wtSwitchingBranch !== null,
+              onSelect: () => void handleSwitchProjectBranch(projectRoot, name, data),
+            };
+          }),
+      at,
+    );
+  }, [handleSwitchProjectBranch, selectedCwd, t, wtSwitchingBranch]);
+
+  const showNativeProjectMenu = useCallback(async (projectRoot: string, at: NativeMenuPoint): Promise<boolean> => {
+    setProjectMenu({ root: projectRoot });
+    setProjectMenuPos(null);
+    setProjectBranchMenu(null);
+    setProjectRevealError(null);
+    const shown = await showNativeMenu([
+      { label: `${t("sidebar.switchBranch")}…`, onSelect: () => void showNativeBranchMenu(projectRoot, at) },
+      ...(onOpenTerminal
+        ? [{ label: t("sidebar.openTerminalHere"), onSelect: () => onOpenTerminal(projectRoot) }]
+        : []),
+      { label: revealProjectLabel, onSelect: () => void revealProjectInFileManager(projectRoot) },
+      { kind: "separator" as const },
+      { label: t("sidebar.archiveProject"), onSelect: () => archiveProject(projectRoot) },
+    ], at);
+    setProjectMenu((current) => (current?.root === projectRoot ? null : current));
+    return shown;
+  }, [archiveProject, onOpenTerminal, revealProjectInFileManager, revealProjectLabel, showNativeBranchMenu, t]);
+
   const openProjectMenu = useCallback((e: React.MouseEvent<HTMLButtonElement>, projectRoot: string) => {
     e.stopPropagation();
+    if (isTauriDesktop()) {
+      void showNativeProjectMenu(projectRoot, menuPointBelow(e.currentTarget));
+      return;
+    }
     if (projectMenu?.root === projectRoot) {
       setProjectMenu(null);
       setProjectMenuPos(null);
@@ -1072,7 +1141,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     setProjectMenuPos({ top, left });
     setProjectBranchMenu(null);
     setProjectRevealError(null);
-  }, [projectMenu]);
+  }, [projectMenu, showNativeProjectMenu]);
 
   // Phase A: project tree — groups sessions by project root. Sorting is
   const trimmedSessionQuery = sessionQuery.trim().toLowerCase();
@@ -2394,17 +2463,72 @@ function SessionItem({
 
   // "…" menu: fixed-position portal so the sidebar's overflow/backdrop-filter can't clip it
   const MENU_WIDTH = 190;
+  // Desktop shell: the same actions as the DOM menu below, as a native popup.
+  // `menuOpen` stays true while it is up so the trailing "…" button does not
+  // swap back to the timestamp; `menuPos` stays null, so no DOM menu renders.
+  const showNativeSessionMenu = useCallback(async (at: NativeMenuPoint): Promise<boolean> => {
+    if (session.transient) return false;
+    setMenuOpen(true);
+    const shown = await showNativeMenu([
+      { label: t("sidebar.rename"), onSelect: startRename },
+      { label: t("sidebar.delete"), onSelect: () => setConfirmDelete(true) },
+      { kind: "separator" },
+      {
+        label: `${formatRelativeTime(session.modified, locale)} · ${t("sidebar.messagesCount", { count: session.messageCount })}`,
+        disabled: true,
+      },
+      ...((session.compactionCount ?? 0) > 0
+        ? [{ label: t("sidebar.compactionCount", { count: session.compactionCount ?? 0 }), disabled: true }]
+        : []),
+      ...(session.worktreeBranch ? [{ label: session.worktreeBranch, disabled: true }] : []),
+    ], at);
+    setMenuOpen(false);
+    return shown;
+  }, [locale, session.compactionCount, session.messageCount, session.modified, session.transient, session.worktreeBranch, startRename, t]);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const handled = dispatchSessionRowContextMenu({
+      id: session.id,
+      path: session.path,
+      cwd: session.cwd,
+      name: session.name,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      refresh: () => { onRenamed?.(); },
+    });
+    if (handled) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    // Replace the webview's own context menu (Reload / Inspect) with the row's actions.
+    if (isTauriDesktop() && !session.transient) {
+      e.preventDefault();
+      e.stopPropagation();
+      void showNativeSessionMenu({ x: e.clientX, y: e.clientY });
+    }
+  }, [onRenamed, session.cwd, session.id, session.name, session.path, session.transient, showNativeSessionMenu]);
+
   const toggleMenu = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (menuOpen) { setMenuOpen(false); return; }
     const rect = e.currentTarget.getBoundingClientRect();
-    const estHeight = 124;
-    const left = Math.max(8, Math.min(rect.right - MENU_WIDTH, window.innerWidth - MENU_WIDTH - 8));
-    let top = rect.bottom + 4;
-    if (top + estHeight > window.innerHeight - 8) top = rect.top - estHeight - 4;
-    setMenuPos({ top, left });
-    setMenuOpen(true);
-  }, [menuOpen]);
+    const openDomMenu = () => {
+      const estHeight = 124;
+      const left = Math.max(8, Math.min(rect.right - MENU_WIDTH, window.innerWidth - MENU_WIDTH - 8));
+      let top = rect.bottom + 4;
+      if (top + estHeight > window.innerHeight - 8) top = rect.top - estHeight - 4;
+      setMenuPos({ top, left });
+      setMenuOpen(true);
+    };
+    if (isTauriDesktop()) {
+      void showNativeSessionMenu(menuPointBelow(e.currentTarget)).then((shown) => {
+        if (!shown) openDomMenu();
+      });
+      return;
+    }
+    openDomMenu();
+  }, [menuOpen, showNativeSessionMenu]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -2438,20 +2562,6 @@ function SessionItem({
     setConfirmDelete(false);
   }, []);
 
-  const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const handled = dispatchSessionRowContextMenu({
-      id: session.id,
-      path: session.path,
-      cwd: session.cwd,
-      name: session.name,
-      clientX: e.clientX,
-      clientY: e.clientY,
-      refresh: () => { onRenamed?.(); },
-    });
-    if (!handled) return;
-    e.preventDefault();
-    e.stopPropagation();
-  }, [onRenamed, session.cwd, session.id, session.name, session.path]);
 
   // Fixed-height outer wrapper — content swaps in place so the list never reflows
   return (

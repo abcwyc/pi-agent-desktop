@@ -21,8 +21,10 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::menu::{MenuItem as MacMenuItem, PredefinedMenuItem, Submenu};
 #[cfg(not(target_os = "linux"))]
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+#[cfg(not(target_os = "macos"))]
+use tauri::webview::Color;
 use tauri::{
-    webview::{Color, NewWindowResponse},
+    webview::NewWindowResponse,
     AppHandle, Emitter, Manager, RunEvent, Theme, Url, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder,
 };
@@ -42,7 +44,9 @@ const SERVER_START_TIMEOUT: Duration = Duration::from_secs(30);
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
+#[cfg(not(target_os = "macos"))]
 const LIGHT_WINDOW_BG: Color = Color(247, 247, 245, 255);
+#[cfg(not(target_os = "macos"))]
 const DARK_WINDOW_BG: Color = Color(28, 28, 30, 255);
 
 struct DesktopServer {
@@ -730,6 +734,7 @@ fn write_last_server_port(app: &AppHandle, port: u16) {
     let _ = write_ui_prefs(app, &prefs);
 }
 
+#[cfg(not(target_os = "macos"))]
 fn theme_background_color(theme: &str) -> Color {
     if theme == "dark" {
         DARK_WINDOW_BG
@@ -754,6 +759,7 @@ fn theme_bootstrap_script(theme: &str) -> String {
 /// True when running under a Wayland compositor. `set_background_color` and a
 /// few other native chrome APIs dereference a null GdkSurface there and crash,
 /// so callers consult this to avoid them.
+#[cfg(not(target_os = "macos"))]
 fn is_wayland() -> bool {
     env::var("WAYLAND_DISPLAY").is_ok()
         || env::var("GDK_BACKEND")
@@ -775,6 +781,9 @@ fn apply_window_theme(app: &AppHandle, theme: &str) {
     // Wayland and segfaults the whole process (frameless WebKitGTK window).
     // The page paints its own opaque background via CSS, so the native chrome
     // color is cosmetic only and is safe to skip on Wayland.
+    // On macOS the window is transparent over an NSVisualEffectView, so an
+    // opaque native background would hide the vibrancy.
+    #[cfg(not(target_os = "macos"))]
     if !is_wayland() {
         let _ = window.set_background_color(Some(theme_background_color(theme)));
     }
@@ -827,10 +836,15 @@ fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWi
             .initialization_script(theme_bootstrap_script(theme));
         // Skip the native background color on Wayland: it can NULL-deref the
         // GdkSurface during window creation and crash the process.
+        #[cfg(not(target_os = "macos"))]
         if !is_wayland() {
             builder = builder.background_color(theme_background_color(theme));
         }
     }
+
+    // Lets native-theme.css apply desktop-only conventions (arrow cursors,
+    // non-selectable chrome) without touching the browser build.
+    builder = builder.initialization_script(DESKTOP_MARKER_SCRIPT);
 
     // Hide the native title bar. macOS keeps the traffic-light controls
     // (overlaid on our own top bar); other platforms go fully frameless and
@@ -839,7 +853,12 @@ fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWi
     {
         builder = builder
             .title_bar_style(tauri::TitleBarStyle::Overlay)
-            .hidden_title(true);
+            .hidden_title(true)
+            // Transparent webview over an NSVisualEffectView (see below). The
+            // `native-vibrancy` class tells native-theme.css to let the sidebar
+            // show through; without it the page paints opaque as before.
+            .transparent(true)
+            .initialization_script(VIBRANCY_MARKER_SCRIPT);
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -847,7 +866,41 @@ fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWi
         builder = builder.decorations(false);
     }
 
-    builder.build()
+    let window = builder.build()?;
+
+    #[cfg(target_os = "macos")]
+    apply_macos_vibrancy(&window);
+
+    Ok(window)
+}
+
+const DESKTOP_MARKER_SCRIPT: &str =
+    r#"(function(){try{document.documentElement.classList.add("native-desktop");}catch(e){}})();"#;
+
+/// Marks <html> so native-theme.css can make the sidebar translucent. Removed
+/// again by `apply_macos_vibrancy` if the effect view could not be attached.
+#[cfg(target_os = "macos")]
+const VIBRANCY_MARKER_SCRIPT: &str =
+    r#"(function(){try{document.documentElement.classList.add("native-vibrancy");}catch(e){}})();"#;
+
+/// Puts the system sidebar material behind the transparent webview. The
+/// material follows the window theme set via `set_theme`.
+#[cfg(target_os = "macos")]
+fn apply_macos_vibrancy(window: &WebviewWindow) {
+    use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
+
+    if apply_vibrancy(
+        window,
+        NSVisualEffectMaterial::Sidebar,
+        Some(NSVisualEffectState::Active),
+        None,
+    )
+    .is_err()
+    {
+        let _ = window.eval(
+            r#"document.documentElement.classList.remove("native-vibrancy");"#,
+        );
+    }
 }
 
 #[cfg(all(feature = "custom-protocol", unix))]

@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, useMemo, useImperativeHandle, forwardRef, KeyboardEvent } from "react";
+import { isTauriDesktop } from "@/lib/desktop-updater";
+import { menuPointBelow, showNativeMenu } from "@/lib/desktop-menu";
 import type { BuiltinSlashCommandResult, CompactResultInfo, QueuedMessages, SlashCommandInfo } from "@/hooks/useAgentSession";
 import type { SkillsResponse } from "@/lib/api-types";
 import type { ModelScopeWarning } from "@/lib/model-scope-warnings";
@@ -2945,9 +2947,24 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   aria-label={t("chat.currentProject", { path: projectPath ?? projectLabel })}
                   aria-haspopup={projectOptions.length > 0 && onProjectChange ? "menu" : undefined}
                   aria-expanded={projectOptions.length > 0 && onProjectChange ? projectDropdownOpen : undefined}
-                  onClick={() => {
-                    if (projectOptions.length > 0 && onProjectChange) setProjectDropdownOpen((open) => !open);
-                    else onSelectProject?.();
+                  onClick={(event) => {
+                    if (projectOptions.length > 0 && onProjectChange) {
+                      // Desktop shell: the project list as a native popup.
+                      if (isTauriDesktop()) {
+                        void showNativeMenu(
+                          projectOptions.map((projectRoot) => ({
+                            label: getProjectLabel(projectRoot) ?? projectRoot,
+                            checked: projectRoot === projectPath,
+                            onSelect: () => {
+                              if (projectRoot !== projectPath) onProjectChange(projectRoot);
+                            },
+                          })),
+                          menuPointBelow(event.currentTarget),
+                        );
+                        return;
+                      }
+                      setProjectDropdownOpen((open) => !open);
+                    } else onSelectProject?.();
                   }}
                   disabled={!onSelectProject && !(projectOptions.length > 0 && onProjectChange)}
                 >
