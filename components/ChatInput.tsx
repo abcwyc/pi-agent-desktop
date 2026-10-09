@@ -2889,6 +2889,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             </button>
           )}
           </div>
+          {/* Session controls sit below the input card, not inside it. */}
+          </div>
 
         {/* Bash mode status label */}
         {bashMode && (
@@ -2901,7 +2903,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         {!compact && <div className="chat-composer-controls" style={{
           marginTop: 8,
           display: isNarrow ? "grid" : "flex",
-          gridTemplateColumns: isNarrow ? "minmax(0, 1fr) auto" : undefined,
+          gridTemplateColumns: isNarrow ? "auto minmax(0, 1fr) auto" : undefined,
           alignItems: "center",
           gap: 6,
         }}>
@@ -2942,7 +2944,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <button
                   type="button"
                   className="chat-project-context"
-                  style={{ maxWidth: isCompact ? 120 : 170 }}
+                  style={{ maxWidth: isNarrow ? 72 : isCompact ? 120 : 170 }}
                   title={`${t("chat.switchProject")} · ${t("chat.currentProject", { path: projectPath ?? projectLabel })}`}
                   aria-label={t("chat.currentProject", { path: projectPath ?? projectLabel })}
                   aria-haspopup={projectOptions.length > 0 && onProjectChange ? "menu" : undefined}
@@ -3109,7 +3111,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   justifyContent: "center",
                   width: "100%",
                   height: 32,
-                  padding: "8px 10px",
+                  padding: "0 6px",
                   background: "none",
                   border: "none",
                   borderRadius: 9,
@@ -3117,6 +3119,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   cursor: controlsMenuOpen ? "default" : "pointer",
                   fontSize: 12,
                   fontWeight: 500,
+                  whiteSpace: "nowrap",
                   visibility: controlsMenuOpen ? "hidden" : "visible",
                   pointerEvents: controlsMenuOpen ? "none" : "auto",
                   transition: "background 0.12s, color 0.12s",
@@ -3612,7 +3615,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           </div>
 
         </div>}
-          </div>
         </div>
       </div>
     </fieldset>

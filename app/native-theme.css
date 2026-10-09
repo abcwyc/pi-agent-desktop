@@ -3289,7 +3289,7 @@ html.dark .sidebar-view-switcher-thumb {
 
 .chat-composer {
   overflow: visible;
-  padding: 8px 9px 6px;
+  padding: 8px 9px;
   background: var(--surface) !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--radius-xl) !important;
@@ -3325,14 +3325,16 @@ html.dark .sidebar-view-switcher-thumb {
 }
 
 .chat-composer-controls {
-  margin-top: 0 !important;
+  /* A separate row under the input card (not inside it), like the reference
+     layout: the card holds only the text and Send, the settings sit below. */
+  margin-top: 6px !important;
   min-height: 32px;
   min-width: 0;
   max-width: 100%;
   /* Dropdowns are rendered inside this row and open above it. Clipping the
      row also clips their scrollable option panels. */
   overflow: visible;
-  padding: 0 3px;
+  padding: 0 4px;
 }
 
 .chat-composer-controls button {
