@@ -47,32 +47,12 @@ test("puts the composer column on the message column's axis", () => {
   );
 });
 
-test("the new-session header keeps only the update chip", () => {
-  const start = source.indexOf("{isEmptyNew && (", source.indexOf('className={`chat-scroll-to-bottom'));
-  assert.notEqual(start, -1, "the empty-session header block must still exist");
-  const block = source.slice(start, source.indexOf("{aboveEditorWidgets.length > 0", start));
-
-  assert.match(block, /<NewSessionUpdateLink /, "the update chip is the row's only content");
-  // The fork dropped the icon + PRODUCT_NAME branding row that sat above the
-  // composer; a merge re-adopting upstream's empty state would bring it back.
-  assert.doesNotMatch(block, /apple-touch-icon|PRODUCT_NAME/, "the product branding must not come back above the composer");
-  assert.doesNotMatch(
-    block,
-    /className="mb-3 w-full"/,
-    "the row must not carry its own bottom margin — it is empty whenever no update is pending",
-  );
-  const chipStart = source.indexOf("function NewSessionUpdateLink(");
-  const chip = source.slice(chipStart, source.indexOf("\nexport function ChatWindow", chipStart));
-  assert.match(
-    chip,
-    /marginBottom: 12,/,
-    "the chip owns the spacing above the composer instead of the always-rendered row",
-  );
-  assert.equal(
-    chip.split("marginBottom: 12,").length - 1,
-    1,
-    "only the chip's own anchor carries that margin",
-  );
+test("the new-session screen has no header row above the composer", () => {
+  // The fork dropped the icon + PRODUCT_NAME branding row and then the update
+  // chip too, so nothing sits between the empty state and the composer.
+  assert.doesNotMatch(source, /NewSessionUpdateLink/, "the update chip above the composer was removed");
+  assert.doesNotMatch(source, /apple-touch-icon|PRODUCT_NAME/, "the product branding must not come back above the composer");
+  assert.doesNotMatch(source, /\/api\/app-update/, "ChatWindow no longer checks for updates");
 });
 
 test("composer and message columns share one padding and one max width", () => {
@@ -80,18 +60,16 @@ test("composer and message columns share one padding and one max width", () => {
   assert.ok(Number.isFinite(columnPadding), "CHAT_COLUMN_PADDING must be a number");
 
   const composerPadding = Number(/padding: compact \? 0 : "0 (\d+)px 8px"/.exec(inputSource)?.[1]);
-  const emptyHeaderPadding = Number(/className="w-full" style=\{\{ padding: "0 (\d+)px" \}\}/.exec(source)?.[1]);
   const widgetPadding = Number(/className="mb-2 w-full" style=\{\{ padding: "0 (\d+)px" \}\}/.exec(source)?.[1]);
 
   assert.equal(composerPadding, columnPadding, "the composer fieldset must inset the column like the message list");
-  assert.equal(emptyHeaderPadding, columnPadding, "the new-session header must sit on the column axis");
   assert.equal(widgetPadding, columnPadding, "extension widgets must sit on the column axis");
 
   const maxWidth = "var(--chat-content-max-width, 820px)";
   assert.equal(
     source.split(maxWidth).length - 1,
-    3,
-    "message list, new-session header and extension widgets share the appearance width",
+    2,
+    "message list and extension widgets share the appearance width",
   );
   assert.equal(inputSource.split(maxWidth).length - 1, 1, "the composer shares the appearance width");
 });
