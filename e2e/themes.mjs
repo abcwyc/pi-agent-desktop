@@ -11,16 +11,41 @@ const labels = ["Light", "Dark", "Mist", "Rose", "Pine", "System"];
 await mkdir(artifacts, { recursive: true });
 const browser = await chromium.launch();
 
-function contrast(a, b) {
-  const luminance = (hex) => {
-    const digits = hex.length === 4 ? [...hex.slice(1)].map((digit) => digit + digit).join("") : hex.slice(1);
-    const channels = digits.match(/../g).map((part) => {
-      const value = parseInt(part, 16) / 255;
+// The fork's surfaces are translucent (rgba / transparent over the window
+// vibrancy), so resolve every token to opaque RGB by compositing it over the
+// page background before measuring contrast.
+function parseColor(value) {
+  const text = value.trim();
+  if (text === "transparent") return [0, 0, 0, 0];
+  if (text.startsWith("#")) {
+    const digits = text.length === 4 ? [...text.slice(1)].map((digit) => digit + digit).join("") : text.slice(1);
+    return [...digits.match(/../g).map((part) => parseInt(part, 16)), 1];
+  }
+  const match = text.match(/^rgba?\(([^)]+)\)$/);
+  assert.ok(match, `Unsupported color token: ${value}`);
+  const [r, g, b, a = 1] = match[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+  return [r, g, b, a];
+}
+
+function composite(color, base) {
+  const [r, g, b, a] = color;
+  return [0, 1, 2].map((i) => [r, g, b][i] * a + base[i] * (1 - a));
+}
+
+function contrast(a, b, baseToken) {
+  const base = composite(parseColor(baseToken), [255, 255, 255]);
+  const resolve = (token) => composite(parseColor(token), base);
+  const luminance = (rgb) => {
+    const channels = rgb.map((part) => {
+      const value = part / 255;
       return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
     });
     return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
   };
-  const values = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  const backgroundRgb = resolve(b);
+  const foreground = parseColor(a);
+  const foregroundRgb = composite(foreground, backgroundRgb);
+  const values = [luminance(foregroundRgb), luminance(backgroundRgb)].sort((x, y) => y - x);
   return (values[0] + 0.05) / (values[1] + 0.05);
 }
 
@@ -33,12 +58,23 @@ try {
     // Keep the check independent of the user's session catalogue.
     await page.route(/\/api\/sessions(?:\?.*)?$/, (route) => route.fulfill({ json: { sessions: [] } }));
     await page.goto(base);
-    await page.getByText("No sessions found", { exact: true }).waitFor({ state: "attached" });
+    await page.getByText("No projects found", { exact: true }).waitFor({ state: "attached" });
     const openSettings = async () => {
       const sidebar = page.getByRole("button", { name: "Show sidebar", exact: true });
       if (width <= 640) await sidebar.waitFor();
-      if (await sidebar.isVisible()) await sidebar.click();
+      if (await sidebar.isVisible()) {
+        await sidebar.click();
+        // The mobile sidebar slides in; the Settings menu anchors to the button's
+        // position at click time, so wait until the drawer has stopped moving.
+        await page.waitForFunction(() => {
+          const left = document.querySelector(".session-sidebar")?.getBoundingClientRect().left;
+          return left !== undefined && left >= 0;
+        });
+        await page.waitForTimeout(300);
+      }
       await page.getByRole("button", { name: "Settings", exact: true }).click();
+      // The fork's Settings button opens a section menu; the themes live in General.
+      await page.getByRole("menuitem", { name: "General", exact: true }).click();
     };
     const expectTheme = async (theme) => {
       await page.waitForFunction((value) => document.documentElement.dataset.theme === value, theme);
@@ -58,11 +94,14 @@ try {
       });
       for (const foreground of ["text", "text-muted", "text-dim", "accent"]) {
         for (const background of ["bg", "bg-panel", "bg-hover", "bg-selected", "user-bg", "assistant-bg", "tool-bg"]) {
-          assert.ok(contrast(colors[foreground], colors[background]) >= 4.5, `${theme}: ${foreground} on ${background} must meet WCAG AA`);
+          // docs/native-theme.md: text-dim is the one token held to a 3:1 floor (timestamps,
+          // tags); everything else is body text and must meet the 4.5:1 AA ratio.
+          const floor = foreground === "text-dim" ? 3 : 4.5;
+          assert.ok(contrast(colors[foreground], colors[background], colors.bg) >= floor, `${theme}: ${foreground} on ${background} must reach ${floor}:1`);
         }
       }
       for (const background of ["accent", "accent-hover"]) {
-        assert.ok(contrast(colors["accent-contrast"], colors[background]) >= 4.5, `${theme}: button contrast`);
+        assert.ok(contrast(colors["accent-contrast"], colors[background], colors.bg) >= 4.5, `${theme}: button contrast`);
       }
       assert.equal(await page.locator(".settings-theme-option").evaluateAll((options) => options.every((option) => {
         const label = option.querySelector(".settings-theme-option-label");
@@ -89,89 +128,26 @@ try {
     await page.keyboard.press("Escape");
     await page.reload();
     await expectTheme("dark");
-    await page.getByText("No sessions found", { exact: true }).waitFor({ state: "attached" });
-    const themeButton = page.getByRole("button", { name: /^Theme:/ });
-    const menu = page.getByRole("menu", { name: "Appearance", exact: true });
-    const showToolbar = async () => {
-      if (width > 640) return;
-      const more = page.locator("[data-mobile-toolbar-more]");
-      if (await more.getAttribute("aria-expanded") !== "true") await more.click();
-    };
-    const openThemeMenu = async () => {
-      await showToolbar();
-      await themeButton.click();
-      await menu.waitFor();
-    };
-    for (const [index, theme] of themes.entries()) {
-      const before = await page.evaluate(() => localStorage.getItem("pi-theme"));
-      await openThemeMenu();
-      assert.equal(await page.evaluate(() => localStorage.getItem("pi-theme")), before, "Opening the menu must not switch themes");
-      assert.equal(await themeButton.getAttribute("aria-expanded"), "true");
-      assert.deepEqual(await menu.getByRole("menuitemradio").allTextContents(), labels);
-      assert.equal(await menu.getByRole("menuitemradio", { checked: true }).count(), 1);
-      assert.equal(await menu.locator("svg").count(), 6);
-      const bounds = await menu.boundingBox();
-      assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width, "Menu must fit the viewport");
-      await menu.getByRole("menuitemradio", { name: labels[index], exact: true }).click();
-      await expectTheme(theme === "auto" ? "light" : theme);
-      await menu.waitFor({ state: "detached" });
-      assert.equal(await page.evaluate(() => localStorage.getItem("pi-theme")), theme);
-      assert.equal(await themeButton.evaluate((button) => button === document.activeElement), true);
-    }
-    await openThemeMenu();
-    assert.equal(await menu.getByRole("menuitemradio", { name: "System", exact: true }).evaluate((button) => button === document.activeElement), true);
-    await page.keyboard.press("Home");
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.press("Enter");
-    await expectTheme("dark");
-    await openThemeMenu();
-    await page.keyboard.press("End");
-    await page.keyboard.press("ArrowUp");
-    await page.keyboard.press("Enter");
-    await expectTheme("pine");
-    await openThemeMenu();
-    await page.screenshot({ path: `${artifacts}/menu-${width}.png`, animations: "disabled" });
-    await page.evaluate(() => {
-      window.themeEscapeReachedWindow = false;
-      window.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") window.themeEscapeReachedWindow = true;
-      });
-    });
-    await page.keyboard.press("Escape");
-    await menu.waitFor({ state: "detached" });
-    assert.equal(await page.evaluate(() => window.themeEscapeReachedWindow), false, "Escape must not reach the global agent-abort shortcut");
-    assert.equal(await themeButton.evaluate((button) => button === document.activeElement), true);
-    await openThemeMenu();
-    await page.mouse.click(width - 10, 850);
-    await menu.waitFor({ state: "detached" });
-    await openThemeMenu();
-    await page.keyboard.press("End");
-    await page.keyboard.press("Tab");
-    await menu.waitFor({ state: "detached" });
-
-    // Both selectors share positioning, dismissal, and focus handling.
-    await showToolbar();
-    await page.getByRole("button", { name: "Language", exact: true }).click();
-    const languageMenu = page.getByRole("menu", { name: "Language", exact: true });
-    await languageMenu.waitFor();
-    await page.keyboard.press("Escape");
-    await languageMenu.waitFor({ state: "detached" });
+    // The fork has no topbar theme/language menus (declined upstream UI); the
+    // Settings radios above are the only theme control.
     if (width === 1440) {
-      await page.emulateMedia({ reducedMotion: "no-preference" });
-      await openThemeMenu();
-      await menu.getByRole("menuitemradio", { name: "Dark", exact: true }).click();
+      await openSettings();
+      await page.getByRole("radio", { name: "Dark", exact: true }).locator("..").click();
       await expectTheme("dark");
-      await page.waitForFunction(() => !document.getAnimations().some((animation) => animation.playState === "running"));
       await page.reload();
       await expectTheme("dark");
       for (const key of ["bg", "bg-panel", "bg-hover", "bg-selected", "border", "text", "text-muted", "text-dim", "user-bg", "tool-bg"]) {
         const hex = await page.locator("html").evaluate((root, token) => getComputedStyle(root).getPropertyValue(`--${token}`).trim(), key);
-        const channels = hex.slice(1).match(hex.length === 4 ? /./g : /../g);
-        assert.equal(new Set(channels).size, 1, `Dark ${key} must remain neutral gray`);
+        // The fork's dark palette follows Apple's system grays (#1c1c1e is faintly
+        // cool), so require "no visible tint" rather than exactly equal channels.
+        // Translucent tokens (rgba) are overlays, not surfaces; skip them.
+        if (!hex.startsWith("#")) continue;
+        const channels = (hex.length === 4 ? hex.slice(1).match(/./g).map((c) => c + c) : hex.slice(1).match(/../g)).map((c) => parseInt(c, 16));
+        assert.ok(Math.max(...channels) - Math.min(...channels) <= 4, `Dark ${key} (${hex}) must stay near neutral gray`);
       }
     }
     assert.deepEqual(errors, []);
-    console.log(`PASS ${width}px: palettes, contrast, persistence, system preference, menu selection, keyboard navigation, dismissal, icons`);
+    console.log(`PASS ${width}px: palettes, contrast, persistence, system preference, keyboard navigation`);
     await context.close();
   }
 } finally {

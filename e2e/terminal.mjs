@@ -68,7 +68,9 @@ try {
       if (new URL(request.url()).pathname === "/api/terminal" && request.method() === "POST") created.add(request.postDataJSON().id);
     });
     const ready = () => page.locator(".terminal-panel:visible .is-ready").waitFor();
-    const text = () => page.locator(".terminal-panel:visible .xterm-rows").innerText();
+    // xterm hard-wraps at the terminal width (narrow at 390px), so drop the row
+    // breaks before matching values such as the shell pid.
+    const text = async () => (await page.locator(".terminal-panel:visible .xterm-rows").innerText()).replace(/\n/g, "");
     const run = async (command) => {
       await page.locator(".terminal-panel:visible .xterm-helper-textarea").focus();
       await page.keyboard.type(command);
@@ -86,8 +88,12 @@ try {
     // The fork opens terminals from the file panel's "+" (the sidebar's project menu
     // offers "Open terminal here"); upstream's dedicated topbar button is gone.
     const openWorkspaceTerminal = async () => {
-      const showPanel = page.locator('.app-topbar button[aria-label="Show file panel"]');
-      if (await showPanel.isVisible()) await showPanel.click();
+      // On mobile the sidebar is a modal overlay whose backdrop covers the toggle.
+      const backdrop = page.locator(".sidebar-overlay-backdrop:visible");
+      if (await backdrop.count()) await backdrop.click({ position: { x: 380, y: 400 } });
+      // Desktop: topbar toggle. Mobile: the fixed floating toggle outside the topbar.
+      const showPanel = page.locator('button[aria-label="Show file panel"]:visible').first();
+      if (await showPanel.count()) await showPanel.click();
       await page.locator("#file-panel").getByRole("button", { name: "New terminal", exact: true }).click();
     };
 
@@ -120,9 +126,9 @@ try {
       const [id] = created;
       assert.equal(created.size, 1);
 
-      await hidePanel();
-      await showSidebar();
-      await page.getByText("note.txt", { exact: true }).click();
+      // The fork's file tree lives inside the right panel, so note.txt is only
+      // reachable while the panel stays open (there is no sidebar explorer).
+      await page.locator("#file-panel").getByText("note.txt", { exact: true }).click();
       await page.getByText("File viewer fixture", { exact: true }).waitFor();
       assert.equal(await page.locator(".terminal-panel").count(), 1);
       assert.equal(await page.locator(".terminal-panel").isVisible(), false);
@@ -195,7 +201,11 @@ try {
       await hidePanel();
       await showSidebar();
       await page.getByRole("button").and(page.getByTitle(workspace, { exact: true })).first().click();
-      await page.getByRole("button").and(page.getByTitle(otherWorkspace, { exact: true })).click();
+      // A project row both selects its cwd and toggles the folder, so the target
+      // may land collapsed; expand it before looking for its session.
+      const otherRow = page.getByRole("button").and(page.getByTitle(otherWorkspace, { exact: true }));
+      await otherRow.click();
+      if (await otherRow.getAttribute("aria-expanded") === "false") await otherRow.click();
       await page.getByText("Other workspace session", { exact: true }).waitFor();
       await openWorkspaceTerminal();
       await ready();
