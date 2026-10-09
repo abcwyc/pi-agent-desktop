@@ -2942,7 +2942,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                             },
                           })),
                           menuPointBelow(event.currentTarget),
-                        );
+                        ).then((shown) => { if (!shown) setProjectDropdownOpen(true); });
                         return;
                       }
                       setProjectDropdownOpen((open) => !open);

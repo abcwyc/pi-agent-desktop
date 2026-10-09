@@ -1425,7 +1425,20 @@ export function AppShell() {
       closeSettingsMenu();
       return;
     }
-    // Desktop shell: the same section list as a native popup.
+    const rect = event.currentTarget.getBoundingClientRect();
+    const openDomMenu = () => {
+      const menuWidth = 184;
+      const menuHeight = 236;
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8));
+      const below = rect.bottom + 6;
+      const top = below + menuHeight > window.innerHeight - 8
+        ? Math.max(8, rect.top - menuHeight - 6)
+        : below;
+      setSettingsMenuPos({ top, left });
+      setSettingsMenuOpen(true);
+    };
+    // Desktop shell: the same section list as a native popup; the DOM menu is
+    // the fallback when the native one cannot be shown.
     if (isTauriDesktop()) {
       void showNativeMenu(
         SETTINGS_SECTION_ITEMS.map((item) => ({
@@ -1434,19 +1447,10 @@ export function AppShell() {
           onSelect: () => setSettingsSection(item.id),
         })),
         menuPointBelow(event.currentTarget),
-      );
+      ).then((shown) => { if (!shown) openDomMenu(); });
       return;
     }
-    const rect = event.currentTarget.getBoundingClientRect();
-    const menuWidth = 184;
-    const menuHeight = 236;
-    const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8));
-    const below = rect.bottom + 6;
-    const top = below + menuHeight > window.innerHeight - 8
-      ? Math.max(8, rect.top - menuHeight - 6)
-      : below;
-    setSettingsMenuPos({ top, left });
-    setSettingsMenuOpen(true);
+    openDomMenu();
   }, [settingsMenuOpen, closeSettingsMenu, translate, projectTrustCwd]);
   // While restoring initial session from URL, don't show the placeholder
   const showPlaceholder = initialSessionRestored && !showChat;
@@ -2120,7 +2124,7 @@ export function AppShell() {
                       checked: activeTopPanel === "session" ? true : undefined,
                       onSelect: () => toggleTopPanel("session"),
                     },
-                  ], menuPointBelow(anchor, "right"));
+                  ], menuPointBelow(anchor, "right")).then((shown) => { if (!shown) setTopMoreOpen(true); });
                 };
 
                 return (
