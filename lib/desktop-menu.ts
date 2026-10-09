@@ -56,9 +56,9 @@ export async function showNativeMenu(
   const tidy = tidyMenuEntries(entries);
   if (tidy.length === 0) return true;
   try {
-    const [{ Menu, MenuItem, CheckMenuItem, Submenu, PredefinedMenuItem }, { LogicalPosition }] = await Promise.all([
+    const [{ Menu, MenuItem, CheckMenuItem, Submenu, PredefinedMenuItem }, { invoke }] = await Promise.all([
       import("@tauri-apps/api/menu"),
-      import("@tauri-apps/api/dpi"),
+      import("@tauri-apps/api/core"),
     ]);
     const previous = lastMenu;
     lastMenu = [];
@@ -85,7 +85,9 @@ export async function showNativeMenu(
     };
     const items = await createNativeMenuItems(tidy, factory);
     const menu = track(await Menu.new({ items: items as never }));
-    await menu.popup(at ? new LogicalPosition(at.x, at.y) : undefined);
+    // Not `menu.popup()`: tauri's own command holds the webview resource-table
+    // lock for as long as the menu is open (see `popup_native_menu` in lib.rs).
+    await invoke("popup_native_menu", { rid: menu.rid, at: at ?? null });
     return true;
   } catch (error) {
     // A silent `false` once hid a menu that popped up but could not act; leave a trace.

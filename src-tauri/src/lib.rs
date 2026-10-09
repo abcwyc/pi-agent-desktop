@@ -663,6 +663,40 @@ async fn open_path_with(path: String, app: String) -> Result<(), String> {
     }
 }
 
+/// Shows a menu built from the webview's menu resources as a native popup.
+///
+/// Replaces the JS API's `menu.popup()`: tauri's own `popup` command keeps the
+/// webview's resource-table lock for as long as the menu is open (it waits for
+/// the main thread, which is inside the platform's menu loop), so an IPC call
+/// that needs the table in that window — and sync commands run on the main
+/// thread — would wait for the lock while the popup waits for the main thread.
+/// Here the menu is cloned out of the table and the lock is released before
+/// the popup starts.
+#[tauri::command]
+async fn popup_native_menu(
+    webview: tauri::Webview,
+    window: tauri::Window,
+    rid: tauri::ResourceId,
+    at: Option<tauri::LogicalPosition<f64>>,
+) -> Result<(), String> {
+    use tauri::menu::ContextMenu as _;
+
+    let menu = {
+        let table = webview.resources_table();
+        table
+            .get::<tauri::menu::Menu<tauri::Wry>>(rid)
+            .map_err(|error| error.to_string())?
+    };
+    // Blocks until the menu is dismissed; keep it off the shared async pool.
+    tauri::async_runtime::spawn_blocking(move || match at {
+        Some(position) => menu.popup_at(window, position),
+        None => menu.popup(window),
+    })
+    .await
+    .map_err(|error| error.to_string())?
+    .map_err(|error| error.to_string())
+}
+
 #[tauri::command]
 fn set_close_quits(app: AppHandle, quit: bool) -> Result<(), String> {
     if let Some(state) = app.try_state::<CloseQuits>() {
@@ -1608,6 +1642,7 @@ pub fn run() {
             reveal_item_in_dir,
             list_apps_for_file,
             open_path_with,
+            popup_native_menu,
             set_close_quits,
             quit_app,
             show_main_window_cmd,
