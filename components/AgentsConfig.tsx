@@ -64,7 +64,7 @@ const inputStyle: CSSProperties = {
   minWidth: 0,
   height: 34,
   padding: "0 9px",
-  border: "1px solid var(--border)",
+  border: "var(--hairline) solid var(--border)",
   borderRadius: 5,
   background: "var(--bg)",
   color: "var(--text)",

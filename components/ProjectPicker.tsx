@@ -189,7 +189,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
         maxWidth: 360,
         zIndex: 650,
         background: "var(--bg)",
-        border: "1px solid var(--border)",
+        border: "var(--hairline) solid var(--border)",
         borderRadius: 8,
         boxShadow: "0 -6px 20px rgba(0,0,0,0.10)",
         overflow: "hidden",
@@ -201,7 +201,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
         right: 0,
         zIndex: 100,
         background: "var(--bg)",
-        border: "1px solid var(--border)",
+        border: "var(--hairline) solid var(--border)",
         borderRadius: 8,
         boxShadow: "0 6px 20px rgba(0,0,0,0.10)",
         overflow: "hidden",
@@ -262,7 +262,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
-                fontSize: 12.5,
+                fontSize: 13,
                 fontWeight: 500,
                 color: selectedCwd ? "var(--text)" : "var(--accent)",
               }}
@@ -280,7 +280,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
 
       <AnimatedDropdown className="native-popover" open={dropdownOpen} style={panelStyle}>
         {showProjectFilter && (
-          <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
+          <div style={{ padding: "6px 8px", borderBottom: "var(--hairline) solid var(--border)" }}>
             <input
               value={projectFilter}
               onChange={(e) => setProjectFilter(e.target.value)}
@@ -300,7 +300,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
                 fontFamily: "var(--font-mono)",
                 padding: "5px 8px",
                 background: "var(--bg-panel)",
-                border: "1px solid var(--border)",
+                border: "var(--hairline) solid var(--border)",
                 borderRadius: 6,
                 color: "var(--text)",
                 outline: "none",
@@ -393,7 +393,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
             padding: "8px 10px",
             background: "none",
             border: "none",
-            borderTop: "1px solid var(--border)",
+            borderTop: "var(--hairline) solid var(--border)",
             color: "var(--text-muted)",
             cursor: "pointer",
             textAlign: "left",
@@ -411,7 +411,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
             role="alert"
             style={{
               padding: "6px 10px 8px",
-              borderTop: "1px solid var(--border)",
+              borderTop: "var(--hairline) solid var(--border)",
               color: "var(--danger)",
               fontSize: 11,
               lineHeight: 1.35,

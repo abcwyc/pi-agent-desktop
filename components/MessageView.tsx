@@ -122,7 +122,7 @@ function SafeMarkdownBody({ children, className, ...props }: React.ComponentProp
           width: "100%",
           margin: "4px 0",
           padding: "7px 10px",
-          border: "1px solid var(--border)",
+          border: "var(--hairline) solid var(--border)",
           borderRadius: 6,
           background: "var(--bg-panel)",
           color: "var(--text-muted)",
@@ -395,7 +395,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
             <img
               src={src}
               alt=""
-              style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid rgba(59,130,246,0.15)" }}
+              style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "var(--hairline) solid rgba(59,130,246,0.15)" }}
             />
           </ImagePreview>
         );
@@ -859,7 +859,7 @@ function AssistantMessageView({
           style={{
             marginTop: blocks.length > 0 ? 8 : 0,
             padding: "7px 10px",
-            border: "1px solid rgba(239,68,68,0.3)",
+            border: "var(--hairline) solid rgba(239,68,68,0.3)",
             borderRadius: 6,
             background: "rgba(239,68,68,0.07)",
             color: "#ef4444",
@@ -880,7 +880,7 @@ function AssistantMessageView({
           style={{
             marginTop: blocks.length > 0 || providerError ? 8 : 0,
             padding: "7px 10px",
-            border: "1px solid rgba(234,179,8,0.3)",
+            border: "var(--hairline) solid rgba(234,179,8,0.3)",
             borderRadius: 6,
             background: "rgba(234,179,8,0.07)",
             color: "#ca8a04",
@@ -901,7 +901,7 @@ function AssistantMessageView({
                 display: "block",
                 marginTop: 8,
                 padding: "3px 8px",
-                border: "1px solid currentColor",
+                border: "var(--hairline) solid currentColor",
                 borderRadius: 5,
                 background: "transparent",
                 color: "inherit",
@@ -1051,7 +1051,7 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex 
   return (
     <div style={{
       display: "flex", alignItems: "flex-start", gap: 6, minWidth: 0,
-      border: "1px solid var(--border)",
+      border: "var(--hairline) solid var(--border)",
       borderRadius: 7,
       padding: "6px 10px",
       background: "var(--bg)",
@@ -1204,7 +1204,7 @@ function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOp
             ) : block.toolName}
           </span>
           {aborted && (
-            <span title={t("chat.toolCancelled")} style={{ flexShrink: 0, fontSize: 10, color: "var(--text-dim)", border: "1px solid var(--border)", borderRadius: 4, padding: "1px 5px" }}>
+            <span title={t("chat.toolCancelled")} style={{ flexShrink: 0, fontSize: 10, color: "var(--text-dim)", border: "var(--hairline) solid var(--border)", borderRadius: 4, padding: "1px 5px" }}>
               {t("chat.toolCancelled")}
             </span>
           )}
@@ -1231,7 +1231,7 @@ function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOp
             onClick={() => onOpenSession(subagent.sessionId)}
             title={t("subagent.open")}
             aria-label={t("subagent.open")}
-            style={{ width: 32, display: "grid", placeItems: "center", border: "none", borderLeft: "1px solid var(--border)", background: "none", color: "var(--text-muted)", cursor: "pointer", flexShrink: 0 }}
+            style={{ width: 32, display: "grid", placeItems: "center", border: "none", borderLeft: "var(--hairline) solid var(--border)", background: "none", color: "var(--text-muted)", cursor: "pointer", flexShrink: 0 }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></svg>
           </button>
@@ -1268,7 +1268,7 @@ function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOp
 
       {/* ── Expanded: applied-patch split diff ── */}
       {expanded && patchFiles && (
-        <div style={{ borderTop: "1px solid rgba(34,197,94,0.15)", background: "var(--bg)" }}>
+        <div style={{ borderTop: "var(--hairline) solid rgba(34,197,94,0.15)", background: "var(--bg)" }}>
           <ApplyPatchDiffView files={patchFiles} />
         </div>
       )}
@@ -1308,7 +1308,7 @@ function PairedDiffResult({ diff }: {
   return (
     <div
       style={{
-        borderTop: "1px solid rgba(34,197,94,0.15)",
+        borderTop: "var(--hairline) solid rgba(34,197,94,0.15)",
         background: "var(--bg)",
       }}
     >
@@ -1355,7 +1355,7 @@ function SplitFilesView({ files, mode = "split" }: { files: SplitDiffFile[]; mod
                   top: 0,
                   zIndex: 1,
                   background: "var(--bg-panel)",
-                  borderBottom: "1px solid var(--border)",
+                  borderBottom: "var(--hairline) solid var(--border)",
                 }}
               >
                 <SplitDiffHeader title={file.newPath || file.oldPath || t("i18n.after")} side="right" />
@@ -1369,7 +1369,7 @@ function SplitFilesView({ files, mode = "split" }: { files: SplitDiffFile[]; mod
                   top: 0,
                   zIndex: 1,
                   background: "var(--bg-panel)",
-                  borderBottom: "1px solid var(--border)",
+                  borderBottom: "var(--hairline) solid var(--border)",
                 }}
               >
                  <SplitDiffHeader title={file.oldPath || t("i18n.before")} side="left" />
@@ -1440,7 +1440,7 @@ function UnifiedDiffLine({ cell }: { cell: SplitDiffCell }) {
           color: "var(--text-dim)",
           userSelect: "none",
           background: "var(--bg-panel)",
-          borderRight: "1px solid var(--border)",
+          borderRight: "var(--hairline) solid var(--border)",
           flexShrink: 0,
         }}
       >
@@ -1523,7 +1523,7 @@ function SplitDiffCellView({ cell, side }: { cell: SplitDiffCell; side: "left" |
           color: "var(--text-dim)",
           userSelect: "none",
           background: "var(--bg-panel)",
-          borderRight: "1px solid var(--border)",
+          borderRight: "var(--hairline) solid var(--border)",
           flexShrink: 0,
         }}
       >
@@ -1600,7 +1600,7 @@ function PatchTextView({ text }: { text: string }) {
                 padding: "0 8px",
                 color: "var(--text-dim)",
                 background: "var(--bg-panel)",
-                borderRight: "1px solid var(--border)",
+                borderRight: "var(--hairline) solid var(--border)",
                 textAlign: "right",
                 userSelect: "none",
                 flexShrink: 0,
@@ -1698,7 +1698,7 @@ function ResultImages({ images, isError }: { images: ImageContent[]; isError: bo
                   maxHeight: 520,
                   borderRadius: 6,
                   objectFit: "contain",
-                  border: "1px solid var(--border)",
+                  border: "var(--hairline) solid var(--border)",
                 }}
               />
             </ImagePreview>
@@ -1820,7 +1820,7 @@ function CompactionMessageView({ message, kind = "compaction" }: { message: Cust
     <div style={{ marginBottom: 16 }}>
       <div
         style={{
-          border: "1px solid var(--border)",
+          border: "var(--hairline) solid var(--border)",
           borderRadius: 8,
           overflow: "hidden",
           background: "var(--bg)",
@@ -1832,7 +1832,7 @@ function CompactionMessageView({ message, kind = "compaction" }: { message: Cust
             alignItems: "center",
             gap: 8,
             padding: "7px 10px",
-            borderBottom: "1px solid var(--border)",
+            borderBottom: "var(--hairline) solid var(--border)",
             background: "var(--bg-panel)",
             color: "var(--text-muted)",
           }}
@@ -1917,7 +1917,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
     <div style={{ marginBottom: 16 }}>
       <div
         style={{
-          border: "1px solid var(--border)",
+          border: "var(--hairline) solid var(--border)",
           borderRadius: 8,
           overflow: "hidden",
           background: isHiddenDisplay ? "var(--bg-subtle)" : "var(--bg)",
@@ -1930,7 +1930,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
             alignItems: "center",
             gap: 8,
             padding: "7px 10px",
-            borderBottom: "1px solid var(--border)",
+            borderBottom: "var(--hairline) solid var(--border)",
             background: "var(--bg-panel)",
             color: "var(--text-muted)",
             fontSize: 12,
@@ -1956,7 +1956,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
                       <img
                         src={src}
                         alt=""
-                        style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid var(--border)" }}
+                        style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "var(--hairline) solid var(--border)" }}
                       />
                     </ImagePreview>
                   );
@@ -1990,7 +1990,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
             alignItems: "center",
             gap: 8,
             padding: "4px 9px",
-            borderTop: "1px solid var(--border)",
+            borderTop: "var(--hairline) solid var(--border)",
             background: "var(--bg-subtle)",
           }}
         >
@@ -2037,7 +2037,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
             style={{
               margin: 0,
               padding: "9px 10px",
-              borderTop: "1px solid var(--border)",
+              borderTop: "var(--hairline) solid var(--border)",
               background: "var(--bg)",
               color: "var(--text-muted)",
               fontSize: "calc(12px + var(--chat-font-size-offset, 0px))",

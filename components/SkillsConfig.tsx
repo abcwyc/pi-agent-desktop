@@ -386,7 +386,7 @@ function AddSkillPanel({
               padding: "7px 10px",
               fontSize: 12,
               background: "var(--bg-panel)",
-              border: "1px solid var(--border)",
+              border: "var(--hairline) solid var(--border)",
               borderRadius: 6,
               color: "var(--text)",
               outline: "none",
@@ -434,7 +434,7 @@ function AddSkillPanel({
                   alignItems: "center",
                   gap: 14,
                   padding: "12px 0",
-                  borderBottom: "1px solid var(--border)",
+                  borderBottom: "var(--hairline) solid var(--border)",
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>

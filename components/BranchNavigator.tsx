@@ -257,7 +257,7 @@ function TreeNodeView({ node, activePathIds, depth, isLast, parentLines, onSelec
         {/* Role badge */}
         {role && (
           <span style={{
-            fontSize: 9,
+            fontSize: 10,
             fontFamily: "var(--font-mono)",
             color: role === "user" ? "var(--accent)" : "var(--text-dim)",
             background: role === "user" ? "var(--accent-soft, var(--user-bg))" : "var(--bg-hover)",
@@ -444,7 +444,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
             left: dropdownPos.left,
             width: dropdownPos.width,
             background: "var(--bg-panel)",
-            borderBottom: "1px solid var(--border)",
+            borderBottom: "var(--hairline) solid var(--border)",
             zIndex: 500,
           }}>
             {hasContent ? (
@@ -475,7 +475,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
   }
 
   return (
-    <div style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", flexShrink: 0, position: "relative" }}>
+    <div style={{ borderBottom: "var(--hairline) solid var(--border)", background: "var(--bg)", flexShrink: 0, position: "relative" }}>
       {/* Header toggle */}
       <button
         onClick={() => setOpenInternal((v) => !v)}
@@ -506,7 +506,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
           left: 0,
           right: 0,
           background: "var(--bg)",
-          borderBottom: "1px solid var(--border)",
+          borderBottom: "var(--hairline) solid var(--border)",
           boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
           zIndex: 100,
         }}>
