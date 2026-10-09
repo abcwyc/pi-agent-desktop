@@ -1,5 +1,6 @@
 "use client";
 
+import { useFileContextMenu } from "@/hooks/useFileContextMenu";
 import { useI18n } from "@/hooks/useI18n";
 import { getFileName } from "@/lib/file-paths";
 import type { WrittenFile } from "@/lib/turn-written-files";
@@ -15,6 +16,7 @@ export function TurnWrittenFiles({ files, onOpenFile }: {
   onOpenFile?: (filePath: string) => void;
 }) {
   const { t } = useI18n();
+  const showFileMenu = useFileContextMenu(onOpenFile);
   if (files.length === 0) return null;
 
   return (
@@ -28,6 +30,7 @@ export function TurnWrittenFiles({ files, onOpenFile }: {
             title={filePath}
             aria-label={t("chat.openWrittenFile", { name })}
             onClick={() => onOpenFile?.(filePath)}
+            onContextMenu={(event) => showFileMenu(event, { filePath })}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -37,7 +40,7 @@ export function TurnWrittenFiles({ files, onOpenFile }: {
               fontFamily: "var(--font-mono)",
               color: "var(--text)",
               background: "var(--bg-subtle)",
-              border: "1px solid var(--border)",
+              border: "var(--hairline) solid var(--border)",
               borderRadius: 6,
               cursor: "pointer",
             }}

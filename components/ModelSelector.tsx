@@ -121,7 +121,7 @@ export function ModelSelector({
         height: 34,
         padding: "0 9px",
         overflow: "hidden",
-        border: "1px solid var(--border)",
+        border: "var(--hairline) solid var(--border)",
         borderRadius: 5,
         background: locked ? "var(--bg-panel)" : "var(--bg)",
         color: locked ? "var(--text-dim)" : "var(--text)",
@@ -257,14 +257,14 @@ export function ModelSelector({
               flexDirection: "column",
               maxHeight,
               overflow: "hidden",
-              border: "1px solid var(--border)",
+              border: "var(--hairline) solid var(--border)",
               borderRadius: 8,
               background: "var(--bg)",
               boxShadow: openAbove ? "0 -4px 16px rgba(0,0,0,0.10)" : "0 4px 16px rgba(0,0,0,0.10)",
             }}
           >
             {showFilter && (
-              <div style={{ flexShrink: 0, padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ flexShrink: 0, padding: "6px 8px", borderBottom: "var(--hairline) solid var(--border)" }}>
                 <input
                   value={filter}
                   onChange={(event) => setFilter(event.target.value)}
@@ -281,7 +281,7 @@ export function ModelSelector({
                     width: "100%",
                     minWidth: isMobile ? 0 : 220,
                     padding: "5px 8px",
-                    border: "1px solid var(--border)",
+                    border: "var(--hairline) solid var(--border)",
                     borderRadius: 5,
                     outline: "none",
                     background: "var(--bg)",

@@ -1379,7 +1379,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         {...windowDrag}
         style={{
           padding: "12px 10px 10px",
-          borderBottom: "1px solid var(--border)",
+          borderBottom: "var(--hairline) solid var(--border)",
           flexShrink: 0,
         }}
       >
@@ -1458,7 +1458,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 </svg>
                 <PathLabel
                   text={currentWt ? (currentWt.branch ?? displayCwd(currentWt.path, homeDir)) : "…"}
-                  style={{ flex: 1, fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--text)" }}
+                  style={{ flex: 1, fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text)" }}
                 />
                 {currentWorktree?.isMain && (
                    <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{t("sidebar.main")}</span>
@@ -1483,14 +1483,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   right: 0,
                   zIndex: 100,
                   background: "var(--bg)",
-                  border: "1px solid var(--border)",
+                  border: "var(--hairline) solid var(--border)",
                   borderRadius: 8,
                   boxShadow: "0 6px 20px rgba(0,0,0,0.10)",
                   overflow: "hidden",
                 }}
               >
                   {showWtFilter && (
-                    <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
+                    <div style={{ padding: "6px 8px", borderBottom: "var(--hairline) solid var(--border)" }}>
                       <input
                         value={wtFilter}
                         onChange={(e) => setWtFilter(e.target.value)}
@@ -1507,7 +1507,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                           fontSize: 11,
                           fontFamily: "var(--font-mono)",
                           padding: "5px 8px",
-                          border: "1px solid var(--border)",
+                          border: "var(--hairline) solid var(--border)",
                           borderRadius: 5,
                           outline: "none",
                           background: "var(--bg)",
@@ -1523,7 +1523,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                       if (wtConfirmRemove?.path === wt.path) {
                         const isForce = wtConfirmRemove.force;
                         return (
-                          <div key={wt.path} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderBottom: "1px solid var(--border)", background: "color-mix(in srgb, var(--danger) 6%, transparent)" }}>
+                          <div key={wt.path} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderBottom: "var(--hairline) solid var(--border)", background: "color-mix(in srgb, var(--danger) 6%, transparent)" }}>
                             <span style={{ flex: 1, fontSize: 11, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {isForce ? t("sidebar.forceRemoveCheckout") : t("sidebar.confirmRemoveWorktree")}
                             </span>
@@ -1536,7 +1536,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                             </button>
                             <button
                               onClick={() => setWtConfirmRemove(null)}
-                              style={{ padding: "3px 9px", background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer", flexShrink: 0 }}
+                              style={{ padding: "3px 9px", background: "var(--bg-hover)", border: "var(--hairline) solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer", flexShrink: 0 }}
                             >
                               {t("sidebar.cancel")}
                             </button>
@@ -1547,7 +1547,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                         <div
                           key={wt.path}
                           className="wt-row"
-                          style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--border)" }}
+                          style={{ display: "flex", alignItems: "center", borderBottom: "var(--hairline) solid var(--border)" }}
                         >
                           <button
                             onClick={() => {
@@ -1606,16 +1606,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                               onClick={() => { setWtError(null); setWtConfirmRemove({ path: wt.path, force: false }); }}
                               disabled={wtBusy}
                                title={t("sidebar.removeWorktreeTitle", { path: wt.path })}
-                              style={{
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                                width: 34, height: 28, padding: 0, marginRight: 4,
-                                background: "none", border: "none",
-                                color: "var(--text-dim)", cursor: "pointer",
-                                borderRadius: 5, flexShrink: 0,
-                                transition: "color 0.12s, background 0.12s",
-                              }}
-                              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger)"; e.currentTarget.style.background = "color-mix(in srgb, var(--danger) 8%, transparent)"; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
+                              className="worktree-remove-button"
                             >
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="3 6 5 6 21 6" />
@@ -1643,7 +1634,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                       ...wtRemoteBranches.map((name) => ({ name, remote: true })),
                     ];
                     return (
-                      <div style={{ borderTop: "1px solid var(--border)" }}>
+                      <div style={{ borderTop: "var(--hairline) solid var(--border)" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 8px 3px" }}>
                           <span style={{ flex: 1, fontSize: 10, fontWeight: 600, letterSpacing: "0.03em", color: "var(--text-dim)" }}>{t("sidebar.switchBranch")}</span>
                           <button
@@ -1713,7 +1704,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                                   </span>
                                 )}
                                 {remote && !holder && (
-                                  <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 9.5 }}>{t("sidebar.remoteBranchTag")}</span>
+                                  <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{t("sidebar.remoteBranchTag")}</span>
                                 )}
                                 {switching && (
                                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0, animation: "spin 0.8s linear infinite" }}>
@@ -1785,7 +1776,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                           fontSize: 11,
                           fontFamily: "var(--font-mono)",
                           padding: "5px 8px",
-                          border: "1px solid var(--accent)",
+                          border: "var(--hairline) solid var(--accent)",
                           borderRadius: 5,
                           outline: "none",
                           background: "var(--bg)",
@@ -1847,7 +1838,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                             flex: 1,
                             padding: "4px 0",
                             background: "var(--bg-hover)",
-                            border: "1px solid var(--border)",
+                            border: "var(--hairline) solid var(--border)",
                             borderRadius: 5,
                             color: "var(--text-muted)",
                             fontSize: 11,
@@ -1892,7 +1883,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               <circle cx="6" cy="18" r="3" />
               <path d="M18 9a9 9 0 0 1-9 9" />
             </svg>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11.5 }}>{inactiveWorktreeSelector.label}</span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12 }}>{inactiveWorktreeSelector.label}</span>
           </button>
         )}
       </div>
@@ -2627,7 +2618,7 @@ function SessionItem({
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 height: 26, padding: "0 9px",
-                background: "var(--bg)", border: "1px solid var(--border)",
+                background: "var(--bg)", border: "var(--hairline) solid var(--border)",
                 borderRadius: 6, color: "var(--text-muted)",
                 cursor: "pointer", fontSize: 12, fontWeight: 500,
                 whiteSpace: "nowrap",
@@ -2654,7 +2645,7 @@ function SessionItem({
             flex: 1,
             fontSize: 12,
             padding: "3px 8px",
-            border: "1px solid var(--accent)",
+            border: "var(--hairline) solid var(--accent)",
             borderRadius: 5,
             outline: "none",
             background: "var(--bg)",
@@ -2742,16 +2733,7 @@ function SessionItem({
                   aria-label={t("sidebar.moreActions")}
                   aria-haspopup="menu"
                   aria-expanded={menuOpen}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    width: 24, height: 24, padding: 0, flexShrink: 0,
-                    background: menuOpen ? "var(--bg-selected)" : "none",
-                    border: "none", borderRadius: 6,
-                    color: "var(--text-muted)", cursor: "pointer",
-                    transition: "background 0.12s, color 0.12s",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-selected)"; e.currentTarget.style.color = "var(--text)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = menuOpen ? "var(--bg-selected)" : "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
+                  className={`session-item-more${menuOpen ? " is-open" : ""}`}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <circle cx="5" cy="12" r="1.7" />
@@ -2795,7 +2777,7 @@ function SessionItem({
                   width: "100%", height: 30, padding: "0 8px",
                   background: "transparent", border: 0, borderRadius: 7,
                   color: "var(--text)", cursor: "pointer",
-                  fontSize: 12.5, textAlign: "left",
+                  fontSize: 13, textAlign: "left",
                 }}
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -2817,7 +2799,7 @@ function SessionItem({
                   width: "100%", height: 30, padding: "0 8px",
                   background: "transparent", border: 0, borderRadius: 7,
                   color: "var(--danger)", cursor: "pointer",
-                  fontSize: 12.5, textAlign: "left",
+                  fontSize: 13, textAlign: "left",
                 }}
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -2860,7 +2842,7 @@ function SessionItem({
                 zIndex: 1000, maxWidth: "80vw",
                 background: "color-mix(in srgb, var(--bg-panel) 94%, #000)",
                 color: "var(--danger)",
-                border: "1px solid color-mix(in srgb, var(--danger) 35%, transparent)",
+                border: "var(--hairline) solid color-mix(in srgb, var(--danger) 35%, transparent)",
                 padding: "8px 14px", borderRadius: 8, fontSize: 12,
                 boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
                 overflowWrap: "anywhere",

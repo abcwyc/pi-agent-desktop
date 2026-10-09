@@ -187,7 +187,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const inputStyle = {
   padding: "6px 9px",
   background: "var(--bg-panel)",
-  border: "1px solid var(--border)",
+  border: "var(--hairline) solid var(--border)",
   borderRadius: 5,
   color: "var(--text)",
   fontSize: 12,
@@ -458,13 +458,13 @@ function ProviderDetail({ name, editingName, provider, onChange, onEditingNameCh
         </span>
       </Field>
 
-      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ borderTop: "var(--hairline) solid var(--border)", paddingTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
         {discoveryState.phase !== "success" && (
           <button
             onClick={handleDiscoverModels}
             disabled={discoveryState.phase === "loading"}
             style={{
-              alignSelf: "flex-start", height: 30, padding: "0 12px", border: "1px solid var(--border)", borderRadius: 5,
+              alignSelf: "flex-start", height: 30, padding: "0 12px", border: "var(--hairline) solid var(--border)", borderRadius: 5,
               background: "var(--bg-panel)", color: discoveryState.phase === "loading" ? "var(--text-dim)" : "var(--text-muted)",
               cursor: discoveryState.phase === "loading" ? "not-allowed" : "pointer", fontSize: 11,
             }}
@@ -474,7 +474,7 @@ function ProviderDetail({ name, editingName, provider, onChange, onEditingNameCh
         )}
 
         {discoveryState.phase === "error" && (
-          <div style={{ padding: "7px 9px", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 5, color: "#ef4444", fontSize: 11, lineHeight: 1.4 }}>
+          <div style={{ padding: "7px 9px", border: "var(--hairline) solid rgba(239,68,68,0.3)", borderRadius: 5, color: "#ef4444", fontSize: 11, lineHeight: 1.4 }}>
             {discoveryState.message}
           </div>
         )}
@@ -489,11 +489,11 @@ function ProviderDetail({ name, editingName, provider, onChange, onEditingNameCh
               style={{ ...inputStyle, width: "100%", minWidth: 0 }}
             />
 
-            <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg-panel)" }}>
+            <div style={{ maxHeight: 220, overflowY: "auto", border: "var(--hairline) solid var(--border)", borderRadius: 6, background: "var(--bg-panel)" }}>
               <label
                 style={{
                   minHeight: 32, padding: "5px 9px", display: "flex", alignItems: "center", gap: 8,
-                  position: "sticky", top: 0, zIndex: 1, borderBottom: "1px solid var(--border)",
+                  position: "sticky", top: 0, zIndex: 1, borderBottom: "var(--hairline) solid var(--border)",
                   background: "var(--bg)", cursor: selectableShownIds.length ? "pointer" : "default",
                   color: "var(--text-muted)", fontSize: 10, fontWeight: 600,
                 }}
@@ -638,7 +638,7 @@ function ThinkingLevelMapEditor({
               padding: "5px 4px",
               borderRadius: 6,
               background: "transparent",
-              border: "1px solid transparent",
+              border: "var(--hairline) solid transparent",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 5, width: 68, flexShrink: 0 }}>
@@ -653,7 +653,7 @@ function ThinkingLevelMapEditor({
               </span>
             </div>
 
-            <div style={{ display: "flex", borderRadius: 5, border: "1px solid var(--border)", overflow: "hidden", flexShrink: 0 }}>
+            <div style={{ display: "flex", borderRadius: 5, border: "var(--hairline) solid var(--border)", overflow: "hidden", flexShrink: 0 }}>
               <button
                 onClick={() => setLevel(level, "omit")}
                 style={{ ...btnBase, ...(state === "omit" ? btnActive : {}) }}
@@ -662,7 +662,7 @@ function ThinkingLevelMapEditor({
               </button>
               <button
                 onClick={() => setLevel(level, null)}
-                style={{ ...btnBase, borderLeft: "1px solid var(--border)", ...(state === "null" ? btnActiveDisabled : {}) }}
+                style={{ ...btnBase, borderLeft: "var(--hairline) solid var(--border)", ...(state === "null" ? btnActiveDisabled : {}) }}
               >
                 Disabled
               </button>
@@ -671,7 +671,7 @@ function ThinkingLevelMapEditor({
             <div style={{ display: "flex", borderRadius: 5, border: `1px solid ${state === "string" ? "var(--accent)" : "var(--border)"}`, overflow: "hidden", transition: "border-color 0.1s" }}>
               <button
                 onClick={() => setLevel(level, strVal || level)}
-                style={{ ...btnBase, ...(state === "string" ? btnActive : {}), borderRight: "1px solid var(--border)", flexShrink: 0 }}
+                style={{ ...btnBase, ...(state === "string" ? btnActive : {}), borderRight: "var(--hairline) solid var(--border)", flexShrink: 0 }}
               >
                 Custom
               </button>
@@ -755,7 +755,7 @@ function HeaderListEditor({ headers, onChange }: {
   const rowBtnStyle = {
     padding: "6px 9px",
     background: "none",
-    border: "1px solid rgba(239,68,68,0.3)",
+    border: "var(--hairline) solid rgba(239,68,68,0.3)",
     borderRadius: 4,
     color: "#ef4444",
     cursor: "pointer",
@@ -777,7 +777,7 @@ function HeaderListEditor({ headers, onChange }: {
         ...current,
         { id: nextRowIdRef.current++, name: "", value: "" },
       ])}
-        style={{ padding: "5px 9px", background: "none", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-muted)", cursor: "pointer", fontSize: 11, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, alignSelf: "flex-start" }}>
+        style={{ padding: "5px 9px", background: "none", border: "var(--hairline) solid var(--border)", borderRadius: 4, color: "var(--text-muted)", cursor: "pointer", fontSize: 11, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, alignSelf: "flex-start" }}>
         + Add header
       </button>
     </div>
@@ -1105,7 +1105,7 @@ function ModelDetail({
             onClick={() => void handleCatalogFill()}
             disabled={!model.id.trim() || catalogState.phase === "loading"}
             style={{
-              height: 28, padding: "0 10px", border: "1px solid var(--border)", borderRadius: 5,
+              height: 28, padding: "0 10px", border: "var(--hairline) solid var(--border)", borderRadius: 5,
               background: "var(--bg-panel)",
               color: !model.id.trim() || catalogState.phase === "loading" ? "var(--text-dim)" : "var(--text-muted)",
               cursor: !model.id.trim() || catalogState.phase === "loading" ? "not-allowed" : "pointer",
@@ -1218,7 +1218,7 @@ function ModelDetail({
         </div>
       </section>
 
-      <section style={{ borderTop: "1px solid var(--border)", paddingTop: 4 }}>
+      <section style={{ borderTop: "var(--hairline) solid var(--border)", paddingTop: 4 }}>
         <button
           type="button"
           onClick={() => setAdvancedOpen((open) => !open)}
@@ -1501,7 +1501,7 @@ function OAuthDetail({ provider, onRefresh, enabledModels }: {
                 <button
                   key={option.id}
                   onClick={() => submitSelection(loginState.token, option.id)}
-                  style={{ padding: "6px 9px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", cursor: "pointer", fontSize: 12, textAlign: "left" }}
+                  style={{ padding: "6px 9px", background: "var(--bg)", border: "var(--hairline) solid var(--border)", borderRadius: 5, color: "var(--text)", cursor: "pointer", fontSize: 12, textAlign: "left" }}
                 >
                   {option.label}
                 </button>
@@ -1536,7 +1536,7 @@ function OAuthDetail({ provider, onRefresh, enabledModels }: {
             <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
               Open the verification page and enter this code:
             </p>
-            <div style={{ padding: "8px 10px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", fontSize: 16, fontWeight: 700, fontFamily: "var(--font-mono)", letterSpacing: 0 }}>
+            <div style={{ padding: "8px 10px", background: "var(--bg)", border: "var(--hairline) solid var(--border)", borderRadius: 5, color: "var(--text)", fontSize: 16, fontWeight: 700, fontFamily: "var(--font-mono)", letterSpacing: 0 }}>
               {loginState.userCode}
             </div>
             <p style={{ margin: 0, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
@@ -1733,7 +1733,7 @@ function AddProviderPicker({
     display: "flex", flexDirection: "row", alignItems: "center", gap: 8,
     padding: "10px 12px",
     background: "var(--bg-panel)",
-    border: "1px solid var(--border)",
+    border: "var(--hairline) solid var(--border)",
     borderRadius: 7,
     boxSizing: "border-box",
     cursor: "pointer",
@@ -1756,9 +1756,9 @@ function AddProviderPicker({
         onClose();
       }}
     >
-      <div style={{ width: 820, maxWidth: "calc(100vw - 32px)", maxHeight: "min(72vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
+      <div style={{ width: 820, maxWidth: "calc(100vw - 32px)", maxHeight: "min(72vh, calc(100vh - 32px))", background: "var(--bg)", border: "var(--hairline) solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
         {/* Search */}
-        <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ padding: "10px 14px", borderBottom: "var(--hairline) solid var(--border)", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
@@ -2172,7 +2172,7 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null, onOpenMcp 
 
               {/* Divider before custom providers, only when there are active managed providers */}
               {(activeOAuth.length > 0 || activeApiKey.length > 0) && providers.length > 0 && (
-                <div style={{ margin: "4px 8px", borderTop: "1px solid var(--border)" }} />
+                <div style={{ margin: "4px 8px", borderTop: "var(--hairline) solid var(--border)" }} />
               )}
 
               {/* Custom providers */}
@@ -2215,7 +2215,7 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null, onOpenMcp 
                              {m.id || t("i18n.newModel")}
                           </ConfigSidebarText>
                           {m.reasoning && (
-                            <span style={{ fontSize: 9, padding: "1px 4px", background: "rgba(99,102,241,0.12)", color: "rgba(99,102,241,0.8)", borderRadius: 3, flexShrink: 0 }}>T</span>
+                            <span style={{ fontSize: 10, padding: "1px 4px", background: "rgba(99,102,241,0.12)", color: "rgba(99,102,241,0.8)", borderRadius: 3, flexShrink: 0 }}>T</span>
                           )}
                         </ConfigSidebarItem>
                       );
@@ -2234,7 +2234,7 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null, onOpenMcp 
               {/* Classifier and image models never reach the model selector; this is where they show. */}
               {!loading && (
                 <>
-                  <div style={{ margin: "4px 8px", borderTop: "1px solid var(--border)" }} />
+                  <div style={{ margin: "4px 8px", borderTop: "var(--hairline) solid var(--border)" }} />
                   <ConfigSidebarItem
                     active={selection?.type === "nonchat"}
                     onClick={() => setSelection({ type: "nonchat" })}

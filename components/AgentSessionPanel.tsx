@@ -133,7 +133,7 @@ function AgentRow({
         alignItems: "center",
         gap: 9,
         padding: "7px 12px",
-        borderBottom: "1px solid var(--border)",
+        borderBottom: "var(--hairline) solid var(--border)",
         borderLeft: selected ? "2px solid var(--accent)" : "2px solid transparent",
         background: selected ? "var(--bg-selected)" : "transparent",
         color: "var(--text)",
@@ -186,7 +186,7 @@ function AgentRow({
                 event.stopPropagation();
                 onSteer();
               }}
-              style={{ display: "inline-grid", placeItems: "center", width: 22, height: 22, border: "1px solid var(--border)", borderRadius: 5, background: "var(--bg)", color: "var(--text-muted)", cursor: actionPending ? "default" : "pointer", padding: 0 }}
+              style={{ display: "inline-grid", placeItems: "center", width: 22, height: 22, border: "var(--hairline) solid var(--border)", borderRadius: 5, background: "var(--bg)", color: "var(--text-muted)", cursor: actionPending ? "default" : "pointer", padding: 0 }}
             >
               <SteerIcon />
             </button>
@@ -199,7 +199,7 @@ function AgentRow({
                 event.stopPropagation();
                 onStop();
               }}
-              style={{ display: "inline-grid", placeItems: "center", width: 22, height: 22, border: "1px solid rgba(239,68,68,0.4)", borderRadius: 5, background: "var(--bg)", color: "#ef4444", cursor: actionPending ? "default" : "pointer", padding: 0 }}
+              style={{ display: "inline-grid", placeItems: "center", width: 22, height: 22, border: "var(--hairline) solid rgba(239,68,68,0.4)", borderRadius: 5, background: "var(--bg)", color: "#ef4444", cursor: actionPending ? "default" : "pointer", padding: 0 }}
             >
               <StopIcon />
             </button>
@@ -272,16 +272,16 @@ export function AgentSessionPanel({ rootSession, subagents, selectedSessionId, r
       aria-label={t("agentSwitcher.title")}
       style={{
         background: "var(--bg-panel)",
-        borderLeft: "1px solid var(--border)",
-        borderRight: "1px solid var(--border)",
-        borderBottom: "1px solid var(--border)",
+        borderLeft: "var(--hairline) solid var(--border)",
+        borderRight: "var(--hairline) solid var(--border)",
+        borderBottom: "var(--hairline) solid var(--border)",
         borderRadius: "0 0 6px 6px",
         boxShadow: "0 10px 28px rgba(0,0,0,0.10)",
         overflow: "hidden",
       }}
     >
       <div>
-        <div style={{ minHeight: 44, display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ minHeight: 44, display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", borderBottom: "var(--hairline) solid var(--border)" }}>
           <strong style={{ fontSize: 12, fontWeight: 600 }}>{t("agentSwitcher.title")}</strong>
           <span style={{ color: "var(--text-dim)", fontSize: 11 }}>
             {t("agentSwitcher.count", { count: subagents.length })}
@@ -293,12 +293,12 @@ export function AgentSessionPanel({ rootSession, subagents, selectedSessionId, r
           )}
         </div>
         {controlError && (
-          <div role="alert" style={{ padding: "6px 12px", background: "rgba(239,68,68,0.07)", color: "#ef4444", fontSize: 11, borderBottom: "1px solid var(--border)" }}>
+          <div role="alert" style={{ padding: "6px 12px", background: "rgba(239,68,68,0.07)", color: "#ef4444", fontSize: 11, borderBottom: "var(--hairline) solid var(--border)" }}>
             {controlError}
           </div>
         )}
         {subagents.length > 8 && (
-          <div style={{ padding: 8, borderBottom: "1px solid var(--border)" }}>
+          <div style={{ padding: 8, borderBottom: "var(--hairline) solid var(--border)" }}>
             <input
               type="search"
               value={query}
@@ -307,7 +307,7 @@ export function AgentSessionPanel({ rootSession, subagents, selectedSessionId, r
               aria-label={t("agentSwitcher.search")}
               style={{
                 width: "100%", height: 32, padding: "0 10px",
-                border: "1px solid var(--border)", borderRadius: 6,
+                border: "var(--hairline) solid var(--border)", borderRadius: 6,
                 background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none",
               }}
             />
@@ -343,7 +343,7 @@ export function AgentSessionPanel({ rootSession, subagents, selectedSessionId, r
                 }}
               />
               {steerOpenId === session.id && runningSessionIds.has(session.id) && (
-                <div style={{ display: "flex", gap: 6, padding: "6px 12px", borderBottom: "1px solid var(--border)", background: "var(--bg)" }}>
+                <div style={{ display: "flex", gap: 6, padding: "6px 12px", borderBottom: "var(--hairline) solid var(--border)", background: "var(--bg)" }}>
                   <input
                     autoFocus
                     type="text"
@@ -361,7 +361,7 @@ export function AgentSessionPanel({ rootSession, subagents, selectedSessionId, r
                     }}
                     placeholder={t("agentSwitcher.steerPlaceholder")}
                     aria-label={t("agentSwitcher.steer")}
-                    style={{ flex: 1, minWidth: 0, height: 30, padding: "0 10px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none" }}
+                    style={{ flex: 1, minWidth: 0, height: 30, padding: "0 10px", border: "var(--hairline) solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none" }}
                   />
                   <button
                     type="button"
