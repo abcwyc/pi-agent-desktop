@@ -34,6 +34,8 @@ import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
 import { useDesktopConnection } from "@/lib/desktop-connection";
 import { isTauriDesktop, setCloseQuitsNative } from "@/lib/desktop-native";
+import { menuPointBelow, showNativeMenu } from "@/lib/desktop-menu";
+import { useNativeContextMenu } from "@/hooks/useNativeContextMenu";
 import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import { PRODUCT_NAME } from "@/lib/branding";
@@ -217,6 +219,7 @@ export function AppShell() {
   }, []);
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
+  useNativeContextMenu();
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [settingsMenuPos, setSettingsMenuPos] = useState<{ top: number; left: number } | null>(null);
   const settingsMenuRef = useRef<HTMLDivElement>(null);
@@ -225,22 +228,6 @@ export function AppShell() {
     setSettingsMenuOpen(false);
     setSettingsMenuPos(null);
   }, []);
-  const toggleSettingsMenu = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
-    if (settingsMenuOpen) {
-      closeSettingsMenu();
-      return;
-    }
-    const rect = event.currentTarget.getBoundingClientRect();
-    const menuWidth = 184;
-    const menuHeight = 236;
-    const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8));
-    const below = rect.bottom + 6;
-    const top = below + menuHeight > window.innerHeight - 8
-      ? Math.max(8, rect.top - menuHeight - 6)
-      : below;
-    setSettingsMenuPos({ top, left });
-    setSettingsMenuOpen(true);
-  }, [settingsMenuOpen, closeSettingsMenu]);
   useEffect(() => {
     if (!settingsMenuOpen) return;
     const handleMouseDown = (event: MouseEvent) => {
@@ -1433,6 +1420,34 @@ export function AppShell() {
   }, [newSessionDraftKey]);
   const showChat = selectedSession !== null || effectiveNewSessionCwd !== null;
   const projectTrustCwd = selectedSession?.cwd ?? effectiveNewSessionCwd;
+  const toggleSettingsMenu = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    if (settingsMenuOpen) {
+      closeSettingsMenu();
+      return;
+    }
+    // Desktop shell: the same section list as a native popup.
+    if (isTauriDesktop()) {
+      void showNativeMenu(
+        SETTINGS_SECTION_ITEMS.map((item) => ({
+          label: translate(item.labelKey),
+          disabled: item.requiresProject && !projectTrustCwd,
+          onSelect: () => setSettingsSection(item.id),
+        })),
+        menuPointBelow(event.currentTarget),
+      );
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 184;
+    const menuHeight = 236;
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8));
+    const below = rect.bottom + 6;
+    const top = below + menuHeight > window.innerHeight - 8
+      ? Math.max(8, rect.top - menuHeight - 6)
+      : below;
+    setSettingsMenuPos({ top, left });
+    setSettingsMenuOpen(true);
+  }, [settingsMenuOpen, closeSettingsMenu, translate, projectTrustCwd]);
   // While restoring initial session from URL, don't show the placeholder
   const showPlaceholder = initialSessionRestored && !showChat;
 
@@ -1919,7 +1934,7 @@ export function AppShell() {
 
       {/* Main column: everything right of the sidebar. The topbar starts at the
           center column so the sidebar runs the full window height. */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
+      <div className="app-main-column" style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
         {/* Top bar with sidebar toggle */}
         <div
           ref={topBarRef}
@@ -2074,13 +2089,62 @@ export function AppShell() {
                     ? autoNameStatus.message
                     : translate("title.generateSession");
 
+                const statsSummary = (() => {
+                  const fmt = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(n);
+                  const t = sessionStats?.tokens;
+                  const c = sessionStats?.cost ?? 0;
+                  const parts: string[] = [];
+                  if (t && t.input > 0) parts.push(`↑${fmt(t.input)}`);
+                  if (t && t.output > 0) parts.push(`↓${fmt(t.output)}`);
+                  if (c > 0) parts.push(c >= 0.01 ? `$${c.toFixed(2)}` : "<$0.01");
+                  if (contextUsage?.contextWindow && contextUsage.percent !== null) {
+                    parts.push(`${contextUsage.percent.toFixed(1)}% ctx`);
+                  }
+                  return parts.length > 0 ? parts.join(" · ") : translate("appshell.statsHint");
+                })();
+
+                // Desktop shell: the same five actions as a native popup. A
+                // native item holds one line, so the DOM menu's caption is
+                // appended to the label where it carries live state.
+                const openNativeMore = (anchor: Element) => {
+                  void showNativeMenu([
+                    { label: nameLabel, disabled: nameDisabled, onSelect: () => void handleAutoName() },
+                    {
+                      label: `${translate("system.prompt")}${systemPrompt === null ? "" : systemPrompt ? "" : ` (${translate("appshell.toolsDisabled")})`}`,
+                      checked: activeTopPanel === "system" ? true : undefined,
+                      onSelect: () => handleSystemInfoToggle("system"),
+                    },
+                    {
+                      label: translate("agentSwitcher.title"),
+                      checked: activeTopPanel === "agents" ? true : undefined,
+                      onSelect: () => toggleTopPanel("agents"),
+                    },
+                    {
+                      label: translate("tools.label"),
+                      checked: activeTopPanel === "tools" ? true : undefined,
+                      onSelect: () => handleSystemInfoToggle("tools"),
+                    },
+                    { kind: "separator" },
+                    {
+                      label: `${translate("appshell.sessionStats")} — ${statsSummary}`,
+                      disabled: !sessionStats && !contextUsage,
+                      checked: activeTopPanel === "session" ? true : undefined,
+                      onSelect: () => toggleTopPanel("session"),
+                    },
+                  ], menuPointBelow(anchor, "right"));
+                };
+
                 return (
                   <div className="app-topbar-more" ref={topMoreRef}>
                     <button
                       className="native-toolbar-button app-topbar-more-trigger"
                       type="button"
-                      onClick={() => {
+                      onClick={(event) => {
                         setActiveTopPanel(null);
+                        if (isTauriDesktop()) {
+                          openNativeMore(event.currentTarget);
+                          return;
+                        }
                         setTopMoreOpen((open) => !open);
                       }}
                       title={translate("appshell.moreActions")}
@@ -2220,17 +2284,7 @@ export function AppShell() {
                           </span>
                         </button>
                         {(() => {
-                          const fmt = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(n);
-                          const t = sessionStats?.tokens;
-                          const c = sessionStats?.cost ?? 0;
-                          const parts: string[] = [];
-                          if (t && t.input > 0) parts.push(`↑${fmt(t.input)}`);
-                          if (t && t.output > 0) parts.push(`↓${fmt(t.output)}`);
-                          if (c > 0) parts.push(c >= 0.01 ? `$${c.toFixed(2)}` : "<$0.01");
-                          if (contextUsage?.contextWindow && contextUsage.percent !== null) {
-                            parts.push(`${contextUsage.percent.toFixed(1)}% ctx`);
-                          }
-                          const summary = parts.length > 0 ? parts.join(" · ") : translate("appshell.statsHint");
+                          const summary = statsSummary;
                           return (
                             <button
                               className="app-topbar-more-item"

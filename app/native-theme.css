@@ -6040,3 +6040,98 @@ span.linenumber {
   .scheduled-header .scheduled-actions { width: 100%; }
   .scheduled-actions .scheduled-button { flex: 1 1 auto; }
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* Desktop shell conventions (Tauri only)                                     */
+/* -------------------------------------------------------------------------- */
+
+/* `native-desktop` is added to <html> by the Tauri shell's initialization
+   script; the browser build never has it, so the web app keeps web habits
+   (pointer cursors, selectable labels). Native controls use the arrow cursor
+   and their labels are not text; only links and real text fields differ. */
+html.native-desktop :is(
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="menuitemcheckbox"],
+  [role="menuitemradio"],
+  [role="option"],
+  [role="switch"],
+  [role="checkbox"],
+  summary,
+  select,
+  label,
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="range"],
+  input[type="button"],
+  input[type="submit"],
+  [style*="cursor: pointer"],
+  .app-sidebar *,
+  .app-topbar *
+):not(a, input:not([type]), input[type="text"], input[type="search"], textarea, [contenteditable="true"]) {
+  cursor: default !important;
+}
+
+/* Chrome text is a label, not content: the sidebar, topbar, tab strip and
+   controls cannot be drag-selected. `user-select: auto` follows the parent, so
+   one declaration on the container covers its descendants. Message, code and
+   file content sit outside these containers and stay selectable. */
+html.native-desktop :is(
+  .app-sidebar,
+  .app-topbar,
+  .file-tab-bar,
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  summary
+) {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+html.native-desktop :is(.app-sidebar, .app-topbar) :is(input, textarea, [contenteditable="true"]) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* -------------------------------------------------------------------------- */
+/* macOS vibrancy                                                             */
+/* -------------------------------------------------------------------------- */
+
+/* The Tauri shell makes the window transparent and puts an NSVisualEffectView
+   (sidebar material) behind the webview, then adds `native-vibrancy` to <html>.
+   Everything that is not the sidebar must therefore paint its own opaque
+   background; the sidebar and the shell around it go transparent so the
+   system material shows through. The material follows the window theme. */
+html.native-vibrancy,
+html.native-vibrancy body {
+  background: transparent;
+}
+
+html.native-vibrancy .app-shell {
+  background: transparent !important;
+}
+
+html.native-vibrancy .app-main-column {
+  background:
+    radial-gradient(circle at 55% -30%, color-mix(in srgb, var(--accent) 4%, transparent), transparent 46%),
+    var(--bg);
+}
+
+html.native-vibrancy .app-sidebar {
+  background: transparent !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Below the overlay breakpoint the sidebar floats over the chat, so it needs
+   a real surface again. */
+@media (max-width: 640px) {
+  html.native-vibrancy .app-sidebar {
+    background: var(--bg-panel) !important;
+  }
+}
