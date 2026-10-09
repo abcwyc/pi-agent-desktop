@@ -145,7 +145,6 @@ export const zhCNLocale: LocalePlugin = {
     "agentSwitcher.status.failed": "失败",
     "agentSwitcher.status.aborted": "已中止",
     "agentSwitcher.status.interrupted": "已中断",
-    "appUpdate.releaseNotes": "Pi Web v{version} 可用，查看更新说明",
     "sidebar.hide": "隐藏侧边栏",
     "sidebar.show": "显示侧边栏",
     "history.full": "完整历史",

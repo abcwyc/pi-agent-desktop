@@ -796,13 +796,6 @@ export interface ProjectTrustUnreadableResponse extends ProjectMcpListing {
   reason: "trust-unreadable";
 }
 
-export interface AppUpdateResponse {
-  currentVersion: string;
-  latestVersion: string;
-  updateAvailable: boolean;
-  releaseUrl: string;
-}
-
 export interface PushConfigResponse {
   publicKey: string;
 }
