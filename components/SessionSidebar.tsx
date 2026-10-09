@@ -16,7 +16,7 @@ import { groupByProject } from "@/lib/project-group";
 import { notifyDesktop } from "@/lib/desktop-notify";
 import { revealItemInDirNative } from "@/lib/desktop-native";
 import { isTauriDesktop } from "@/lib/desktop-updater";
-import { menuPointBelow, showNativeMenu, type NativeMenuPoint } from "@/lib/desktop-menu";
+import { canUseNativeMenu, menuPointBelow, showNativeMenu, type NativeMenuPoint } from "@/lib/desktop-menu";
 import { getDesktopPlatform, type DesktopPlatform } from "@/lib/desktop-window";
 import { useWindowDrag } from "./desktop";
 import { SessionSearch } from "./SessionSearch";
@@ -1120,7 +1120,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
   const openProjectMenu = useCallback((e: React.MouseEvent<HTMLButtonElement>, projectRoot: string) => {
     e.stopPropagation();
-    if (isTauriDesktop()) {
+    if (canUseNativeMenu()) {
       void showNativeProjectMenu(projectRoot, menuPointBelow(e.currentTarget));
       return;
     }
@@ -2458,7 +2458,7 @@ function SessionItem({
   // `menuOpen` stays true while it is up so the trailing "…" button does not
   // swap back to the timestamp; `menuPos` stays null, so no DOM menu renders.
   const showNativeSessionMenu = useCallback(async (at: NativeMenuPoint): Promise<boolean> => {
-    if (session.transient) return false;
+    if (session.transient || !canUseNativeMenu()) return false;
     setMenuOpen(true);
     const shown = await showNativeMenu([
       { label: t("sidebar.rename"), onSelect: startRename },
@@ -2494,6 +2494,8 @@ function SessionItem({
     }
     // Replace the webview's own context menu (Reload / Inspect) with the row's actions.
     if (isTauriDesktop() && !session.transient) {
+      // Suppresses the webview menu (Reload / Inspect); the row actions open
+      // natively only while native popups are on, otherwise via the "…" button.
       e.preventDefault();
       e.stopPropagation();
       void showNativeSessionMenu({ x: e.clientX, y: e.clientY });
@@ -2512,7 +2514,7 @@ function SessionItem({
       setMenuPos({ top, left });
       setMenuOpen(true);
     };
-    if (isTauriDesktop()) {
+    if (canUseNativeMenu()) {
       void showNativeSessionMenu(menuPointBelow(e.currentTarget)).then((shown) => {
         if (!shown) openDomMenu();
       });

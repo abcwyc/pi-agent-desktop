@@ -3,7 +3,7 @@
 import { useCallback, type MouseEvent } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { copyText } from "@/lib/clipboard";
-import { showNativeMenu } from "@/lib/desktop-menu";
+import { canUseNativeMenu, showNativeMenu } from "@/lib/desktop-menu";
 import {
   listAppsForFileNative,
   openPathWithNative,
@@ -11,7 +11,6 @@ import {
   selectApplicationNative,
   type FileOpenApp,
 } from "@/lib/desktop-native";
-import { isTauriDesktop } from "@/lib/desktop-updater";
 import { getDesktopPlatform } from "@/lib/desktop-window";
 import { appListCacheKey, buildFileMenuEntries, revealLabelKey } from "@/lib/file-context-menu";
 import { encodeFilePathForApi } from "@/lib/file-paths";
@@ -75,7 +74,7 @@ export function useFileContextMenu(
   const { t } = useI18n();
 
   return useCallback((event, { filePath, page, verify }) => {
-    if (!isTauriDesktop()) return;
+    if (!canUseNativeMenu()) return;
     // Claim the right-click now: the checks below are async, and the document
     // fallback in useNativeContextMenu only respects a prevented event.
     event.preventDefault();

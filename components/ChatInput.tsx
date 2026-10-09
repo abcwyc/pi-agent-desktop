@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, useMemo, useImperativeHandle, forwardRef, KeyboardEvent } from "react";
-import { isTauriDesktop } from "@/lib/desktop-updater";
-import { menuPointBelow, showNativeMenu } from "@/lib/desktop-menu";
+import { canUseNativeMenu, menuPointBelow, showNativeMenu } from "@/lib/desktop-menu";
 import type { BuiltinSlashCommandResult, CompactResultInfo, QueuedMessages, SlashCommandInfo } from "@/hooks/useAgentSession";
 import type { SkillsResponse } from "@/lib/api-types";
 import type { ModelScopeWarning } from "@/lib/model-scope-warnings";
@@ -2932,7 +2931,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   onClick={(event) => {
                     if (projectOptions.length > 0 && onProjectChange) {
                       // Desktop shell: the project list as a native popup.
-                      if (isTauriDesktop()) {
+                      if (canUseNativeMenu()) {
                         void showNativeMenu(
                           projectOptions.map((projectRoot) => ({
                             label: getProjectLabel(projectRoot) ?? projectRoot,

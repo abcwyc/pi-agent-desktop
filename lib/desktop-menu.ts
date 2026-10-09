@@ -16,6 +16,20 @@ export type { NativeMenuEntry } from "./desktop-menu-model";
  * failed), and the caller then opens the DOM menu as before.
  */
 
+/**
+ * Native popups are switched off. tauri's `menu.popup` command holds the
+ * webview's resource-table lock while the main thread runs the menu, so any
+ * IPC call that needs the lock in that window freezes the whole app (reported
+ * as a hang on opening Settings in 0.6.x). Every caller keeps its DOM menu, so
+ * flipping this back on is a one-line change once tauri fixes `popup`.
+ */
+export const NATIVE_POPUP_MENUS_ENABLED = false;
+
+/** Whether a caller should try a native popup at all (desktop shell and not switched off). */
+export function canUseNativeMenu(): boolean {
+  return NATIVE_POPUP_MENUS_ENABLED && isTauriDesktop();
+}
+
 // A menu and its items live in the Rust resource table until closed. Item
 // actions arrive over IPC after the popup returns, so a menu is closed when the
 // *next* one opens, never right after its own popup.
@@ -38,7 +52,7 @@ export async function showNativeMenu(
   entries: NativeMenuEntry[],
   at?: NativeMenuPoint,
 ): Promise<boolean> {
-  if (!isTauriDesktop()) return false;
+  if (!canUseNativeMenu()) return false;
   const tidy = tidyMenuEntries(entries);
   if (tidy.length === 0) return true;
   try {

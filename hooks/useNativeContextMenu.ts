@@ -1,6 +1,5 @@
 import { useEffect } from "react";
-import { showNativeMenu, type NativeMenuEntry } from "@/lib/desktop-menu";
-import { isTauriDesktop } from "@/lib/desktop-updater";
+import { canUseNativeMenu, showNativeMenu, type NativeMenuEntry } from "@/lib/desktop-menu";
 
 function isEditable(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -29,7 +28,8 @@ function hasSelection(target: EventTarget | null): boolean {
  */
 export function useNativeContextMenu(): void {
   useEffect(() => {
-    if (!isTauriDesktop()) return;
+    // With native popups off the webview keeps its own context menu.
+    if (!canUseNativeMenu()) return;
     const onContextMenu = (event: MouseEvent) => {
       if (event.defaultPrevented) return;
       const at = { x: event.clientX, y: event.clientY };

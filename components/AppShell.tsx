@@ -34,7 +34,7 @@ import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
 import { useDesktopConnection } from "@/lib/desktop-connection";
 import { isTauriDesktop, setCloseQuitsNative } from "@/lib/desktop-native";
-import { menuPointBelow, showNativeMenu } from "@/lib/desktop-menu";
+import { canUseNativeMenu, menuPointBelow, showNativeMenu } from "@/lib/desktop-menu";
 import { useNativeContextMenu } from "@/hooks/useNativeContextMenu";
 import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
@@ -1437,21 +1437,12 @@ export function AppShell() {
       setSettingsMenuPos({ top, left });
       setSettingsMenuOpen(true);
     };
-    // Desktop shell: the same section list as a native popup; the DOM menu is
-    // the fallback when the native one cannot be shown.
-    if (isTauriDesktop()) {
-      void showNativeMenu(
-        SETTINGS_SECTION_ITEMS.map((item) => ({
-          label: translate(item.labelKey),
-          disabled: item.requiresProject && !projectTrustCwd,
-          onSelect: () => setSettingsSection(item.id),
-        })),
-        menuPointBelow(event.currentTarget),
-      ).then((shown) => { if (!shown) openDomMenu(); });
-      return;
-    }
+    // Always the DOM menu, also in the desktop shell: tauri's `menu.popup` command
+    // holds the webview's resource-table lock while the main thread runs the
+    // menu, so one IPC call that needs the lock in that window freezes the app.
+    // Settings is the only way into the panel, so it must not depend on that.
     openDomMenu();
-  }, [settingsMenuOpen, closeSettingsMenu, translate, projectTrustCwd]);
+  }, [settingsMenuOpen, closeSettingsMenu]);
   // While restoring initial session from URL, don't show the placeholder
   const showPlaceholder = initialSessionRestored && !showChat;
 
@@ -2134,7 +2125,7 @@ export function AppShell() {
                       type="button"
                       onClick={(event) => {
                         setActiveTopPanel(null);
-                        if (isTauriDesktop()) {
+                        if (canUseNativeMenu()) {
                           openNativeMore(event.currentTarget);
                           return;
                         }
