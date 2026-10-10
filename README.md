@@ -17,9 +17,9 @@
 - A weekly check of the latest stable `pi-agent-desktop` GitHub Release, with an in-app notice only when the installed app is older.
 - One upgrade button installs a complete, signed new build of Pi Agent and restarts automatically.
 
-![Pi Agent light mode](./docs/screenshots/pi-agent-light@2x.png)
+![Pi Agent light mode](./docs/screenshots/pi-agent-light.webp)
 
-![Pi Agent dark mode](./docs/screenshots/pi-agent-dark@2x.png)
+![Pi Agent dark mode](./docs/screenshots/pi-agent-dark.webp)
 
 **[⬇️ Download Pi Agent (macOS / Windows)](https://github.com/abcwyc/pi-agent-desktop/releases)**
 

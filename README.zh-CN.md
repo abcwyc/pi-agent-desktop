@@ -17,9 +17,9 @@
 - 每周检查三个组成项目的稳定 GitHub Release，并在发现更新时提醒用户。
 - 通过一个升级按钮安装完整、签名的 Pi Agent 新版本并自动重启。
 
-![Pi Agent 浅色模式界面](./docs/screenshots/pi-agent-light@2x.png)
+![Pi Agent 浅色模式界面](./docs/screenshots/pi-agent-light.webp)
 
-![Pi Agent 深色模式界面](./docs/screenshots/pi-agent-dark@2x.png)
+![Pi Agent 深色模式界面](./docs/screenshots/pi-agent-dark.webp)
 
 **[⬇️ 下载 Pi Agent（macOS / Windows）](https://github.com/abcwyc/pi-agent-desktop/releases)**
 
