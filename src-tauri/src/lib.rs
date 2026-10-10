@@ -1471,7 +1471,6 @@ mod tests {
     use super::{visible_linux_tray_item, LinuxTray, LINUX_TRAY_QUIT_LABEL, LINUX_TRAY_SHOW_LABEL};
     use std::path::{Path, PathBuf};
 
-    #[cfg(target_os = "macos")]
     #[test]
     fn popup_menu_entries_parse_the_shape_the_ui_sends() {
         // Mirrors `toPopupSpec` in lib/desktop-menu-model.ts.
@@ -1494,6 +1493,7 @@ mod tests {
         assert!(matches!(&entries[5], PopupMenuEntry::Predefined { text: Some(text), .. } if text == "Einfügen"));
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn lists_applications_that_can_open_a_text_file() {
         let file = std::env::temp_dir().join(format!("pi-open-with-{}.txt", std::process::id()));
