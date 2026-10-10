@@ -112,7 +112,7 @@ npm install
 npm run dev
 ```
 
-The dev server runs at [http://localhost:30141](http://localhost:30141).
+The dev server runs at [http://localhost:30141](http://localhost:30141) and does not open a browser. `npm run web` starts the same loopback server and opens `http://127.0.0.1:30141` in the desktop browser after it is ready. From WSL that is the Windows browser. See [Web profile](./docs/web-profile.md).
 
 Do not run `next build` or `npm run build` during normal development. They write into `.next/` and can disrupt a running dev server; production builds are done by the desktop preparation script or by CI.
 
