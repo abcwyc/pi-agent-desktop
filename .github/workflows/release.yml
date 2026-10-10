@@ -103,33 +103,39 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.6.3
+            ## Pi Agent Desktop 0.6.4
 
-            The file right-click menu is back.
+            Native menus are back, and opening Settings no longer freezes the app.
 
             ### Fixed
 
-            - Right-clicking a file Pi wrote, a link to a local file, or a file name in inline code shows **Open**, **Open With** (macOS), **Reveal in Finder / Explorer** and **Copy Path** again. It had been paused in 0.6.2 while the native popup menus were switched off; it now uses an in-app menu with keyboard support (arrow keys, Enter, Esc).
+            - Opening **Settings** could freeze the whole app on some systems. Popup menus are now built and shown by the desktop shell itself, so nothing on the page can deadlock with an open menu.
+            - The Settings button, top bar **More**, session and project menus, and the project switcher use native menus again, and clicking their items works.
+            - Right-clicking a file Pi wrote, a link to a local file, or a file name in inline code shows the native **Open**, **Open With** (macOS), **Reveal in Finder / Explorer** and **Copy Path** menu again.
 
             ### Good to know
 
-            - Settings, top bar **More**, and the session and project menus keep using in-app menus, as in 0.6.2.
+            - If a native menu cannot be shown, the in-app menu opens instead.
+            - The app log folder now has a `desktop.log` that records when popup menus open and close, to help diagnose a hang.
 
             Bundled components: pi 1.1.0, pi-web 0.10.0.
 
             ---
 
-            ## Pi Agent Desktop 0.6.3
+            ## Pi Agent Desktop 0.6.4
 
-            文件右键菜单回来了。
+            原生菜单回来了，打开设置不再卡死。
 
             ### 修复
 
-            - 在 Pi 写出的文件、指向本地文件的链接，或行内代码里的文件名上点右键，又能看到**打开**、**用其他应用打开**（macOS）、**在 Finder / 资源管理器中显示**和**复制路径**了。0.6.2 因为暂停了原生弹出菜单而一并停用了它；现在改用应用内菜单，并支持键盘操作（方向键、回车、Esc）。
+            - 在部分系统上，打开**设置**可能导致整个应用卡死。现在弹出菜单由桌面外壳自己构建和显示，页面上的任何操作都不会再与打开的菜单互相等待。
+            - 设置按钮、顶栏**更多**、会话和项目菜单、项目切换重新使用原生菜单，点击菜单项能正常生效。
+            - 在 Pi 写出的文件、指向本地文件的链接，或行内代码里的文件名上点右键，重新显示原生的**打开**、**用其他应用打开**（macOS）、**在 Finder / 资源管理器中显示**和**复制路径**菜单。
 
             ### 需要了解
 
-            - 设置、顶栏**更多**以及会话和项目菜单继续使用应用内菜单，与 0.6.2 相同。
+            - 如果原生菜单无法显示，会改为打开应用内菜单。
+            - 应用日志目录新增 `desktop.log`，记录弹出菜单的打开和关闭，便于排查卡死问题。
 
             内置组件版本：pi 1.1.0、pi-web 0.10.0。
           releaseDraft: true
