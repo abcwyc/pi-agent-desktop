@@ -16,15 +16,16 @@ export type { NativeMenuEntry } from "./desktop-menu-model";
  */
 
 /**
- * Native popups are off in regular builds and on where
- * `NEXT_PUBLIC_NATIVE_POPUP_MENUS=1` is set at build time (the desktop test
- * build). Opening Settings froze the app for a user in 0.6.x, and the suspect
- * is the way menus used to be driven from JS: tauri's `menu.popup` command
- * holds the webview's resource-table lock while the main thread runs the menu.
- * Menus now go through `show_popup_menu`, which builds and shows them in Rust,
- * but that is not confirmed on every platform yet, so it is opt-in.
+ * Native popups are on in the desktop shell; `NEXT_PUBLIC_NATIVE_POPUP_MENUS=0`
+ * at build time switches them off, and every caller then uses its DOM menu.
+ * Opening Settings froze the app for a user in 0.6.x, and the suspect was the
+ * way menus used to be driven from JS: tauri's `menu.popup` command holds the
+ * webview's resource-table lock while the main thread runs the menu. Menus now
+ * go through `show_popup_menu`, which builds and shows them in Rust and hands
+ * the picked id back as the command's result; a test build with this on was
+ * checked by the user who reported the freeze.
  */
-export const NATIVE_POPUP_MENUS_ENABLED = process.env.NEXT_PUBLIC_NATIVE_POPUP_MENUS === "1";
+export const NATIVE_POPUP_MENUS_ENABLED = process.env.NEXT_PUBLIC_NATIVE_POPUP_MENUS !== "0";
 
 /** Whether a caller should try a native popup at all (desktop shell and not switched off). */
 export function canUseNativeMenu(): boolean {

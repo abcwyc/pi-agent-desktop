@@ -11,7 +11,7 @@ on:
         required: true
         default: "test.1"
       native_popup_menus:
-        description: "Build with native popup menus on (NEXT_PUBLIC_NATIVE_POPUP_MENUS=1)"
+        description: "Build with native popup menus on (off sets NEXT_PUBLIC_NATIVE_POPUP_MENUS=0)"
         type: boolean
         default: true
 
@@ -35,7 +35,7 @@ jobs:
             args: --target x86_64-pc-windows-msvc --bundles nsis
     runs-on: ${{ matrix.runner }}
     env:
-      NEXT_PUBLIC_NATIVE_POPUP_MENUS: ${{ inputs.native_popup_menus && '1' || '' }}
+      NEXT_PUBLIC_NATIVE_POPUP_MENUS: ${{ inputs.native_popup_menus && '1' || '0' }}
     steps:
       - name: Check out
         uses: actions/checkout@v7
