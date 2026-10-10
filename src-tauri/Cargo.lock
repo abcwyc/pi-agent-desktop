@@ -2751,6 +2751,7 @@ dependencies = [
  "getrandom 0.3.4",
  "ksni",
  "libc",
+ "serde",
  "serde_json",
  "tauri",
  "tauri-build",

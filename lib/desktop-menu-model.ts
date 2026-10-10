@@ -1,4 +1,4 @@
-/** Pure description of a native menu and how it is built through Tauri's menu API (no Tauri imports, so it is unit-testable in Node). */
+/** Pure description of a native menu and how it is handed to the desktop shell (no Tauri imports, so it is unit-testable in Node). */
 
 export type NativeMenuEntry =
   | {
@@ -19,53 +19,57 @@ export type NativeMenuEntry =
     };
 
 /**
- * What `createNativeMenuItems` needs from Tauri's menu API. Every `item`,
- * `submenu`, ... call must return a *standalone* resource (`MenuItem.new`, not a
- * nested options object): tauri 2.12 drops an item's JS channel as soon as the
- * Rust wrapper built from nested `Menu.new({ items })` options goes out of
- * scope, so an `action` given that way never fires. Standalone resources stay
- * in the resource table until closed, which keeps the channel alive.
+ * What the Rust `show_popup_menu` command takes (`PopupMenuEntry` in
+ * src-tauri/src/lib.rs; the shapes are pinned on both sides). Plain data only:
+ * the menu is built and shown in Rust and the page learns which item was
+ * picked from the command's result, so there are no menu resources or click
+ * channels on the JS side.
  */
-export interface NativeMenuFactory<T> {
-  separator(): Promise<T>;
-  predefined(item: "Copy" | "Cut" | "Paste" | "SelectAll" | "Undo" | "Redo", text?: string): Promise<T>;
-  item(options: { text: string; enabled: boolean; action: () => void; checked?: boolean }): Promise<T>;
-  submenu(options: { text: string; enabled: boolean; items: T[] }): Promise<T>;
-}
+export type PopupMenuSpec =
+  | { kind: "item"; id: string; text: string; enabled: boolean; checked?: boolean }
+  | { kind: "separator" }
+  | { kind: "submenu"; text: string; enabled: boolean; items: PopupMenuSpec[] }
+  | { kind: "predefined"; item: "Copy" | "Cut" | "Paste" | "SelectAll" | "Undo" | "Redo"; text?: string };
 
-/** Builds every entry (submenus depth-first) through `factory`, in order. */
-export async function createNativeMenuItems<T>(
-  entries: NativeMenuEntry[],
-  factory: NativeMenuFactory<T>,
-): Promise<T[]> {
-  const out: T[] = [];
-  for (const entry of entries) {
-    switch (entry.kind) {
-      case "separator":
-        out.push(await factory.separator());
-        break;
-      case "predefined":
-        out.push(await factory.predefined(entry.item, entry.label));
-        break;
-      case "submenu":
-        out.push(await factory.submenu({
-          text: entry.label,
-          enabled: !entry.disabled,
-          items: await createNativeMenuItems(entry.items, factory),
-        }));
-        break;
-      default: {
-        const options: Parameters<NativeMenuFactory<T>["item"]>[0] = {
-          text: entry.label,
-          enabled: !entry.disabled,
-          action: () => entry.onSelect?.(),
-        };
-        if (entry.checked !== undefined) options.checked = entry.checked;
-        out.push(await factory.item(options));
+/**
+ * Turns entries into the spec plus the handlers to run for each item id. Ids
+ * are sequential strings, unique across submenus.
+ */
+export function toPopupSpec(entries: NativeMenuEntry[]): {
+  items: PopupMenuSpec[];
+  actions: Map<string, () => void>;
+} {
+  const actions = new Map<string, () => void>();
+  let next = 0;
+  const convert = (list: NativeMenuEntry[]): PopupMenuSpec[] => {
+    const out: PopupMenuSpec[] = [];
+    for (const entry of list) {
+      switch (entry.kind) {
+        case "separator":
+          out.push({ kind: "separator" });
+          break;
+        case "predefined":
+          out.push({ kind: "predefined", item: entry.item, ...(entry.label ? { text: entry.label } : {}) });
+          break;
+        case "submenu":
+          out.push({ kind: "submenu", text: entry.label, enabled: !entry.disabled, items: convert(entry.items) });
+          break;
+        default: {
+          const id = String(next++);
+          if (entry.onSelect) actions.set(id, entry.onSelect);
+          out.push({
+            kind: "item",
+            id,
+            text: entry.label,
+            enabled: !entry.disabled,
+            ...(entry.checked !== undefined ? { checked: entry.checked } : {}),
+          });
+        }
       }
     }
-  }
-  return out;
+    return out;
+  };
+  return { items: convert(entries), actions };
 }
 
 /** Drops separators that lead, trail or repeat, so callers can build lists with conditional groups. */

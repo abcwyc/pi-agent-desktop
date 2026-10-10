@@ -1438,12 +1438,22 @@ export function AppShell() {
       setSettingsMenuPos({ top, left });
       setSettingsMenuOpen(true);
     };
-    // Always the DOM menu, also in the desktop shell: tauri's `menu.popup` command
-    // holds the webview's resource-table lock while the main thread runs the
-    // menu, so one IPC call that needs the lock in that window freezes the app.
-    // Settings is the only way into the panel, so it must not depend on that.
+    // Desktop shell with native popups on: the same section list as a native
+    // menu, shown by the shell (`show_popup_menu`). The DOM menu is the
+    // fallback when it cannot be shown, and the menu in regular builds.
+    if (canUseNativeMenu()) {
+      void showNativeMenu(
+        SETTINGS_SECTION_ITEMS.map((item) => ({
+          label: translate(item.labelKey),
+          disabled: item.requiresProject && !projectTrustCwd,
+          onSelect: () => setSettingsSection(item.id),
+        })),
+        menuPointBelow(event.currentTarget),
+      ).then((shown) => { if (!shown) openDomMenu(); });
+      return;
+    }
     openDomMenu();
-  }, [settingsMenuOpen, closeSettingsMenu]);
+  }, [settingsMenuOpen, closeSettingsMenu, translate, projectTrustCwd]);
   // While restoring initial session from URL, don't show the placeholder
   const showPlaceholder = initialSessionRestored && !showChat;
 

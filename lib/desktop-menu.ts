@@ -1,9 +1,8 @@
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import {
-  createNativeMenuItems,
   tidyMenuEntries,
+  toPopupSpec,
   type NativeMenuEntry,
-  type NativeMenuFactory,
 } from "./desktop-menu-model";
 
 export type { NativeMenuEntry } from "./desktop-menu-model";
@@ -17,26 +16,20 @@ export type { NativeMenuEntry } from "./desktop-menu-model";
  */
 
 /**
- * Native popups are switched off. tauri's `menu.popup` command holds the
- * webview's resource-table lock while the main thread runs the menu, so any
- * IPC call that needs the lock in that window freezes the whole app (reported
- * as a hang on opening Settings in 0.6.x). Every caller keeps its DOM menu, so
- * flipping this back on is a one-line change once tauri fixes `popup`.
+ * Native popups are off in regular builds and on where
+ * `NEXT_PUBLIC_NATIVE_POPUP_MENUS=1` is set at build time (the desktop test
+ * build). Opening Settings froze the app for a user in 0.6.x, and the suspect
+ * is the way menus used to be driven from JS: tauri's `menu.popup` command
+ * holds the webview's resource-table lock while the main thread runs the menu.
+ * Menus now go through `show_popup_menu`, which builds and shows them in Rust,
+ * but that is not confirmed on every platform yet, so it is opt-in.
  */
-export const NATIVE_POPUP_MENUS_ENABLED = false;
+export const NATIVE_POPUP_MENUS_ENABLED = process.env.NEXT_PUBLIC_NATIVE_POPUP_MENUS === "1";
 
 /** Whether a caller should try a native popup at all (desktop shell and not switched off). */
 export function canUseNativeMenu(): boolean {
   return NATIVE_POPUP_MENUS_ENABLED && isTauriDesktop();
 }
-
-// A menu and its items live in the Rust resource table until closed. Item
-// actions arrive over IPC after the popup returns, so a menu is closed when the
-// *next* one opens, never right after its own popup.
-interface MenuResource {
-  close: () => Promise<void>;
-}
-let lastMenu: MenuResource[] = [];
 
 export interface NativeMenuPoint {
   x: number;
@@ -47,6 +40,9 @@ export interface NativeMenuPoint {
  * Shows `entries` as a native popup menu at `at` (window client coordinates;
  * the cursor when omitted). Resolves `true` once the menu was shown and
  * dismissed, `false` when the caller should fall back to its DOM menu.
+ *
+ * The picked item's `onSelect` runs after the menu has closed, from the
+ * command's result, never while the menu is open.
  */
 export async function showNativeMenu(
   entries: NativeMenuEntry[],
@@ -56,38 +52,10 @@ export async function showNativeMenu(
   const tidy = tidyMenuEntries(entries);
   if (tidy.length === 0) return true;
   try {
-    const [{ Menu, MenuItem, CheckMenuItem, Submenu, PredefinedMenuItem }, { invoke }] = await Promise.all([
-      import("@tauri-apps/api/menu"),
-      import("@tauri-apps/api/core"),
-    ]);
-    const previous = lastMenu;
-    lastMenu = [];
-    for (const resource of previous) void resource.close().catch(() => {});
-
-    const created: MenuResource[] = [];
-    lastMenu = created;
-    const track = <T extends MenuResource>(resource: T): T => {
-      created.push(resource);
-      return resource;
-    };
-    // Items are created as standalone resources and handed to the menu by
-    // reference: see NativeMenuFactory for why nested options lose `action`.
-    const factory: NativeMenuFactory<MenuResource> = {
-      separator: async () => track(await PredefinedMenuItem.new({ item: "Separator" })),
-      predefined: async (item, text) =>
-        track(await PredefinedMenuItem.new(text ? { item, text } : { item })),
-      item: async ({ checked, ...options }) =>
-        track(checked === undefined
-          ? await MenuItem.new(options)
-          : await CheckMenuItem.new({ ...options, checked })),
-      submenu: async (options) =>
-        track(await Submenu.new({ ...options, items: options.items as never })),
-    };
-    const items = await createNativeMenuItems(tidy, factory);
-    const menu = track(await Menu.new({ items: items as never }));
-    // Not `menu.popup()`: tauri's own command holds the webview resource-table
-    // lock for as long as the menu is open (see `popup_native_menu` in lib.rs).
-    await invoke("popup_native_menu", { rid: menu.rid, at: at ?? null });
+    const { invoke } = await import("@tauri-apps/api/core");
+    const { items, actions } = toPopupSpec(tidy);
+    const chosen = await invoke<string | null>("show_popup_menu", { items, at: at ?? null });
+    if (chosen) actions.get(chosen)?.();
     return true;
   } catch (error) {
     // A silent `false` once hid a menu that popped up but could not act; leave a trace.

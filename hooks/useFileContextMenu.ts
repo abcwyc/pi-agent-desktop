@@ -56,10 +56,8 @@ async function fileExists(filePath: string): Promise<boolean> {
  * (components/DomContextMenuHost.tsx), which draws the same entries.
  */
 async function showMenu(entries: NativeMenuEntry[], at: { x: number; y: number }): Promise<void> {
-  if (canUseNativeMenu()) {
-    await showNativeMenu(entries, at);
-    return;
-  }
+  // `false` means the native menu could not be shown: fall back to the in-app one.
+  if (canUseNativeMenu() && await showNativeMenu(entries, at)) return;
   openDomMenu(entries, at);
 }
 

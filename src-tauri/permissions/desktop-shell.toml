@@ -49,6 +49,6 @@ description = "Allows the trusted desktop WebView to authorize native-dialog fil
 commands.allow = ["get_desktop_api_token"]
 
 [[permission]]
-identifier = "allow-popup-native-menu"
-description = "Allows the UI to show a native popup menu without holding the webview resource-table lock."
-commands.allow = ["popup_native_menu"]
+identifier = "allow-show-popup-menu"
+description = "Allows the UI to show a native popup menu described as plain data and learn which item was picked."
+commands.allow = ["show_popup_menu"]
