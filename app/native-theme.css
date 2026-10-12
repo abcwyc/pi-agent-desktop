@@ -1530,25 +1530,36 @@ pre, code {
   backdrop-filter: saturate(130%) blur(24px);
 }
 
+/* 10px top padding centres the 28px controls row on y = 24px, the same line as
+   the 48px topbar's own buttons, so the collapse toggle does not shift
+   vertically when the sidebar opens, closes or peeks. */
 .session-sidebar-header {
-  padding: 8px 6px 4px !important;
+  padding: 10px 6px 0 !important;
   border-bottom: 0 !important;
 }
 
-/* On macOS (titleBarStyle: Overlay) the traffic lights float over the
-   sidebar's top-left; the right-aligned controls row shares that strip, so
-   only a small extra inset is needed to keep the rows below clear. */
-.session-sidebar-header--mac-inset {
-  padding-top: 12px !important;
-}
-
-/* Window-chrome controls row at the sidebar's top-right (theme + collapse). */
+/* Window-chrome controls row: collapse toggle at the left, settings at the
+   right. */
 .sidebar-controls-row {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 2px;
-  padding: 0 2px 4px;
+  padding: 0 2px 8px;
+}
+
+/* The toggle lines up with the topbar's reopen button (which sits at the
+   topbar's 9px padding, or past the 72px traffic-light inset on macOS) so it
+   stays under the pointer when a hover peek covers that button. The row
+   already contributes 6px + 2px of its own inset. On macOS (titleBarStyle:
+   Overlay) the traffic lights float over this strip's left side, which is
+   what the larger margin clears. */
+.sidebar-chrome-button--toggle {
+  margin-left: 1px;
+}
+
+.session-sidebar-header--mac-inset .sidebar-chrome-button--toggle {
+  margin-left: 64px;
 }
 
 .sidebar-chrome-button {
@@ -4976,6 +4987,39 @@ span.linenumber {
   }
 }
 
+
+/* Hover peek: the collapsed sidebar slides over the chat instead of pushing it,
+   so a glance at the session list costs no layout shift. */
+@media (min-width: 641px) {
+  .sidebar-container.sidebar-peek {
+    position: absolute;
+    z-index: 200;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--sidebar-width, 284px);
+    min-width: var(--sidebar-width, 284px);
+    border-right: 1px solid var(--border) !important;
+    box-shadow: 6px 0 24px rgb(0 0 0 / 28%);
+  }
+
+  /* The peek floats over the topbar and the chat, so unlike the docked sidebar it
+     must be opaque: --bg-panel is translucent and macOS vibrancy makes the docked
+     sidebar fully transparent, which let the topbar's reopen button and title
+     bleed through the peek and pile up under its own header controls. Painting
+     --bg-panel over solid --bg keeps the docked sidebar's tone. */
+  html .sidebar-container.sidebar-peek.app-sidebar {
+    background: linear-gradient(var(--bg-panel), var(--bg-panel)), var(--bg) !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  /* Leaving the peek must not animate the width back down: for those frames the
+     sidebar is in flow again and the chat would visibly reflow around it. */
+  .sidebar-container.sidebar-peek-exit {
+    transition: none !important;
+  }
+}
 
 /* Right panel: animate width */
 @media (min-width: 641px) {

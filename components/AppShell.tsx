@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 import type { UnavailableWorkspace, WorkspaceAvailability } from "@/lib/workspace-availability";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -102,6 +102,10 @@ type AutoNameStatus =
   | { kind: "naming" }
   | { kind: "success" }
   | { kind: "error"; message: string };
+// Hover peek for the collapsed sidebar: it stays long enough to aim at a
+// session, and closes on its own when the pointer never arrives or leaves.
+const SIDEBAR_PEEK_IDLE_MS = 2600;
+const SIDEBAR_PEEK_LEAVE_MS = 420;
 const FILE_TREE_DEFAULT_WIDTH = 300;
 const AGENT_PANEL_WIDTH = 420;
 const FILE_TREE_MIN_WIDTH = 220;
@@ -262,6 +266,8 @@ export function AppShell() {
   const [projectTrustBusy, setProjectTrustBusy] = useState(false);
   const [projectTrustError, setProjectTrustError] = useState<ProjectTrustFailure | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(() => !initialNavigation.sidebarCollapsed);
+  const [sidebarPeek, setSidebarPeek] = useState(false);
+  const [sidebarPeekExiting, setSidebarPeekExiting] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [rightPanelExpanded, setRightPanelExpanded] = useState(false);
   const rightPanelFullWidth = rightPanelOpen && rightPanelExpanded && !isMobile;
@@ -534,8 +540,55 @@ export function AppShell() {
 
   const handleSidebarToggle = useCallback(() => {
     if (isMobile) setActiveTopPanel(null);
+    setSidebarPeek(false);
     setSidebarOpen((open) => !open);
   }, [isMobile]);
+
+  // Hover peek: the collapsed sidebar slides over the chat while the pointer is
+  // near it, and retreats by itself once the pointer leaves or never arrives.
+  const sidebarPeekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sidebarPeekExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdSidebarPeek = useCallback(() => {
+    if (sidebarPeekTimerRef.current) clearTimeout(sidebarPeekTimerRef.current);
+    sidebarPeekTimerRef.current = null;
+  }, []);
+  // The peek is an overlay, so it must vanish without animating its width back
+  // down: in flow that animation would squeeze the chat for a frame or two.
+  const endSidebarPeek = useCallback(() => {
+    setSidebarPeekExiting(true);
+    setSidebarPeek(false);
+    if (sidebarPeekExitTimerRef.current) clearTimeout(sidebarPeekExitTimerRef.current);
+    sidebarPeekExitTimerRef.current = setTimeout(() => setSidebarPeekExiting(false), 80);
+  }, []);
+  const closeSidebarPeekAfter = useCallback((delay: number) => {
+    holdSidebarPeek();
+    sidebarPeekTimerRef.current = setTimeout(endSidebarPeek, delay);
+  }, [endSidebarPeek, holdSidebarPeek]);
+  const openSidebarPeek = useCallback(() => {
+    setSidebarPeekExiting(false);
+    setSidebarPeek(true);
+    closeSidebarPeekAfter(SIDEBAR_PEEK_IDLE_MS);
+  }, [closeSidebarPeekAfter]);
+  // The sidebar's own toggle and the topbar's reopen button occupy the same spot,
+  // so hiding the sidebar with a click leaves the pointer right over the reopen
+  // button — which would peek the sidebar straight back. Skip that one hover; it
+  // ends when the pointer leaves the button.
+  const sidebarPeekSuppressedRef = useRef(false);
+  const handleSidebarHeaderToggle = useCallback((event: ReactMouseEvent) => {
+    if (sidebarOpen && event.detail > 0) sidebarPeekSuppressedRef.current = true;
+    handleSidebarToggle();
+  }, [handleSidebarToggle, sidebarOpen]);
+  useEffect(() => {
+    if (sidebarOpen || isMobile) {
+      holdSidebarPeek();
+      setSidebarPeek(false);
+      setSidebarPeekExiting(false);
+    }
+  }, [sidebarOpen, isMobile, holdSidebarPeek]);
+  useEffect(() => () => {
+    holdSidebarPeek();
+    if (sidebarPeekExitTimerRef.current) clearTimeout(sidebarPeekExitTimerRef.current);
+  }, [holdSidebarPeek]);
 
   const handleRightPanelToggle = useCallback(() => {
     if (isMobile) {
@@ -1658,10 +1711,25 @@ export function AppShell() {
     return () => observer.disconnect();
   }, [windowTitle]);
 
-  // Settings + collapse controls at the sidebar's own top-right (Claude Desktop
-  // style). When the sidebar is closed, the topbar shows a reopen button.
+  // Collapse + settings controls in the sidebar's own header row. The collapse
+  // toggle sits at the left, exactly where the topbar's reopen button sits while
+  // the sidebar is closed (CSS offsets it past the macOS traffic lights), so it
+  // never jumps between open / closed / peek: during a hover peek the sidebar
+  // covers the topbar button and this one takes its place, which leaves a single
+  // "pin it open" control instead of two.
+  const sidebarToggleLabel = sidebarOpen ? translate("sidebar.hide") : translate("sidebar.show");
   const sidebarHeaderControls = (
     <>
+      <button
+        className="sidebar-chrome-button sidebar-chrome-button--toggle"
+        onClick={handleSidebarHeaderToggle}
+        title={sidebarToggleLabel}
+        aria-label={sidebarToggleLabel}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" />
+        </svg>
+      </button>
       <button
         ref={settingsMenuButtonRef}
         className="sidebar-chrome-button"
@@ -1674,16 +1742,6 @@ export function AppShell() {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="3" />
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-        </svg>
-      </button>
-      <button
-        className="sidebar-chrome-button"
-        onClick={handleSidebarToggle}
-        title={translate("sidebar.hide")}
-        aria-label={translate("sidebar.hide")}
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" />
         </svg>
       </button>
     </>
@@ -1911,8 +1969,12 @@ export function AppShell() {
       <div
         ref={sidebarResizer.panelRef}
         id="session-sidebar"
-        className={`app-sidebar sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"}${mobileSidebarReady ? "" : " sidebar-mobile-pending"}${sidebarResizer.isResizing ? " sidebar-resizing" : ""}`}
-        inert={rightPanelFullWidth}
+        inert={rightPanelFullWidth || (!sidebarOpen && !sidebarPeek)}
+        onMouseEnter={sidebarPeek ? holdSidebarPeek : undefined}
+        onMouseMove={sidebarPeek ? holdSidebarPeek : undefined}
+        onMouseLeave={sidebarPeek ? () => closeSidebarPeekAfter(SIDEBAR_PEEK_LEAVE_MS) : undefined}
+        onFocusCapture={sidebarPeek ? holdSidebarPeek : undefined}
+        className={`app-sidebar sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"}${sidebarPeek ? " sidebar-peek" : ""}${sidebarPeekExiting ? " sidebar-peek-exit" : ""}${mobileSidebarReady ? "" : " sidebar-mobile-pending"}${sidebarResizer.isResizing ? " sidebar-resizing" : ""}`}
         style={{
           "--sidebar-width": `${sidebarResizer.width}px`,
           background: "var(--bg-panel)",
@@ -1961,6 +2023,9 @@ export function AppShell() {
               // Size, hover colour and background come from .native-icon-button, which
               // declares them with !important — inline overrides here would be dead.
               style={{ order: -2, flexShrink: 0 }}
+              // Hovering this button peeks the sidebar; clicking it pins it open.
+              onMouseEnter={() => { if (!isMobile && !sidebarPeekSuppressedRef.current) openSidebarPeek(); }}
+              onMouseLeave={() => { sidebarPeekSuppressedRef.current = false; }}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" />
