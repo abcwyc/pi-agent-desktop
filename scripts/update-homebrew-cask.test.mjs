@@ -21,6 +21,20 @@ test("the cask points at the aarch64 DMG the release publishes", async () => {
   const source = await readFile(CASK_PATH, "utf8");
   assert.match(source, /releases\/download\/v#\{version\}\/Pi\.Agent_#\{version\}_aarch64\.dmg/);
   assert.match(source, /depends_on arch: :arm64/);
+  // `depends_on macos: ">= :big_sur"` is deprecated in Homebrew 5+, and any
+  // versioned minimum at or below Big Sur is redundant under Homebrew's own
+  // macOS 11 floor, so the bare form is the one Homebrew 7 asks for.
+  assert.match(source, /^  depends_on :macos$/m);
+  assert.doesNotMatch(
+    source,
+    /depends_on (?:macos|maximum_macos): "/,
+    "depends_on macos: must not use the deprecated string comparison format",
+  );
+  assert.doesNotMatch(
+    source,
+    /depends_on macos: :(?:big_sur|catalina|mojave|high_sierra|sierra|el_capitan)/,
+    "a minimum macOS at or below Homebrew's own floor is redundant",
+  );
   assert.match(source, /auto_updates true/);
   assert.doesNotMatch(source, /"~\/\.pi/, "zap must not delete ~/.pi, which the pi CLI shares");
 });

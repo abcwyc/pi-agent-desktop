@@ -15,7 +15,9 @@ cask "pi-agent" do
   # The app upgrades itself from Settings with signed updater builds.
   auto_updates true
   depends_on arch: :arm64
-  depends_on macos: ">= :big_sur"
+  # The app builds against macOS 11 (Tauri `minimumSystemVersion`), which is also
+  # Homebrew's own floor, so a bare `depends_on :macos` is the whole requirement.
+  depends_on :macos
 
   app "Pi Agent.app"
 
