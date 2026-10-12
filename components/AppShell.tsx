@@ -1718,6 +1718,10 @@ export function AppShell() {
   // covers the topbar button and this one takes its place, which leaves a single
   // "pin it open" control instead of two.
   const sidebarToggleLabel = sidebarOpen ? translate("sidebar.hide") : translate("sidebar.show");
+  // While the sidebar is closed and not peeking, the topbar's reopen button is the
+  // one control with this name; keep the hidden copy out of the accessibility
+  // tree and the tab order instead of exposing two identical buttons.
+  const sidebarToggleHidden = !sidebarOpen && !sidebarPeek;
   const sidebarHeaderControls = (
     <>
       <button
@@ -1725,6 +1729,8 @@ export function AppShell() {
         onClick={handleSidebarHeaderToggle}
         title={sidebarToggleLabel}
         aria-label={sidebarToggleLabel}
+        aria-hidden={sidebarToggleHidden || undefined}
+        tabIndex={sidebarToggleHidden ? -1 : undefined}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" />
@@ -1969,7 +1975,7 @@ export function AppShell() {
       <div
         ref={sidebarResizer.panelRef}
         id="session-sidebar"
-        inert={rightPanelFullWidth || (!sidebarOpen && !sidebarPeek)}
+        inert={rightPanelFullWidth}
         onMouseEnter={sidebarPeek ? holdSidebarPeek : undefined}
         onMouseMove={sidebarPeek ? holdSidebarPeek : undefined}
         onMouseLeave={sidebarPeek ? () => closeSidebarPeekAfter(SIDEBAR_PEEK_LEAVE_MS) : undefined}
