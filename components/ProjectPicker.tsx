@@ -61,6 +61,10 @@ export async function selectProjectDirectoryNative(selectedCwd: string | null, h
   const path = await selectDirectoryNative(selectedCwd ?? (homeDir || undefined));
   if (path === null) return null;
 
+  return validateProjectDirectory(path);
+}
+
+export async function validateProjectDirectory(path: string): Promise<string> {
   const res = await fetch("/api/cwd/validate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

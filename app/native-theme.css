@@ -2184,31 +2184,6 @@ html.dark .sidebar-view-switcher-thumb {
   margin: 2px 10px;
 }
 
-/* Modal overlay used when the user clicks + to add a new project from the
-   project-tree header. */
-.project-picker-modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-  background: color-mix(in srgb, var(--bg) 55%, transparent);
-  backdrop-filter: blur(6px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
-.project-picker-modal-shell {
-  width: min(420px, 100%);
-  max-height: min(640px, calc(100vh - 48px));
-  background: var(--bg-panel);
-  border: var(--hairline) solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.25);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
 .sidebar-session-list {
   padding: 0 0 6px !important;
 }

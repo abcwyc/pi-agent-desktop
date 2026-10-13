@@ -9,7 +9,8 @@ import { workspaceKeyOf } from "@/lib/workspace-memory";
 import { useI18n } from "@/hooks/useI18n";
 import { formatCompactRelativeTime, formatRelativeTime } from "@/lib/i18n/format";
 import { createPortal } from "react-dom";
-import { ProjectPicker, selectProjectDirectoryNative } from "./ProjectPicker";
+import { DirectoryPicker } from "./DirectoryPicker";
+import { ProjectPicker, selectProjectDirectoryNative, validateProjectDirectory } from "./ProjectPicker";
 import { AnimatedDropdown, PathLabel, displayCwd, getRecentProjects } from "./path-ui";
 import { APP_PREF_KEYS, getPrefJson, removePref, setPrefJson } from "@/lib/app-prefs";
 import { groupByProject } from "@/lib/project-group";
@@ -315,6 +316,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   );
   const projectMenuRef = useRef<HTMLDivElement>(null);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [projectPickerBusy, setProjectPickerBusy] = useState(false);
+  const [projectPickerError, setProjectPickerError] = useState<string | null>(null);
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
   const [unreadSessionIds, setUnreadSessionIds] = useState<Set<string>>(() => loadUnreadSessionIds());
   const previousRunningSessionIdsRef = useRef<Set<string>>(new Set());
@@ -1032,6 +1035,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
   const handleAddProject = useCallback(async () => {
     if (!isTauriDesktop()) {
+      setProjectPickerError(null);
       setProjectPickerOpen(true);
       return;
     }
@@ -2127,21 +2131,24 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         document.body,
       )}
       {projectPickerOpen && (
-        <div className="project-picker-modal-overlay" role="dialog" aria-modal="true" onClick={() => setProjectPickerOpen(false)}>
-          <div className="project-picker-modal-shell" onClick={(e) => e.stopPropagation()}>
-            <ProjectPicker
-              recentProjects={recentProjects}
-              selectedCwd={selectedCwdProp ?? null}
-              selectedProject={selectedProjectObject?.root ?? null}
-              homeDir={homeDir}
-              onSelectCwd={(cwd) => {
-                activateProject(cwd);
-                setProjectPickerOpen(false);
-              }}
-              variant="block"
-            />
-          </div>
-        </div>
+        <DirectoryPicker
+          initialPath={selectedCwd ?? (homeDir || undefined)}
+          busy={projectPickerBusy}
+          error={projectPickerError}
+          onCancel={() => setProjectPickerOpen(false)}
+          onSelect={async (path) => {
+            setProjectPickerBusy(true);
+            setProjectPickerError(null);
+            try {
+              activateProject(await validateProjectDirectory(path));
+              setProjectPickerOpen(false);
+            } catch (error) {
+              setProjectPickerError(error instanceof Error ? error.message : String(error));
+            } finally {
+              setProjectPickerBusy(false);
+            }
+          }}
+        />
       )}
     </div>
   );

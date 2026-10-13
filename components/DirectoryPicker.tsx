@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, type FormEvent, useCallback, useEffect, useState } from "react";
+import { type CSSProperties, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
 import { isImeComposing } from "@/lib/ime";
@@ -126,16 +126,19 @@ export function DirectoryPicker({ onCancel, onSelect, initialPath, busy = false,
   const [drives, setDrives] = useState<DirectoryEntry[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigationId = useRef(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [directoryName, setDirectoryName] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   const navigateTo = useCallback(async (directory?: string) => {
+    const id = ++navigationId.current;
     setLoading(true);
     setLoadError(null);
     try {
       const data = await loadDirectories(directory);
+      if (id !== navigationId.current) return;
       const nextPath = data.path ?? directory ?? "/";
       setCurrentPath(nextPath);
       setParentDirectory(data.parentPath ?? null);
@@ -143,15 +146,17 @@ export function DirectoryPicker({ onCancel, onSelect, initialPath, busy = false,
       setDirectories(data.directories ?? []);
       setDrives(data.drives ?? null);
     } catch (cause) {
+      if (id !== navigationId.current) return;
       setLoadError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      setLoading(false);
+      if (id === navigationId.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     setPortalTarget(document.body);
     void navigateTo(initialPath || undefined);
+    return () => { navigationId.current += 1; };
   }, [initialPath, navigateTo]);
 
   const handlePathSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -188,7 +193,7 @@ export function DirectoryPicker({ onCancel, onSelect, initialPath, busy = false,
   };
 
   const hasUncommittedPath = pathInput.trim() !== currentPath;
-  const canSelect = Boolean(currentPath) && !hasUncommittedPath && !busy;
+  const canSelect = Boolean(currentPath) && !hasUncommittedPath && !busy && !loading && !loadError;
   const canCreate = canSelect && !loading;
   const canNavigateUp = Boolean(parentDirectory) || isWindowsDriveRoot(currentPath);
 

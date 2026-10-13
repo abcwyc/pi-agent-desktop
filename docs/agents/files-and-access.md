@@ -1,6 +1,9 @@
 # File access, worktrees and web auth
 
 ## Worktrees and project grouping
+
+The sidebar and composer open the server directory browser in Web mode. Its start directory and `/api/home` both use `userHome()` (`PI_AGENT_HOME` when configured). Selecting a directory still passes through `/api/cwd/validate`; merely navigating does not select or authorize it.
+
 - `lib/worktree.ts` resolves linked worktree top-levels to the main repo `projectRoot`; `listAllSessions()` attaches it to each `SessionInfo`, so a repo's worktrees group together in the sidebar. A session whose cwd is a removed worktree is inferred back into the main project, never a phantom project row.
 - `/api/worktrees` serves worktree operations under the same allowed-root rules as `/api/files`. New worktrees go under `<repoRoot>-worktrees/<sanitized-branch>`; an existing branch is reused, else `git worktree add -b` creates it. Removing a dirty worktree answers `409 { dirty: true }`, and the UI asks before retrying with `force`.
 - git prints POSIX-style absolute paths even on Windows: every path read from git goes through `toNativePath()` (`lib/paths.ts`) before it is compared or returned, and paths are compared with `samePath()`, never `===` (otherwise `isTopLevel` is always false on Windows and the worktree switcher hides). Branch names are not paths and keep their forward slashes. Browser code cannot apply Node path rules, so `/api/worktrees` resolves `currentWorktreePath` server-side and the sidebar uses it for highlighting and the removal fallback.
