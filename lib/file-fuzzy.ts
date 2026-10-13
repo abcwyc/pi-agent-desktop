@@ -1,6 +1,5 @@
-// Pure helpers for the chat input's @ file autocomplete. Mirrors the pi TUI's
-// behavior: @ triggers at line start or after whitespace, entries are ranked
-// with the TUI's scoreEntry ladder, and completions insert "@relative/path ".
+// Pure helpers for composer selectors. File entries use the TUI scoreEntry
+// ranking ladder, and completions insert "@relative/path ".
 
 export interface AtQueryMatch {
   /** Index of the "@" character in the text */
@@ -36,13 +35,12 @@ export interface SessionMentionEntry {
 }
 
 /**
- * Detect an @ file token immediately before the cursor. The @ must be at the
- * start of the text or preceded by whitespace (same rule as the TUI), so
- * emails like foo@bar never trigger. Supports the in-progress quoted form
+ * Detect an @ file token anywhere before the cursor, including next to text.
+ * Supports the in-progress quoted form
  * @"my dir/fi so drill-down into space-containing paths keeps working.
  */
 export function extractAtQuery(textBeforeCursor: string): AtQueryMatch | null {
-  const quoted = /(?:^|\s)@"([^"\n]*)$/.exec(textBeforeCursor);
+  const quoted = /@"([^"\n@#]*)$/.exec(textBeforeCursor);
   if (quoted) {
     return {
       start: textBeforeCursor.length - (quoted[1].length + 2),
@@ -50,7 +48,7 @@ export function extractAtQuery(textBeforeCursor: string): AtQueryMatch | null {
       quoted: true,
     };
   }
-  const plain = /(?:^|\s)@([^\s"]*)$/.exec(textBeforeCursor);
+  const plain = /@([^\s"@#]*)$/.exec(textBeforeCursor);
   if (plain) {
     return {
       start: textBeforeCursor.length - (plain[1].length + 1),
@@ -63,7 +61,7 @@ export function extractAtQuery(textBeforeCursor: string): AtQueryMatch | null {
 
 /** Detect a session token immediately before the cursor. */
 export function extractHashQuery(textBeforeCursor: string): HashQueryMatch | null {
-  const quoted = /(?:^|\s)#"([^"\n]*)$/.exec(textBeforeCursor);
+  const quoted = /#"([^"\n@#]*)$/.exec(textBeforeCursor);
   if (quoted) {
     return {
       start: textBeforeCursor.length - (quoted[1].length + 2),
@@ -71,7 +69,7 @@ export function extractHashQuery(textBeforeCursor: string): HashQueryMatch | nul
       quoted: true,
     };
   }
-  const plain = /(?:^|\s)#([^\s"]*)$/.exec(textBeforeCursor);
+  const plain = /#([^\s"@#]*)$/.exec(textBeforeCursor);
   if (plain) {
     return {
       start: textBeforeCursor.length - (plain[1].length + 1),
@@ -80,6 +78,13 @@ export function extractHashQuery(textBeforeCursor: string): HashQueryMatch | nul
     };
   }
   return null;
+}
+
+/** File paths and quoted session names retain their selector during drill-down. */
+export function extractSlashQuery(textBeforeCursor: string): { start: number; query: string } | null {
+  if (extractAtQuery(textBeforeCursor) || extractHashQuery(textBeforeCursor)) return null;
+  const match = /\/([^\s/@#"]*)$/.exec(textBeforeCursor);
+  return match ? { start: match.index, query: match[1].toLowerCase() } : null;
 }
 
 function pathDepth(p: string): number {

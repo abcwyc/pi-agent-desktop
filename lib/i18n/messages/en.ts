@@ -360,6 +360,8 @@ export const enLocale: LocalePlugin = {
     "sidebar.newActivity": "New activity",
     "sidebar.newSessionActivity": "New session activity",
     "sidebar.deleteSession": "Delete {title}?",
+    "sidebar.markAsRead": "Mark as Read",
+    "sidebar.markAsUnread": "Mark as Unread",
     "sidebar.rename": "Rename",
     "sidebar.delete": "Delete",
     "sidebar.renameFailed": "Rename failed: {error}",

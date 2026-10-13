@@ -573,15 +573,19 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     void loadSessions(false);
   }, [runningSessionIds, allSessions, loadSessions]);
 
-  useEffect(() => {
-    if (!selectedSessionId) return;
+  const setSessionUnread = useCallback((id: string, unread: boolean) => {
     setUnreadSessionIds((prev) => {
-      if (!prev.has(selectedSessionId)) return prev;
+      if (prev.has(id) === unread) return prev;
       const next = new Set(prev);
-      next.delete(selectedSessionId);
+      if (unread) next.add(id);
+      else next.delete(id);
       return next;
     });
-  }, [selectedSessionId]);
+  }, []);
+
+  useEffect(() => {
+    if (selectedSessionId) setSessionUnread(selectedSessionId, false);
+  }, [selectedSessionId, setSessionUnread]);
 
   useEffect(() => {
     fetch("/api/home").then((r) => r.json()).then((d: { home?: string }) => {
@@ -1006,10 +1010,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   // works when the prop value won't change — e.g. re-clicking the already
   // open session after manually switching worktrees.
   const handleSelectSessionFromList = useCallback((s: SessionInfo, entryId?: string, blockIndex?: number) => {
+    setSessionUnread(s.id, false);
     setAllSessions((current) => current.some((session) => session.id === s.id) ? current : [s, ...current]);
     if (s.cwd) setSelectedCwd(s.cwd);
     onSelectSession(s, false, entryId, blockIndex);
-  }, [onSelectSession]);
+  }, [onSelectSession, setSessionUnread]);
 
   const handleNewSession = useCallback((cwdOverride?: string) => {
     const cwd = cwdOverride ?? selectedCwd;
@@ -1333,6 +1338,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 selectedSessionId={selectedSessionId}
                 runningSessionIds={runningSessionIds}
                 unreadSessionIds={unreadSessionIds}
+                onUnreadChange={setSessionUnread}
                 onSelectSession={handleSelectSessionFromList}
                 onRenamed={loadSessions}
                 onSessionDeleted={(id) => {
@@ -2160,6 +2166,7 @@ function SessionFamilyItem({
   selectedSessionId,
   runningSessionIds,
   unreadSessionIds,
+  onUnreadChange,
   onSelectSession,
   onRenamed,
   onSessionDeleted,
@@ -2171,6 +2178,7 @@ function SessionFamilyItem({
   selectedSessionId: string | null;
   runningSessionIds: Set<string>;
   unreadSessionIds: Set<string>;
+  onUnreadChange: (id: string, unread: boolean) => void;
   onSelectSession: (s: SessionInfo) => void;
   onRenamed?: () => void;
   onSessionDeleted?: (id: string) => void;
@@ -2196,6 +2204,7 @@ function SessionFamilyItem({
             ? familySessions.some((session) => runningSessionIds.has(session.id))
             : runningSessionIds.has(node.session.id)}
           isUnread={unreadSessionIds.has(node.session.id)}
+          onUnreadChange={(unread) => onUnreadChange(node.session.id, unread)}
           onClick={() => onSelectSession(node.session)}
           onRenamed={onRenamed}
           onDeleted={(id) => onSessionDeleted?.(id)}
@@ -2214,6 +2223,7 @@ function SessionFamilyItem({
               selectedSessionId={selectedSessionId}
               runningSessionIds={runningSessionIds}
               unreadSessionIds={unreadSessionIds}
+              onUnreadChange={onUnreadChange}
               onSelectSession={onSelectSession}
               onRenamed={onRenamed}
               onSessionDeleted={onSessionDeleted}
@@ -2338,6 +2348,7 @@ function SessionItem({
   isSelected,
   isRunning,
   isUnread,
+  onUnreadChange,
   onClick,
   onRenamed,
   onDeleted,
@@ -2350,6 +2361,7 @@ function SessionItem({
   isSelected: boolean;
   isRunning?: boolean;
   isUnread?: boolean;
+  onUnreadChange: (unread: boolean) => void;
   onClick: () => void;
   onRenamed?: () => void;
   onDeleted?: (id: string) => void;
@@ -2454,8 +2466,10 @@ function SessionItem({
   // swap back to the timestamp; `menuPos` stays null, so no DOM menu renders.
   const showNativeSessionMenu = useCallback(async (at: NativeMenuPoint): Promise<boolean> => {
     if (session.transient || !canUseNativeMenu()) return false;
+    setMenuPos(null);
     setMenuOpen(true);
     const shown = await showNativeMenu([
+      { label: t(isUnread ? "sidebar.markAsRead" : "sidebar.markAsUnread"), onSelect: () => onUnreadChange(!isUnread) },
       { label: t("sidebar.rename"), onSelect: startRename },
       { label: t("sidebar.delete"), onSelect: () => setConfirmDelete(true) },
       { kind: "separator" },
@@ -2470,7 +2484,27 @@ function SessionItem({
     ], at);
     setMenuOpen(false);
     return shown;
-  }, [locale, session.compactionCount, session.messageCount, session.modified, session.transient, session.worktreeBranch, startRename, t]);
+  }, [isUnread, onUnreadChange, locale, session.compactionCount, session.messageCount, session.modified, session.transient, session.worktreeBranch, startRename, t]);
+
+  const openSessionMenu = useCallback((point: NativeMenuPoint) => {
+    const openDomMenu = () => {
+      const estimatedHeight = 170
+        + ((session.compactionCount ?? 0) > 0 ? 18 : 0)
+        + (session.worktreeBranch ? 18 : 0);
+      setMenuPos({
+        left: Math.max(8, Math.min(point.x, window.innerWidth - MENU_WIDTH - 8)),
+        top: Math.max(8, Math.min(point.y, window.innerHeight - estimatedHeight - 8)),
+      });
+      setMenuOpen(true);
+    };
+    if (canUseNativeMenu()) {
+      void showNativeSessionMenu(point).then((shown) => {
+        if (!shown) openDomMenu();
+      });
+    } else {
+      openDomMenu();
+    }
+  }, [session.compactionCount, session.worktreeBranch, showNativeSessionMenu]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const handled = dispatchSessionRowContextMenu({
@@ -2487,36 +2521,18 @@ function SessionItem({
       e.stopPropagation();
       return;
     }
-    // Replace the webview's own context menu (Reload / Inspect) with the row's actions.
-    if (isTauriDesktop() && !session.transient) {
-      // Suppresses the webview menu (Reload / Inspect); the row actions open
-      // natively only while native popups are on, otherwise via the "…" button.
-      e.preventDefault();
-      e.stopPropagation();
-      void showNativeSessionMenu({ x: e.clientX, y: e.clientY });
-    }
-  }, [onRenamed, session.cwd, session.id, session.name, session.path, session.transient, showNativeSessionMenu]);
+    if (session.transient) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openSessionMenu({ x: e.clientX, y: e.clientY });
+  }, [onRenamed, session.cwd, session.id, session.name, session.path, session.transient, openSessionMenu]);
 
   const toggleMenu = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (menuOpen) { setMenuOpen(false); return; }
-    const rect = e.currentTarget.getBoundingClientRect();
-    const openDomMenu = () => {
-      const estHeight = 124;
-      const left = Math.max(8, Math.min(rect.right - MENU_WIDTH, window.innerWidth - MENU_WIDTH - 8));
-      let top = rect.bottom + 4;
-      if (top + estHeight > window.innerHeight - 8) top = rect.top - estHeight - 4;
-      setMenuPos({ top, left });
-      setMenuOpen(true);
-    };
-    if (canUseNativeMenu()) {
-      void showNativeSessionMenu(menuPointBelow(e.currentTarget)).then((shown) => {
-        if (!shown) openDomMenu();
-      });
-      return;
-    }
-    openDomMenu();
-  }, [menuOpen, showNativeSessionMenu]);
+    const point = menuPointBelow(e.currentTarget, "right");
+    openSessionMenu({ x: point.x - MENU_WIDTH, y: point.y });
+  }, [menuOpen, openSessionMenu]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -2766,6 +2782,22 @@ function SessionItem({
                 display: "flex", flexDirection: "column", gap: 1,
               }}
             >
+              <button
+                role="menuitem"
+                onClick={() => { setMenuOpen(false); onUnreadChange(!isUnread); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  width: "100%", height: 30, padding: "0 8px",
+                  background: "transparent", border: 0, borderRadius: 7,
+                  color: "var(--text)", cursor: "pointer",
+                  fontSize: 13, textAlign: "left",
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  {isUnread ? <path d="m5 12 4 4L19 6" /> : <circle cx="12" cy="12" r="7" />}
+                </svg>
+                {t(isUnread ? "sidebar.markAsRead" : "sidebar.markAsUnread")}
+              </button>
               <button
                 role="menuitem"
                 onClick={() => { setMenuOpen(false); startRename(); }}

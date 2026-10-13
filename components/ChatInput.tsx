@@ -22,7 +22,7 @@ import {
   isBase64ImageWithinLimits,
 } from "@/lib/image-attachments";
 import {
-  buildEntriesFromFiles, buildAtInsertText, buildSessionMentionText, extractAtQuery, extractHashQuery,
+  buildEntriesFromFiles, buildAtInsertText, buildSessionMentionText, extractAtQuery, extractHashQuery, extractSlashQuery,
   filterFileEntries, filterSessionEntries,
   type AtQueryMatch, type FileIndexEntry, type HashQueryMatch, type SessionMentionEntry,
 } from "@/lib/file-fuzzy";
@@ -852,6 +852,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const trimmedValue = value.trimStart();
   const bashMode = attachedImages.length === 0 && trimmedValue.startsWith("!");
   const bashExcluded = bashMode && trimmedValue.startsWith("!!");
+  const [cursorPosition, setCursorPosition] = useState<number | null>(null);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashActiveIndex, setSlashActiveIndex] = useState(0);
   const [slashMenuMaxHeight, setSlashMenuMaxHeight] = useState<number | null>(null);
@@ -1285,9 +1286,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     clearInput();
   }, [value, attachedImages, workspaceUnavailable, isStreaming, runBuiltinCommand, onSend, clearInput, onAudioUnlock]);
 
-  const slashQuery = !compact && value.startsWith("/") && !/\s/.test(value.slice(1))
-    ? value.slice(1).toLowerCase()
-    : null;
+  const slashToken = compact ? null : extractSlashQuery(value.slice(0, cursorPosition ?? value.length));
+  const slashQuery = slashToken?.query ?? null;
+  const slashTokenKey = slashToken === null ? null : `${slashToken.start}:${slashToken.query}`;
 
   const filteredSlashCommands = (() => {
     if (slashQuery === null) return [];
@@ -1599,19 +1600,24 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, []);
 
   const applySlashCommand = useCallback((command: SlashCommandPaletteItem) => {
-    const nextValue = `/${command.name} `;
+    if (!slashToken) return;
+    const cursor = textareaRef.current?.selectionStart ?? value.length;
+    const insert = `/${command.name} `;
+    const nextValue = value.slice(0, slashToken.start) + insert + value.slice(cursor);
+    const nextCursor = slashToken.start + insert.length;
     setValue(nextValue);
+    setCursorPosition(nextCursor);
     setSlashMenuOpen(false);
     setSlashActiveIndex(0);
     requestAnimationFrame(() => {
       const ta = textareaRef.current;
       if (!ta) return;
       ta.focus();
-      ta.setSelectionRange(nextValue.length, nextValue.length);
+      ta.setSelectionRange(nextCursor, nextCursor);
       ta.style.height = "auto";
       ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
     });
-  }, []);
+  }, [slashToken, value]);
 
   const sendQueued = useCallback(async (mode: "steer" | "followup") => {
     const msg = value.trim();
@@ -1921,7 +1927,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         slashCommandsRequestedRef.current = false;
       });
     }
-  }, [slashQuery, onLoadSlashCommands]);
+  }, [slashQuery, slashTokenKey, onLoadSlashCommands]);
 
   // Lazy-load skill dormancy (disable-model-invocation) each time the slash
   // palette opens, so toggles made in the skills panel are reflected on the
@@ -2749,12 +2755,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             onChange={(e) => {
               valueRef.current = e.target.value;
               setValue(e.target.value);
+              setCursorPosition(e.target.selectionStart);
               setHistoryMenuOpen(false);
               updateAtQuery(e.target.value, e.target.selectionStart);
               updateHashQuery(e.target.value, e.target.selectionStart);
             }}
             onSelect={(e) => {
               const el = e.currentTarget;
+              setCursorPosition(el.selectionStart);
               updateAtQuery(el.value, el.selectionStart);
               updateHashQuery(el.value, el.selectionStart);
             }}
@@ -2766,6 +2774,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               isComposingRef.current = false;
               lastCompositionEndAtRef.current = Date.now();
               const el = e.currentTarget;
+              setCursorPosition(el.selectionStart);
               updateAtQuery(el.value, el.selectionStart);
               updateHashQuery(el.value, el.selectionStart);
             }}

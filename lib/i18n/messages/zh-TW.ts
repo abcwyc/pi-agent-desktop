@@ -345,6 +345,8 @@ export const zhTWLocale: LocalePlugin = {
     "sidebar.newActivity": "有新活動",
     "sidebar.newSessionActivity": "工作階段有新活動",
     "sidebar.deleteSession": "刪除 {title}？",
+    "sidebar.markAsRead": "標為已讀",
+    "sidebar.markAsUnread": "標為未讀",
     "sidebar.rename": "重新命名",
     "sidebar.delete": "刪除",
     "sidebar.renameFailed": "重新命名失敗：{error}",

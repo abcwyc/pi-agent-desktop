@@ -360,6 +360,8 @@ export const zhCNLocale: LocalePlugin = {
     "sidebar.newActivity": "有新活动",
     "sidebar.newSessionActivity": "会话有新活动",
     "sidebar.deleteSession": "删除 {title}？",
+    "sidebar.markAsRead": "标为已读",
+    "sidebar.markAsUnread": "标为未读",
     "sidebar.rename": "重命名",
     "sidebar.delete": "删除",
     "sidebar.renameFailed": "重命名失败：{error}",
