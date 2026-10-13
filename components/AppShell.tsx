@@ -1660,8 +1660,15 @@ export function AppShell() {
 
   // Settings + collapse controls at the sidebar's own top-right (Claude Desktop
   // style). When the sidebar is closed, the topbar shows a reopen button.
+  const backendLogo = desktopChrome.isDesktop ? (
+    <a href="https://pi-desktop.invalid/backend-switcher" data-backend-switcher data-no-drag
+      className="sidebar-backend-logo" aria-label="Switch backend / 切换后端" aria-haspopup="menu">
+      π <span aria-hidden="true">⌄</span>
+    </a>
+  ) : null;
   const sidebarHeaderControls = (
     <>
+      {backendLogo}
       <button
         ref={settingsMenuButtonRef}
         className="sidebar-chrome-button"
@@ -1949,6 +1956,7 @@ export function AppShell() {
           {...windowDrag}
           style={{ display: "flex", alignItems: "center", flexShrink: 0, height: "calc(36px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)", background: "var(--bg-panel)" }}
         >
+          {!sidebarOpen && backendLogo}
           {/* Sidebar reopen — while the sidebar (and its own toggle) is hidden.
               A wide-panel split keeps this reachable; the full-width panel covers
               the window, so there the sidebar stays closed until it is restored. */}

@@ -66,3 +66,7 @@ pi-gui-session-preview.png
 
 # upstream e2e scratch files
 e2e_*.mjs
+
+# Staged by the Tauri build from public/.
+desktop/frontend/desktop-backend.html
+desktop/frontend/desktop-backend.js

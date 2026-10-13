@@ -15,11 +15,14 @@ export interface DesktopUpgradeResult {
 declare global {
   interface Window {
     __TAURI_INTERNALS__?: unknown;
+    __PI_REMOTE_BACKEND__?: boolean;
   }
 }
 
 export function isTauriDesktop(): boolean {
-  return typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__);
+  return typeof window !== "undefined"
+    && Boolean(window.__TAURI_INTERNALS__)
+    && !window.__PI_REMOTE_BACKEND__;
 }
 
 export async function installLatestDesktopRelease(

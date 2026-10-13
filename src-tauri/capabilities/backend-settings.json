@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "backend-settings",
+  "description": "Only the bundled backend selector can read or change the backend URL.",
+  "windows": ["backend-settings"],
+  "remote": { "urls": ["http://127.0.0.1:30141/desktop-backend.html"] },
+  "permissions": ["allow-get-backends", "allow-save-backend", "allow-remove-backend", "allow-activate-backend"]
+}

@@ -1,3 +1,5 @@
+mod backend;
+
 use std::{
     env,
     fs::{self, OpenOptions},
@@ -86,10 +88,15 @@ fn get_desktop_api_token(token: tauri::State<'_, DesktopApiToken>) -> String {
 }
 
 fn show_main_window(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
+    if let Some(window) = app
+        .get_webview_window(WINDOW_LABEL)
+        .or_else(|| app.get_webview_window(backend::REMOTE_WINDOW))
+    {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
+    } else {
+        let _ = backend::show_settings(app);
     }
 }
 
@@ -111,6 +118,13 @@ fn build_macos_app_menu(app: &AppHandle) -> Result<(), Box<dyn std::error::Error
         "Model Settings…",
         true,
         Some("CmdOrCtrl+M"),
+    )?;
+    let backend_settings = MacMenuItem::with_id(
+        app,
+        "settings-backend",
+        "Backend Connection…",
+        true,
+        None::<&str>,
     )?;
     let about = PredefinedMenuItem::about(app, None, None)?;
     let services = PredefinedMenuItem::services(app, None)?;
@@ -149,8 +163,12 @@ fn build_macos_app_menu(app: &AppHandle) -> Result<(), Box<dyn std::error::Error
             &PredefinedMenuItem::select_all(app, None)?,
         ],
     )?;
-    let settings_menu =
-        Submenu::with_items(app, "Settings", true, &[&general_settings, &model_settings])?;
+    let settings_menu = Submenu::with_items(
+        app,
+        "Settings",
+        true,
+        &[&general_settings, &model_settings, &backend_settings],
+    )?;
     let view_menu = Submenu::with_items(
         app,
         "View",
@@ -344,7 +362,6 @@ fn build_platform_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error
 }
 
 impl DesktopServer {
-    #[cfg(not(feature = "custom-protocol"))]
     fn empty() -> Self {
         Self {
             child: Mutex::new(None),
@@ -1248,6 +1265,7 @@ fn launched_at_login() -> bool {
 
 fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWindow> {
     let navigation_origin = app_url.clone();
+    let navigation_app = app.clone();
     let stored_theme = read_stored_theme(app);
 
     let mut builder = WebviewWindowBuilder::new(app, WINDOW_LABEL, WebviewUrl::External(app_url))
@@ -1257,7 +1275,11 @@ fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWi
         .resizable(true)
         // Pi Agent already handles browser drag/drop for image attachments.
         .disable_drag_drop_handler()
+        .initialization_script(backend::LOGO_SCRIPT)
         .on_navigation(move |url| {
+            if backend::intercept_navigation(&navigation_app, WINDOW_LABEL, url) {
+                return false;
+            }
             if same_origin(url, &navigation_origin) {
                 true
             } else {
@@ -2061,6 +2083,15 @@ pub fn run() {
                 .build(),
         )
         .on_menu_event(|app, event| {
+            if backend::menu_event(app, event.id().as_ref()) {
+                return;
+            }
+            if event.id().as_ref() == "settings-backend" {
+                if let Err(error) = backend::show_settings(app) {
+                    eprintln!("Backend settings failed: {error}");
+                }
+                return;
+            }
             // A popup menu's click: hand it to the command waiting on it.
             if event.id().as_ref().starts_with(POPUP_ID_PREFIX) {
                 if let Some(state) = app.try_state::<PopupMenuSelection>() {
@@ -2083,10 +2114,15 @@ pub fn run() {
                 eprintln!("Pi Agent menu action failed: {error}");
             }
         })
+        .manage(backend::SwitcherMenu::default())
         .manage(CloseQuits(Mutex::new(false)))
         .manage(PopupMenuSelection::default())
         .manage(DesktopApiToken(desktop_api_token))
         .invoke_handler(tauri::generate_handler![
+            backend::get_backends,
+            backend::save_backend,
+            backend::remove_backend,
+            backend::activate_backend,
             get_desktop_api_token,
             open_external_url,
             open_path,
@@ -2125,31 +2161,50 @@ pub fn run() {
                 )?;
             }
 
-            #[cfg(feature = "custom-protocol")]
-            let (url, server) =
-                start_packaged_server(app.handle(), &server_api_token, &server_instance_id)?;
-            #[cfg(not(feature = "custom-protocol"))]
-            let (url, server) = start_development_server(app.handle())?;
-
-            desktop_log(app.handle(), &format!("server ready at {url}"));
-            app.manage(server);
-            #[cfg(feature = "custom-protocol")]
-            if let Some(port) = url.port() {
-                spawn_server_monitor(
-                    app.handle().clone(),
-                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port),
-                    server_instance_id.clone(),
-                );
-            }
-            // Clear stale webview caches when the app version changed since the
-            // last successful launch (fixes WebKitGTK loading stale hashed
-            // Next.js assets after an upgrade).
             reconcile_webview_cache_for_version(app.handle());
-            let window = build_window(app.handle(), url)?;
+            match backend::read(app.handle()) {
+                Ok(Some(url)) => {
+                    app.manage(DesktopServer::empty());
+                    backend::build_remote_window(app.handle(), url)?;
+                }
+                Ok(None) => {
+                    #[cfg(feature = "custom-protocol")]
+                    let started =
+                        start_packaged_server(app.handle(), &server_api_token, &server_instance_id);
+                    #[cfg(not(feature = "custom-protocol"))]
+                    let started = start_development_server(app.handle());
+                    match started {
+                        Ok((url, server)) => {
+                            desktop_log(app.handle(), &format!("server ready at {url}"));
+                            app.manage(server);
+                            #[cfg(feature = "custom-protocol")]
+                            if let Some(port) = url.port() {
+                                spawn_server_monitor(
+                                    app.handle().clone(),
+                                    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port),
+                                    server_instance_id.clone(),
+                                );
+                            }
+                            build_window(app.handle(), url)?;
+                        }
+                        Err(error) => {
+                            eprintln!("Local backend failed to start: {error}");
+                            app.manage(DesktopServer::empty());
+                            backend::show_settings(app.handle())?;
+                        }
+                    }
+                }
+                Err(_) => {
+                    app.manage(DesktopServer::empty());
+                    backend::show_settings(app.handle())?;
+                }
+            }
             if launched_at_login() {
-                // Started by the OS at login: stay hidden. The tray (Linux /
-                // Windows) or the Dock icon (macOS) is the way back in.
-                let _ = window.hide();
+                for label in [WINDOW_LABEL, backend::REMOTE_WINDOW] {
+                    if let Some(window) = app.get_webview_window(label) {
+                        let _ = window.hide();
+                    }
+                }
             }
             // Record the current version only after the window built cleanly,
             // so a startup crash keeps the cache clear flagged on relaunch.
@@ -2170,7 +2225,7 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if window.label() == WINDOW_LABEL {
+            if window.label() == WINDOW_LABEL || window.label() == backend::REMOTE_WINDOW {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     let quit = window
                         .app_handle()
@@ -2203,11 +2258,7 @@ pub fn run() {
             has_visible_windows,
             ..
         } if !has_visible_windows => {
-            if let Some(window) = app_handle.get_webview_window(WINDOW_LABEL) {
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.set_focus();
-            }
+            show_main_window(app_handle);
         }
         _ => {}
     });

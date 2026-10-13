@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backend Connections</title>
+  <style>
+    :root { color-scheme: light dark; font: 14px -apple-system, BlinkMacSystemFont, sans-serif; background: #f7f7f5; color: #202020; }
+    body { margin: 24px; }
+    h1 { font-size: 21px; margin: 0 0 12px; }
+    h2 { font-size: 15px; margin: 24px 0 12px; }
+    p { color: #666; line-height: 1.5; }
+    label { display: block; margin: 12px 0 6px; }
+    input { box-sizing: border-box; width: 100%; padding: 9px; border: 1px solid #aaa; border-radius: 7px; font: inherit; }
+    button { padding: 8px 12px; border: 1px solid #9996; border-radius: 7px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: default; }
+    button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+    form button { margin-top: 14px; background: #2563eb; color: white; border: 0; }
+    .server { display: flex; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px solid #9993; }
+    .server-info { flex: 1; min-width: 0; }
+    .server-info strong, .server-info small { display: block; overflow-wrap: anywhere; }
+    .server-info small { margin-top: 4px; opacity: .65; }
+    #error { color: #c03535; font-size: 13px; }
+    #status { color: #666; }
+    @media (prefers-color-scheme: dark) { :root { background: #1c1c1e; color: #eee; } p, #status { color: #aaa; } }
+  </style>
+</head>
+<body>
+  <h1 data-en="Backend Connections" data-zh="后端连接"></h1>
+  <p data-en="Click the top-left logo to switch between saved servers. Switching restarts the app and stops running local tasks." data-zh="点击左上角 Logo 即可切换已保存的后端。切换会重启应用，并停止正在运行的本地任务。"></p>
+  <div id="servers" aria-live="polite"></div>
+  <h2 data-en="Add or rename a remote" data-zh="添加远端或修改名称"></h2>
+  <form>
+    <label for="name" data-en="Name" data-zh="名称"></label>
+    <input id="name" required maxlength="80" autocomplete="off" placeholder="Office / 办公室">
+    <label for="url" data-en="Server URL" data-zh="服务器 URL"></label>
+    <input id="url" type="url" required placeholder="https://pi.example.com" autocomplete="off" spellcheck="false">
+    <p data-en="Use the server root URL, without /api. Saving the same URL updates its name." data-zh="填写服务器根地址，不含 /api。保存相同 URL 会更新其名称。"></p>
+    <button type="submit" disabled data-en="Save remote" data-zh="保存远端"></button>
+  </form>
+  <p id="error" role="alert"></p>
+  <p id="status" role="status"></p>
+  <script src="desktop-backend.js"></script>
+</body>
+</html>

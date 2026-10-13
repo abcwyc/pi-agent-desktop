@@ -54,6 +54,26 @@ description = "Allows the trusted desktop WebView to authorize native-dialog fil
 commands.allow = ["get_desktop_api_token"]
 
 [[permission]]
+identifier = "allow-get-backends"
+description = "Allow get_backends from the bundled backend manager only."
+commands.allow = ["get_backends"]
+
+[[permission]]
+identifier = "allow-save-backend"
+description = "Allow save_backend from the bundled backend manager only."
+commands.allow = ["save_backend"]
+
+[[permission]]
+identifier = "allow-remove-backend"
+description = "Allow remove_backend from the bundled backend manager only."
+commands.allow = ["remove_backend"]
+
+[[permission]]
+identifier = "allow-activate-backend"
+description = "Allow activate_backend from the bundled backend manager only."
+commands.allow = ["activate_backend"]
+
+[[permission]]
 identifier = "allow-show-popup-menu"
 description = "Allows the UI to show a native popup menu described as plain data and learn which item was picked."
 commands.allow = ["show_popup_menu"]
