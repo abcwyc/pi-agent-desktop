@@ -267,6 +267,8 @@ export function TreeNode({
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hovered, setHovered] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [allowedLinkTarget, setAllowedLinkTarget] = useState<string | null>(null);
   const [allowingLink, setAllowingLink] = useState(false);
   const [allowLinkError, setAllowLinkError] = useState<string | null>(null);
@@ -465,11 +467,22 @@ export function TreeNode({
             {t("files.mention")}
           </button>
         )}
-        {hovered && !node.isDir && (
-          <a
-            href={`/api/files/${encodeFilePathForApi(node.fullPath)}?type=download`}
-            download
-            onClick={(e) => e.stopPropagation()}
+        {(hovered || downloading) && !node.isDir && (
+          <button
+            type="button"
+            disabled={downloading}
+            aria-label={t("files.download")}
+            onClick={(event) => {
+              event.stopPropagation();
+              setDownloading(true);
+              setDownloadError(null);
+              void import("@/lib/desktop-native")
+                .then(({ downloadUrlAsFile }) => downloadUrlAsFile(
+                  `/api/files/${encodeFilePathForApi(node.fullPath)}?type=download`, node.name,
+                ))
+                .catch((error) => setDownloadError(error instanceof Error ? error.message : String(error)))
+                .finally(() => setDownloading(false));
+            }}
             title={t("files.download")}
             style={{
               position: "absolute",
@@ -498,9 +511,10 @@ export function TreeNode({
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
-          </a>
+          </button>
         )}
       </div>
+      {downloadError && <div role="alert">{downloadError}</div>}
       {node.isDir && open && pendingLinkTarget && (
         <div
           style={{

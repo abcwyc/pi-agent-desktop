@@ -21,3 +21,9 @@ The sidebar and composer open the server directory browser in Web mode. Its star
 - `lib/auth-throttle.ts` is deliberately global, not per-IP (its header says why). Failures double the delay (1 s → 60 s cap) for everyone; a success or 5 idle minutes resets it. The reset window must stay longer than the max delay, or waiting out one block restarts the burst.
 - State lives on `globalThis` under `Symbol.for("pi-web:auth-throttle")`, so it survives hot reload and `proxy.ts` and the route handlers share it under both `next dev` and `next start`. Tests reset it with `recordAuthSuccess()`.
 - `POST /api/web-auth` and every `Authorization: Basic` header on `/api/*` share the counter; `proxy.ts` checks Basic before its `/api/web-auth` exemption, so `GET /api/web-auth` is no unthrottled password oracle. A valid session cookie is checked first and never blocked. While blocked, Basic gets `429` even with the right password, and a Basic success never resets the counter (`proxy.ts` explains both).
+
+## Desktop file actions
+
+Local desktop previews expose Open with default app and the platform's Reveal action for text and media files; remote/browser views hide these actions. Native failures appear in the preview instead of becoming unhandled promises.
+
+The file tree and preview download buttons both use `downloadUrlAsFile()`. It reads the same authorized files URL as the preview (including `sessionId` for transcript references outside project roots), then writes those bytes through the token-protected `/api/desktop/save` after the native save dialog. There is no separate source-path copy authorization path. Canceling the dialog writes nothing; browsers continue to download to the client device.

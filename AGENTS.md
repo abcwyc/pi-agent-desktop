@@ -84,7 +84,7 @@ app/api/
   worktrees/route.ts              GET list / POST create / PUT switch branch / DELETE git worktrees
   worktrees/fetch/route.ts        POST git fetch --prune + fresh branch lists
   desktop/read-images/route.ts    POST read natively-picked images into attachment payloads
-  desktop/save/route.ts           POST copy a file to, or write bytes at, a natively-picked path
+  desktop/save/route.ts           POST write downloaded bytes at a natively-picked path
 
 lib/
   agent-client.ts      typed fetch helper for /api/agent commands
@@ -349,7 +349,7 @@ The pi CLI's `AgentSessionRuntime` replaces its single session in place; Pi Web 
 
 ### Desktop shell (Tauri)
 - `lib/desktop-native.ts` is the only place the UI touches Tauri APIs; every entry point checks `isTauriDesktop()` and degrades to a web equivalent. Tauri commands are declared in `src-tauri/src/lib.rs`, their permissions in `src-tauri/permissions/desktop-shell.toml`, and both must be listed in `src-tauri/capabilities/desktop-dialog.json` or the call fails at runtime only.
-- `/api/desktop/read-images`, `/api/desktop/save`, and `/api/files?...type=import` deliberately accept absolute paths selected by native dialogs, so the normal `lib/file-access.ts` source/destination allow-list cannot cover them (`save` still allow-lists its *source*). They require a loopback Host, normal request-security checks, and the per-process desktop token from `lib/desktop-api-auth.ts`. The Tauri shell passes the token to the packaged server and exposes it to the trusted WebView through the capability-scoped `get_desktop_api_token` command. Never fall back to a static token or User-Agent detection.
+- `/api/desktop/read-images`, `/api/desktop/save`, and `/api/files?...type=import` deliberately accept absolute paths selected by native dialogs, so the normal `lib/file-access.ts` source/destination allow-list cannot cover them (`save` accepts bytes already read through the authorized files API). They require a loopback Host, normal request-security checks, and the per-process desktop token from `lib/desktop-api-auth.ts`. The Tauri shell passes the token to the packaged server and exposes it to the trusted WebView through the capability-scoped `get_desktop_api_token` command. Never fall back to a static token or User-Agent detection.
 - `read-images` caps the file count at `MAX_ATTACHED_IMAGES` from `lib/image-attachments.ts`. Keep it derived from that constant; a separate literal silently 400s selections the composer considered valid.
 - Open a local path with `explorer.exe` on Windows, never `cmd.exe /C start` — Rust's argument escaping does not apply to the cmd parser, so a legal path like `C:\src\R&D\x.txt` would split into commands.
 - `lib/app-prefs.ts` owns every `localStorage` key. Theme is additionally mirrored into the app config dir via the `set_ui_theme` command, because the packaged server's port (and therefore the WebView origin, and therefore `localStorage`) can change between cold starts.

@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { isWindowsAbsolutePath } from "@/lib/file-access";
 import {
-  getAllowedFileRoots,
-  isExistingFilePathAllowed,
-  isWindowsAbsolutePath,
-} from "@/lib/file-access";
-import {
-  parseJsonWithinLimit,
   readRequestBytesWithinLimit,
   RequestBodyTooLargeError,
 } from "@/lib/bounded-form-data";
@@ -15,8 +10,6 @@ import { isDesktopApiRequestAllowed } from "@/lib/desktop-api-auth";
 import { MAX_DESKTOP_SAVE_BYTES } from "@/lib/desktop-api";
 
 export const runtime = "nodejs";
-
-const MAX_SAVE_JSON_BYTES = 16 * 1024;
 
 function resolveAbsolutePath(candidate: string): string | null {
   const trimmed = candidate.trim();
@@ -52,43 +45,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const contentType = request.headers.get("content-type") ?? "";
-
-    if (contentType.includes("application/json")) {
-      const body = await parseJsonWithinLimit(request, MAX_SAVE_JSON_BYTES) as {
-        sourcePath?: unknown;
-        destPath?: unknown;
-      } | null;
-      if (typeof body?.sourcePath !== "string" || typeof body?.destPath !== "string") {
-        return NextResponse.json({ error: "sourcePath and destPath are required" }, { status: 400 });
-      }
-
-      const sourcePath = resolveAbsolutePath(body.sourcePath);
-      const destPath = resolveAbsolutePath(body.destPath);
-      if (!sourcePath || !destPath) {
-        return NextResponse.json({ error: "Paths must be absolute" }, { status: 400 });
-      }
-
-      const allowedRoots = await getAllowedFileRoots();
-      if (!isExistingFilePathAllowed(sourcePath, allowedRoots)) {
-        return NextResponse.json({ error: "Access denied" }, { status: 403 });
-      }
-
-      const sourceStat = fs.lstatSync(sourcePath);
-      if (!sourceStat.isFile() || sourceStat.isSymbolicLink()) {
-        return NextResponse.json({ error: "Source must be a regular file" }, { status: 400 });
-      }
-      if (sourceStat.size > MAX_DESKTOP_SAVE_BYTES) {
-        return NextResponse.json({ error: "File is too large to save" }, { status: 413 });
-      }
-
-      const destError = assertWritableDest(destPath);
-      if (destError) return NextResponse.json({ error: destError }, { status: 400 });
-
-      fs.copyFileSync(sourcePath, destPath);
-      return NextResponse.json({ ok: true, destPath });
-    }
-
     const encodedDest = request.headers.get("x-pi-dest-path");
     if (!encodedDest) {
       return NextResponse.json({ error: "X-Pi-Dest-Path header is required" }, { status: 400 });

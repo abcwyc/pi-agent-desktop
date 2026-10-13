@@ -214,14 +214,23 @@ export async function selectApplicationNative(): Promise<string | null> {
   return path ?? null;
 }
 
-function triggerBrowserDownload(url: string, fileName?: string): void {
+async function triggerBrowserDownload(url: string, fileName?: string): Promise<void> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Download failed (HTTP ${response.status})`);
+  const bytes = await readResponseBytesWithinLimit(response, MAX_DESKTOP_SAVE_BYTES);
+  const blob = new Blob([bytes.buffer as ArrayBuffer], {
+    type: response.headers.get("content-type") ?? "application/octet-stream",
+  });
+  const objectUrl = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
-  anchor.href = url;
+  anchor.href = objectUrl;
   if (fileName) anchor.download = fileName;
   anchor.rel = "noopener noreferrer";
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
+  // WebKit may consume the URL after the click handler has returned.
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
 /**
@@ -231,7 +240,7 @@ function triggerBrowserDownload(url: string, fileName?: string): void {
  */
 export async function downloadUrlAsFile(url: string, defaultFileName: string): Promise<boolean> {
   if (!isTauriDesktop()) {
-    triggerBrowserDownload(url, defaultFileName);
+    await triggerBrowserDownload(url, defaultFileName);
     return true;
   }
 
@@ -260,35 +269,6 @@ export async function downloadUrlAsFile(url: string, defaultFileName: string): P
   if (!saveResponse.ok) {
     const data = await saveResponse.json().catch(() => ({})) as { error?: string };
     throw new Error(data.error || `Save failed (HTTP ${saveResponse.status})`);
-  }
-  return true;
-}
-
-/**
- * Desktop: save-dialog + server-side copy of an allowed local file.
- * Web: trigger download via the files API.
- */
-export async function saveLocalFileAs(
-  sourcePath: string,
-  defaultFileName: string,
-  downloadUrl: string,
-): Promise<boolean> {
-  if (!isTauriDesktop()) {
-    triggerBrowserDownload(downloadUrl, defaultFileName);
-    return true;
-  }
-
-  const destPath = await selectSavePathNative({ defaultPath: defaultFileName });
-  if (!destPath) return false;
-
-  const response = await fetch("/api/desktop/save", {
-    method: "POST",
-    headers: await desktopApiHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ sourcePath, destPath }),
-  });
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({})) as { error?: string };
-    throw new Error(data.error || `Save failed (HTTP ${response.status})`);
   }
   return true;
 }

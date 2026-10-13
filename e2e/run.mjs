@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { checkFilePanel, filePanelFixture, filePanelStylesheet } from "./file-panel.mjs";
 import { checkExtensionDialogs, extensionSource } from "./extension-dialog.mjs";
+import { checkLocalFiles, desktopTestToken } from "./local-files.mjs";
 import { checkChatAppearance } from "./chat-appearance.mjs";
 import { checkMcpManager } from "./mcp-manager.mjs";
 import { checkMissingWorkspace, MISSING_WORKSPACE, missingWorkspaceReply } from "./missing-workspace.mjs";
@@ -25,6 +26,8 @@ const agentDir = mkdtempSync(join(tmpdir(), "pi-web-e2e-"));
 const project = join(agentDir, "project");
 const sessionDir = join(agentDir, "sessions", "e2e");
 mkdirSync(project);
+const referencedFile = join(agentDir, "referenced-report.txt");
+writeFileSync(referencedFile, "Transcript-only file: 中文 bytes\n");
 const previewFile = join(project, "preview.html");
 writeFileSync(previewFile, filePanelFixture);
 writeFileSync(join(project, "preview.css"), filePanelStylesheet);
@@ -32,7 +35,7 @@ mkdirSync(sessionDir, { recursive: true });
 const timestamp = "2026-08-23T00:00:00.000Z";
 const LONG = "e2e-long-session";
 const BRANCH = "e2e-branch-session";
-const RICH = "e2e-rich-session";
+const RICH = "11111111-1111-4111-8111-111111111111";
 const COMPACTED = "e2e-compacted-session";
 const APPEND = "e2e-external-append-session";
 const text = (i) => `E2E message ${String(i).padStart(4, "0")}`;
@@ -99,7 +102,8 @@ try {
         "E2E final answer\n```js\nconsole.log('E2E code');\n```\n\n"
         + "E2E answer paragraph.\n\n".repeat(20)
         + "## E2E reading position\n\n"
-        + "E2E answer paragraph.\n\n".repeat(20),
+        + "E2E answer paragraph.\n\n".repeat(20)
+        + `[Referenced report](${referencedFile})`,
       },
     ]),
   ];
@@ -144,7 +148,7 @@ try {
   const base = `http://127.0.0.1:${port}`;
   server = spawn(process.execPath, [join(root, "node_modules/next/dist/bin/next"), mode, "-H", "127.0.0.1", "-p", String(port)], {
     cwd: root,
-    env: { ...process.env, PI_CODING_AGENT_DIR: agentDir, PI_WEB_PASSWORD: "", NEXT_TELEMETRY_DISABLED: "1" },
+    env: { ...process.env, PI_CODING_AGENT_DIR: agentDir, PI_DESKTOP_API_TOKEN: desktopTestToken, PI_WEB_PASSWORD: "", NEXT_TELEMETRY_DISABLED: "1" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   server.once("error", (error) => { serverError = error; });
@@ -473,6 +477,7 @@ try {
     context = undefined;
     page = undefined;
   }
+  await checkLocalFiles(browser, base, RICH, previewFile, referencedFile, agentDir);
   await checkMissingWorkspace(browser, base, missingProject);
 } catch (error) {
   console.error(error);

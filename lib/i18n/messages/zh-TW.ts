@@ -407,6 +407,7 @@ export const zhTWLocale: LocalePlugin = {
     "chat.filesWritten": "已變更的檔案",
     "chat.openWrittenFile": "開啟 {name}",
     "fileMenu.open": "開啟",
+    "files.openDefaultApp": "使用預設應用程式開啟",
     "fileMenu.openWith": "開啟方式",
     "fileMenu.otherApp": "其他…",
     "fileMenu.defaultApp": "{name}（預設）",

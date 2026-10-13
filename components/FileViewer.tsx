@@ -25,6 +25,8 @@ import { FrontmatterCard } from "./FrontmatterCard";
 import { parseUnifiedPatch } from "@/lib/patch";
 import type { GitFileDiffResponse } from "@/lib/git-types";
 import { getFileIcon } from "./FileIcons";
+import { revealLabelKey } from "@/lib/file-context-menu";
+import { useDesktopChrome } from "./desktop/useDesktopChrome";
 import { useI18n } from "@/hooks/useI18n";
 import {
   resolveInitialFileDisplayMode,
@@ -227,7 +229,10 @@ function getFileApiUrl(
 function DownloadLink({ filePath, sourceSessionId }: { filePath: string; sourceSessionId?: string | null }) {
   const { t } = useI18n();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   return (
+    <>
+    {error && <span role="alert">{error}</span>}
     <button
       type="button"
       disabled={busy}
@@ -237,15 +242,15 @@ function DownloadLink({ filePath, sourceSessionId }: { filePath: string; sourceS
       onClick={() => {
         void (async () => {
           setBusy(true);
+          setError(null);
           try {
-            const { saveLocalFileAs } = await import("@/lib/desktop-native");
-            await saveLocalFileAs(
-              filePath,
-              getFileName(filePath),
+            const { downloadUrlAsFile } = await import("@/lib/desktop-native");
+            await downloadUrlAsFile(
               getFileApiUrl(filePath, "download", sourceSessionId),
+              getFileName(filePath),
             );
           } catch (error) {
-            console.error("Failed to save file:", error);
+            setError(error instanceof Error ? error.message : String(error));
           } finally {
             setBusy(false);
           }
@@ -258,28 +263,40 @@ function DownloadLink({ filePath, sourceSessionId }: { filePath: string; sourceS
         <line x1="12" y1="15" x2="12" y2="3" />
       </svg>
     </button>
+    </>
   );
 }
 
 function DesktopPathActions({ filePath }: { filePath: string }) {
-  const [desktop, setDesktop] = useState(false);
-  useEffect(() => {
-    void import("@/lib/desktop-native").then(({ isTauriDesktop }) => {
-      setDesktop(isTauriDesktop());
-    });
-  }, []);
-  if (!desktop) return null;
+  const { t } = useI18n();
+  const { isDesktop, platform } = useDesktopChrome();
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (!isDesktop) return null;
+
+  const run = async (action: "openPathNative" | "revealItemInDirNative") => {
+    setBusy(true);
+    setError(null);
+    try {
+      const native = await import("@/lib/desktop-native");
+      await native[action](filePath);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <>
+      {error && <span role="alert">{error}</span>}
       <button
         type="button"
-        title="Open with default app"
-        aria-label="Open with default app"
+        disabled={busy}
+        title={t("files.openDefaultApp")}
+        aria-label={t("files.openDefaultApp")}
         className="file-viewer-icon-button"
-        onClick={() => {
-          void import("@/lib/desktop-native").then(({ openPathNative }) => openPathNative(filePath));
-        }}
+        onClick={() => void run("openPathNative")}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
@@ -289,12 +306,11 @@ function DesktopPathActions({ filePath }: { filePath: string }) {
       </button>
       <button
         type="button"
-        title="Reveal in Finder"
-        aria-label="Reveal in Finder"
+        disabled={busy}
+        title={t(revealLabelKey(platform))}
+        aria-label={t(revealLabelKey(platform))}
         className="file-viewer-icon-button"
-        onClick={() => {
-          void import("@/lib/desktop-native").then(({ revealItemInDirNative }) => revealItemInDirNative(filePath));
-        }}
+        onClick={() => void run("revealItemInDirNative")}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
@@ -1657,6 +1673,7 @@ function TextFileViewer({
             )}
           </div>
 
+          {!isDeletedDiff && <DesktopPathActions filePath={filePath} />}
           {!isDeletedDiff && <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />}
         </div>
       </div>

@@ -447,6 +447,7 @@ export const zhCNLocale: LocalePlugin = {
     "chat.filesWritten": "改动的文件",
     "chat.openWrittenFile": "打开 {name}",
     "fileMenu.open": "打开",
+    "files.openDefaultApp": "使用默认应用打开",
     "fileMenu.openWith": "打开方式",
     "fileMenu.otherApp": "其他…",
     "fileMenu.defaultApp": "{name}（默认）",

@@ -447,6 +447,7 @@ export const enLocale: LocalePlugin = {
     "chat.filesWritten": "Files changed",
     "chat.openWrittenFile": "Open {name}",
     "fileMenu.open": "Open",
+    "files.openDefaultApp": "Open with default app",
     "fileMenu.openWith": "Open With",
     "fileMenu.otherApp": "Other…",
     "fileMenu.defaultApp": "{name} (default)",
