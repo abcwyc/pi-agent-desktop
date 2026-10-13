@@ -24,20 +24,11 @@ export function shouldStartDrag(target: ClosestTarget): boolean {
 }
 
 /**
- * Windows/Linux workaround for a Tauri limitation: its native drag-region
- * listener only checks `event.target` itself, not ancestors, so a click on
- * anything nested inside a `data-tauri-drag-region` container (icons, text,
- * wrapper divs) silently fails to start dragging the window. This re-derives
- * the drag region with `closest()` so it also fires from a nested child, and
- * excludes interactive descendants the same way Tauri's own check would if
- * the click landed on them directly.
- *
- * macOS keeps Tauri's native handling untouched — spread the returned props
- * unconditionally; they're empty there.
+ * Tauri only checks the direct event target. Handle nested title/header content
+ * on every desktop platform, while keeping buttons and inputs interactive.
  */
 export function useWindowDrag(): { onMouseDown?: (event: MouseEvent<HTMLElement>) => void } {
-  const { isDesktop, isMacOS } = useDesktopChrome();
-  const active = isDesktop && !isMacOS;
+  const { isDesktop } = useDesktopChrome();
 
   const onMouseDown = useCallback((event: MouseEvent<HTMLElement>) => {
     if (event.button !== 0) return;
@@ -53,5 +44,5 @@ export function useWindowDrag(): { onMouseDown?: (event: MouseEvent<HTMLElement>
     }
   }, []);
 
-  return active ? { onMouseDown } : {};
+  return isDesktop ? { onMouseDown } : {};
 }
