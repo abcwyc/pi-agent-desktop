@@ -47,8 +47,11 @@ manual merge, run it yourself.
      To override a property that upstream sets and the fork simply *dropped*, reset it
      explicitly (`border-left: none`, `max-width: none`). A later rule cannot delete an earlier
      declaration.
-2. **Tokens.** `:root` holds the light palette and `html.dark` the dark one. `hooks/useTheme.ts`
-   toggles the class, following the OS scheme until the user picks a theme.
+2. **Tokens.** The neutral light/dark overrides exclude named palettes. Mist (soft sage),
+   Rose and Pine keep upstream’s core colors; the native layer derives matching surfaces,
+   separators and focus states from them. Pine uses dark elevation and native window chrome.
+   `hooks/useTheme.ts` sets `data-theme` and the dark class; the desktop persists the palette
+   name across server-port changes. System follows the OS scheme.
 3. **Component sections**, roughly in DOM order: sidebar, topbar, popovers/modals, settings,
    composer, messages/markdown, file workbench, responsive shell. The file ends with a "final
    workbench pass" that must stay after the responsive rules.
@@ -70,6 +73,13 @@ stays at a value that clears 3:1 contrast because it carries real labels; inside
 The two exceptions to the near-black accent are text selection and keyboard focus rings: they
 use the system `AccentColor` (`--selection`, `--focus-ring`, behind an `@supports` query that
 also requires `color-mix`) so they read as native. Browsers without it keep the neutral values.
+
+**Palette character.** Mist uses rounded controls, mist-line icons and a soft dissolve;
+Rose uses fuller corners, a flower that unfolds on interaction, and a reveal anchored to
+the selected option; Pine uses tighter corners, a filled tree silhouette and a quick fade.
+The preview icons animate once on selection, hover or keyboard focus, never continuously.
+Reduced motion disables these movements and the theme reveal; desktop keeps its safe
+instant-switch fallback. Functional icons retain their familiar meanings.
 
 **Shape and motion.** Radii come from `--radius-sm/md/lg/xl` (6/8/12/16px). Controls are
 `--control-height-sm` 28px or `--control-height` 32px. Elevation uses the four

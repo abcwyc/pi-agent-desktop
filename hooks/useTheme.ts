@@ -67,7 +67,7 @@ async function persistNativeTheme(theme: ResolvedTheme): Promise<void> {
   if (!isTauriDesktop()) return;
   try {
     const { invoke } = await import("@tauri-apps/api/core");
-    await invoke("set_ui_theme", { theme: theme === "dark" ? "dark" : "light" });
+    await invoke("set_ui_theme", { theme });
   } catch {
     // Tauri IPC may not be ready on the very first tick; next toggle retries.
   }
@@ -159,14 +159,14 @@ export function useTheme() {
     transition.ready
       .then(() => {
         document.documentElement.animate(
+          nextTheme === "mist" || nextTheme === "pine"
+            ? { opacity: [0, 1] }
+            : { clipPath: [
+                `circle(0px at ${x}px ${y}px)`,
+                `circle(${endRadius}px at ${x}px ${y}px)`,
+              ] },
           {
-            clipPath: [
-              `circle(0px at ${x}px ${y}px)`,
-              `circle(${endRadius}px at ${x}px ${y}px)`,
-            ],
-          },
-          {
-            duration: 450,
+            duration: nextTheme === "mist" ? 500 : nextTheme === "pine" ? 220 : 450,
             easing: "cubic-bezier(0.22, 0.61, 0.36, 1)",
             pseudoElement: "::view-transition-new(root)",
           },

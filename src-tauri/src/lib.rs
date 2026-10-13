@@ -938,11 +938,10 @@ fn show_main_window_cmd(app: AppHandle) -> Result<(), String> {
 }
 
 /// Persist the UI theme outside the webview origin so cold starts keep the
-/// user's light/dark choice even when the local server port changes.
+/// user's palette choice even when the local server port changes.
 #[tauri::command]
 fn set_ui_theme(app: AppHandle, theme: String) -> Result<(), String> {
-    let theme =
-        normalize_theme(&theme).ok_or_else(|| "theme must be \"light\" or \"dark\"".to_string())?;
+    let theme = normalize_theme(&theme).ok_or_else(|| "unsupported theme".to_string())?;
     write_ui_prefs_theme(&app, theme)?;
     apply_window_theme(&app, theme);
     Ok(())
@@ -1026,6 +1025,9 @@ fn normalize_theme(theme: &str) -> Option<&'static str> {
     match theme {
         "light" => Some("light"),
         "dark" => Some("dark"),
+        "mist" => Some("mist"),
+        "rose" => Some("rose"),
+        "pine" => Some("pine"),
         _ => None,
     }
 }
@@ -1175,10 +1177,12 @@ fn write_last_server_port(app: &AppHandle, port: u16) {
 
 #[cfg(not(target_os = "macos"))]
 fn theme_background_color(theme: &str) -> Color {
-    if theme == "dark" {
-        DARK_WINDOW_BG
-    } else {
-        LIGHT_WINDOW_BG
+    match theme {
+        "dark" => DARK_WINDOW_BG,
+        "mist" => Color(244, 248, 247, 255),
+        "rose" => Color(252, 247, 248, 255),
+        "pine" => Color(25, 32, 31, 255),
+        _ => LIGHT_WINDOW_BG,
     }
 }
 
@@ -1191,7 +1195,7 @@ fn theme_bootstrap_script(theme: &str) -> String {
     // must never be clobbered by a (possibly stale) native pref — e.g. after
     // a crash interrupted the toggle before the IPC round-trip landed.
     format!(
-        r#"(function(){{try{{var t=localStorage.getItem("pi-theme");if(!t){{t="{theme}";localStorage.setItem("pi-theme",t);}}var d=t==="dark";document.documentElement.classList.toggle("dark",d);document.documentElement.style.colorScheme=d?"dark":"light";}}catch(e){{}}}})();"#
+        r#"(function(){{try{{var t=localStorage.getItem("pi-theme");if(!t){{t="{theme}";localStorage.setItem("pi-theme",t);}}var r=t==="auto"?(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t;var d=r==="dark"||r==="pine";document.documentElement.dataset.theme=r;document.documentElement.classList.toggle("dark",d);}}catch(e){{}}}})();"#
     )
 }
 
@@ -1210,7 +1214,7 @@ fn apply_window_theme(app: &AppHandle, theme: &str) {
     let Some(window) = app.get_webview_window(WINDOW_LABEL) else {
         return;
     };
-    let tauri_theme = if theme == "dark" {
+    let tauri_theme = if matches!(theme, "dark" | "pine") {
         Theme::Dark
     } else {
         Theme::Light
@@ -1277,7 +1281,7 @@ fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWi
     // before the page paints — otherwise macOS dark mode flashes a black
     // webview while the user has chosen light mode.
     if let Some(theme) = stored_theme {
-        let tauri_theme = if theme == "dark" {
+        let tauri_theme = if matches!(theme, "dark" | "pine") {
             Theme::Dark
         } else {
             Theme::Light

@@ -359,16 +359,23 @@ function GeneralSettings({
                   <label
                     key={option.id}
                     className="settings-theme-option"
+                    data-palette={option.id}
                   >
                     <input
                       type="radio"
                       name="theme"
                       value={option.id}
                       checked={selected}
-                      onChange={() => setThemePreference(option.id)}
+                      onChange={(event) => {
+                        const bounds = event.currentTarget.parentElement?.getBoundingClientRect();
+                        setThemePreference(option.id, bounds ? {
+                          x: bounds.x + bounds.width / 2,
+                          y: bounds.y + bounds.height / 2,
+                        } : undefined);
+                      }}
                       className="sr-only"
                     />
-                    <ThemeIcon preference={option.id} />
+                    <span className="settings-theme-icon"><ThemeIcon preference={option.id} size={23} /></span>
                     <span className="settings-theme-option-label">{t(option.label)}</span>
                   </label>
                 );

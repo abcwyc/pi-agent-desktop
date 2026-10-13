@@ -822,7 +822,7 @@
 
 /* ---- end of fork base layer ---------------------------------------------- */
 
-:root {
+:root:where(:not([data-theme="mist"], [data-theme="rose"], [data-theme="pine"])) {
   color-scheme: light;
 
   /* Native-inspired semantic colors. Keep the canvas warm and reserve pure
@@ -861,7 +861,9 @@
   --tool-bg: rgba(118, 118, 128, 0.08);
   --bg-subtle: rgba(60, 60, 67, 0.055);
   --scroll-thumb: rgba(60, 60, 67, 0.25);
+}
 
+:root {
   /* Typography. "Noto Sans SC" backstops CJK on Linux builds (deb target in
      release.yml), which this stack otherwise has no CJK fallback for once it
      falls past the macOS/Windows-only names above it. */
@@ -890,7 +892,7 @@
   --ease-sheet: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-html.dark {
+html.dark:not([data-theme="pine"]) {
   color-scheme: dark;
   --bg: #1c1c1e;
   --bg-panel: rgba(36, 36, 38, 0.94);
@@ -921,6 +923,9 @@ html.dark {
   --tool-bg: rgba(255, 255, 255, 0.055);
   --bg-subtle: rgba(255, 255, 255, 0.055);
   --scroll-thumb: rgba(235, 235, 245, 0.25);
+}
+
+html.dark {
   --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.24);
   --shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.28),
     0 14px 36px rgba(0, 0, 0, 0.3);
@@ -928,6 +933,155 @@ html.dark {
     0 2px 8px rgba(0, 0, 0, 0.28);
   --shadow-dialog: 0 30px 90px rgba(0, 0, 0, 0.58),
     0 4px 18px rgba(0, 0, 0, 0.36);
+}
+
+/* Named palettes keep upstream's core colors. Derive the desktop surfaces
+   from those same tokens so the sidebar, sheets and composer stay in palette. */
+html:is([data-theme="mist"], [data-theme="rose"], [data-theme="pine"]) {
+  --separator: color-mix(in srgb, var(--border) 55%, transparent);
+  --surface: color-mix(in srgb, var(--bg) 35%, white);
+  --surface-muted: color-mix(in srgb, var(--surface) 64%, transparent);
+  --surface-elevated: var(--surface);
+  --text-meta: var(--text-dim);
+  --accent-soft: color-mix(in srgb, var(--accent) 9%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 28%, transparent);
+  --focus-ring: color-mix(in srgb, var(--accent) 38%, transparent);
+  --danger: #b42318;
+  --success: #23733d;
+  --warning: #8a5800;
+  --scroll-thumb: color-mix(in srgb, var(--text) 25%, transparent);
+}
+
+html[data-theme="pine"] {
+  --surface: #28352f;
+  --surface-muted: color-mix(in srgb, var(--surface) 72%, transparent);
+  --surface-elevated: #2e3c35;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --danger: #ff9991;
+  --success: #8fd6a3;
+  --warning: #e8c880;
+}
+
+/* Each palette has a tactile character as well as a hue. */
+html[data-theme="mist"] {
+  --icon-stroke: 1.5;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --ease-native: cubic-bezier(0.22, 0.68, 0.25, 1);
+}
+
+html[data-theme="rose"] {
+  --icon-stroke: 1.7;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --ease-native: cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+html[data-theme="pine"] {
+  --icon-stroke: 1.9;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --ease-native: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html:is([data-theme="mist"], [data-theme="rose"], [data-theme="pine"])
+:is(.sidebar-chrome-button, .app-topbar-actions, .native-modal-header) svg {
+  stroke-width: var(--icon-stroke);
+}
+
+/* Palette previews are identifiable even before selection; the radio remains
+   the only control, with the existing keyboard and focus behavior. */
+.settings-theme-options {
+  gap: 6px;
+}
+
+.settings-theme-option {
+  flex-direction: column;
+  gap: 6px;
+  min-height: 82px;
+  padding: 10px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.settings-theme-option:has(input:checked) {
+  border-color: var(--accent-border);
+}
+
+.settings-theme-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+}
+
+.settings-theme-option[data-palette="mist"] .settings-theme-icon {
+  background: #e0efeb;
+  color: #1e6559;
+}
+.settings-theme-option[data-palette="rose"] .settings-theme-icon {
+  background: #f3e4eb;
+  color: #914360;
+  border-radius: 12px 12px 12px 4px;
+}
+.settings-theme-option[data-palette="pine"] .settings-theme-icon {
+  background: #25382f;
+  color: #acccb7;
+  border-radius: 6px;
+}
+
+.theme-icon {
+  flex-shrink: 0;
+}
+.theme-icon-petals {
+  transform-origin: 12px 13.5px;
+  fill: currentColor;
+  fill-opacity: 0.1;
+}
+.theme-icon-canopy {
+  transform-origin: 12px 21px;
+  fill: currentColor;
+  fill-opacity: 0.14;
+}
+
+/* One short response to selection/focus. No ambient animation while reading. */
+@media (prefers-reduced-motion: no-preference) {
+  .settings-theme-option:is(:hover, :has(input:focus-visible), :has(input:checked)) .theme-icon-mist-high {
+    animation: theme-mist-drift 600ms ease-out;
+  }
+  .settings-theme-option:is(:hover, :has(input:focus-visible), :has(input:checked)) .theme-icon-mist-low {
+    --mist-offset: 3px;
+    animation: theme-mist-drift 600ms ease-out;
+  }
+  .settings-theme-option:is(:hover, :has(input:focus-visible), :has(input:checked)) .theme-icon-petals {
+    animation: theme-rose-unfold 450ms var(--ease-native);
+  }
+  .settings-theme-option:is(:hover, :has(input:focus-visible), :has(input:checked)) .theme-icon-canopy {
+    animation: theme-pine-rise 280ms var(--ease-native);
+  }
+  .settings-theme-option:active .settings-theme-icon {
+    transform: scale(0.94);
+  }
+}
+
+@keyframes theme-mist-drift {
+  from { transform: translateX(var(--mist-offset, -3px)); opacity: 0.4; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes theme-rose-unfold {
+  from { transform: rotate(-16deg) scale(0.8); }
+  to { transform: rotate(0) scale(1); }
+}
+@keyframes theme-pine-rise {
+  from { transform: scaleY(0.85); opacity: 0.55; }
+  to { transform: scaleY(1); opacity: 1; }
 }
 
 /* Text selection and keyboard focus follow the system accent color, as AppKit
