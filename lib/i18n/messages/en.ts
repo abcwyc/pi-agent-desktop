@@ -445,6 +445,7 @@ export const enLocale: LocalePlugin = {
     "chat.collapseProcess": "Collapse process details",
     "chat.expandProcess": "Expand process details",
     "chat.filesWritten": "Files changed",
+    "chat.imageReadFailed": "Could not read the selected image. Please select it again.",
     "chat.openWrittenFile": "Open {name}",
     "fileMenu.open": "Open",
     "files.openDefaultApp": "Open with default app",

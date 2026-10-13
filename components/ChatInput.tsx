@@ -839,6 +839,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const enterSendMode = useEnterSendMode();
   const [value, setValue] = useState(() => (draftKey ? getDraft(draftKey)?.value ?? "" : ""));
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imageReadError, setImageReadError] = useState<string | null>(null);
   const [automationDropdownOpen, setAutomationDropdownOpen] = useState(false);
   const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
@@ -1123,6 +1124,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       .slice(0, remaining);
     if (!imageFiles.length) return;
     pendingImageCountRef.current += imageFiles.length;
+    setImageReadError(null);
     try {
       const newImages = await Promise.all(
         imageFiles.map(async (file) => ({
@@ -1131,10 +1133,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }))
       );
       appendAttachedImages(newImages);
+    } catch {
+      setImageReadError(t("chat.imageReadFailed"));
     } finally {
       pendingImageCountRef.current -= imageFiles.length;
     }
-  }, [appendAttachedImages, compact]);
+  }, [appendAttachedImages, compact, t]);
 
   const removeImage = useCallback((index: number) => {
     setAttachedImages((prev) => {
@@ -2073,6 +2077,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         transition: "opacity 0.15s",
       }}
     >
+      {imageReadError && <div role="alert">{imageReadError}</div>}
       {/* Hidden file input */}
       {!compact && <input
         ref={fileInputRef}

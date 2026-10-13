@@ -358,3 +358,9 @@ test("keeps a block that opens a raw-text tag as it renders without line breaks"
   const list = renderMarkdown("- item <textarea>\n  more\n- two\n  lines", { keepLineBreaks: true });
   assert.match(list, /<li>two<br\/>lines<\/li>/);
 });
+
+test("server image previews carry their source session for referenced files outside the project", () => {
+  const html = renderMarkdown("![result](/tmp/generated.png)", { sessionId: "session-123" });
+  assert.match(html, /src="\/api\/files\/tmp\/generated\.png\?type=read&amp;sessionId=session-123"/);
+  assert.doesNotMatch(html, /src="file:/);
+});

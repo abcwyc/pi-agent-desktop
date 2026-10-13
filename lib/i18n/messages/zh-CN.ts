@@ -445,6 +445,7 @@ export const zhCNLocale: LocalePlugin = {
     "chat.collapseProcess": "收起处理详情",
     "chat.expandProcess": "展开处理详情",
     "chat.filesWritten": "改动的文件",
+    "chat.imageReadFailed": "无法读取所选图片，请重新选择。",
     "chat.openWrittenFile": "打开 {name}",
     "fileMenu.open": "打开",
     "files.openDefaultApp": "使用默认应用打开",
