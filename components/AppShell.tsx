@@ -705,7 +705,7 @@ export function AppShell() {
     }
   }, [desktopMode]);
 
-  const { state: connectionState, retry: retryConnection } = useDesktopConnection(desktopMode);
+  const { state: connectionState, retry: retryConnection } = useDesktopConnection();
 
   const [remoteProjectPickerOpen, setRemoteProjectPickerOpen] = useState(false);
   const [remoteProjectPickerBusy, setRemoteProjectPickerBusy] = useState(false);

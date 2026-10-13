@@ -28,9 +28,9 @@ test("switching sessions immediately clears parent-owned session UI", async () =
   assert.match(handler, /setActiveTopPanel\(null\)/);
 });
 
-test("desktop-only workspace and health behavior is gated before use", async () => {
+test("workspace restore stays desktop-only while server health covers web", async () => {
   const source = await readFile(new URL("./AppShell.tsx", import.meta.url), "utf8");
   assert.match(source, /desktopMode \? getPrefJson<PersistedWorkspace>/);
-  assert.match(source, /useDesktopConnection\(desktopMode\)/);
+  assert.match(source, /useDesktopConnection\(\)/);
   assert.match(source, /if \(!desktopMode \|\| !workspaceHydrated\) return/);
 });

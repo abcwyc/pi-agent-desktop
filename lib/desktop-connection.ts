@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { relaunchAppNative } from "@/lib/desktop-native";
+import { isTauriDesktop, relaunchAppNative } from "@/lib/desktop-native";
 
 export type DesktopConnectionState = "online" | "offline" | "checking";
 
@@ -10,7 +10,7 @@ const PING_INTERVAL_MS = 8_000;
 const OFFLINE_THRESHOLD = 2;
 
 /**
- * Lightweight local-server health probe. Used to surface a reconnect banner
+ * Server health probe for browser and desktop clients. Used to surface a reconnect banner
  * when the packaged Next server or SSE streams drop.
  */
 export function useDesktopConnection(enabled = true): {
@@ -40,6 +40,8 @@ export function useDesktopConnection(enabled = true): {
         signal: controller.signal,
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = await res.json();
+      if (typeof body.home !== "string") throw new Error("Invalid server response");
       if (stoppedRef.current || probeControllerRef.current !== controller) return null;
       failuresRef.current = 0;
       setState("online");
@@ -82,6 +84,11 @@ export function useDesktopConnection(enabled = true): {
       if (stoppedRef.current || reachable === null) return;
       if (reachable) {
         // Recreate every HTTP/SSE connection, not only the health probe.
+        window.location.reload();
+        return;
+      }
+
+      if (!isTauriDesktop()) {
         window.location.reload();
         return;
       }
