@@ -6,7 +6,7 @@ export const desktopTestToken = "e2e-desktop-file-save-authorization-only";
 
 export async function checkLocalFiles(browser, base, sessionId, filePath, referencedFile, agentDir) {
   const expected = await readFile(filePath);
-  for (const mode of ["macos", "windows", "browser"]) {
+  for (const mode of ["macos", "windows", "browser", "remote"]) {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: "en-US" });
     let page;
     try {
@@ -16,6 +16,7 @@ export async function checkLocalFiles(browser, base, sessionId, filePath, refere
         window.cancelFileSave = false;
         window.failFileAction = false;
         if (mode === "browser") return;
+        if (mode === "remote") window.__PI_REMOTE_BACKEND__ = true;
         Object.defineProperty(navigator, "platform", { value: mode === "windows" ? "Win32" : "MacIntel" });
         window.__TAURI_INTERNALS__ = {
           metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main" } },
@@ -91,6 +92,9 @@ export async function checkLocalFiles(browser, base, sessionId, filePath, refere
       await page.getByRole("link", { name: "Referenced report", exact: true }).click();
       await panel.locator(".file-viewer-path").filter({ hasText: "referenced-report.txt" }).waitFor();
       await download(panel.locator(".file-viewer-controls").getByRole("button", { name: "Download file", exact: true }), await readFile(referencedFile));
+      if (mode === "remote") {
+        assert.deepEqual(await page.evaluate(() => window.fileCommands), [], "Remote windows must not use local native capabilities");
+      }
       if (local) await page.screenshot({ path: join(process.cwd(), `test-results/e2e/local-files-${mode}.png`) });
       assert.deepEqual(errors, [], `${mode} file action runtime errors`);
     } catch (error) {
@@ -101,5 +105,5 @@ export async function checkLocalFiles(browser, base, sessionId, filePath, refere
       await context.close();
     }
   }
-  console.log("PASS: local file-manager actions, preview/tree saves, cancel, session-reference downloads, and browser downloads");
+  console.log("PASS: local file-manager actions, preview/tree saves, cancel, session-reference downloads, and browser/remote downloads");
 }
