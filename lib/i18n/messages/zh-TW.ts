@@ -489,6 +489,7 @@ export const zhTWLocale: LocalePlugin = {
     "chat.branchSwitchCancelled": "擴充功能取消了這次分支切換。",
     "chat.branchSummaryFailed": "無法總結分支：{error}",
     "chat.attachImage": "附加圖片",
+    "chat.attachFiles": "新增檔案",
     "chat.previewImage": "預覽圖片",
     "chat.saveImage": "儲存圖片",
     "chat.filterModels": "篩選模型…",

@@ -534,6 +534,7 @@ export const zhCNLocale: LocalePlugin = {
     "chat.branchSwitchCancelled": "扩展取消了这次分支切换。",
     "chat.branchSummaryFailed": "无法总结分支：{error}",
     "chat.attachImage": "附加图片",
+    "chat.attachFiles": "添加文件",
     "chat.dropFilesHint": "松开以添加到对话",
     "chat.dropFilesDetail": "图片会作为消息附件；其他文件会复制到项目根目录并插入为 @路径。",
     "chat.dropNeedsProject": "请先打开项目，再把文件拖入对话",

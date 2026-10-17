@@ -790,16 +790,9 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
   const cwd = session?.cwd ?? newSessionCwd;
   const projectImportBusyRef = useRef(false);
 
-  const onDrop = useCallback((files: File[]) => {
-    const { images, projectFiles } = partitionChatDroppedFiles(files);
-
-    // Images stay on the multimodal attachment path (blocked while the agent is busy).
-    if (images.length > 0 && !sessionBusy) {
-      chatInputRef?.current?.addImages(images);
-    }
-
-    // Documents/other files are copied into the project root and @mentioned so
-    // the agent can read them with its normal tools — not inlined into the prompt.
+  // Documents/other files are copied into the project root and @mentioned so
+  // the agent can read them with its normal tools — not inlined into the prompt.
+  const importProjectFiles = useCallback((projectFiles: File[]) => {
     if (projectFiles.length === 0) return;
     if (!cwd) {
       addNotice({ type: "error", message: t("chat.dropNeedsProject") });
@@ -843,7 +836,27 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
         projectImportBusyRef.current = false;
       }
     })();
-  }, [addNotice, chatInputRef, cwd, onProjectFilesImported, sessionBusy, t]);
+  }, [addNotice, chatInputRef, cwd, onProjectFilesImported, t]);
+
+  const onDrop = useCallback((files: File[]) => {
+    const { images, projectFiles } = partitionChatDroppedFiles(files);
+
+    // Images stay on the multimodal attachment path (blocked while the agent is busy).
+    if (images.length > 0 && !sessionBusy) {
+      chatInputRef?.current?.addImages(images);
+    }
+    importProjectFiles(projectFiles);
+  }, [chatInputRef, importProjectFiles, sessionBusy]);
+
+  // The composer's "+" picker. The desktop WebView's file panel ignores the
+  // input's `accept`, so any file can come back here: split it like a drop
+  // instead of letting non-images vanish on the image-only path. Images may be
+  // attached while a run is going, as before (they are sent with the next prompt).
+  const onAttachFiles = useCallback((files: File[]) => {
+    const { images, projectFiles } = partitionChatDroppedFiles(files);
+    if (images.length > 0) chatInputRef?.current?.addImages(images);
+    importProjectFiles(projectFiles);
+  }, [chatInputRef, importProjectFiles]);
 
   const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useDragDrop(onDrop);
 
@@ -1098,6 +1111,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
     <ChatInput
       ref={chatInputRef}
       onSend={handleSend}
+      onAttachFiles={onAttachFiles}
       onAbort={handleAbort}
       onSteer={agentRunning ? handleSteer : undefined}
       onFollowUp={agentRunning ? handleFollowUp : undefined}
