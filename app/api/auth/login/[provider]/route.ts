@@ -2,6 +2,7 @@ import type { AuthEvent, AuthPrompt } from "@earendil-works/pi-ai";
 import { randomUUID } from "node:crypto";
 import { invalidateModelsCache } from "@/lib/models-cache";
 import { createModelRuntimeWithExtensions } from "@/lib/model-runtime";
+import { oauthLoginOptions } from "@/lib/oauth-login-options";
 
 export const dynamic = "force-dynamic";
 
@@ -172,7 +173,7 @@ export async function GET(
             }
           },
           signal: abort.signal,
-        });
+        }, oauthLoginOptions());
 
         invalidateModelsCache();
         send(controller, { type: "success" });
