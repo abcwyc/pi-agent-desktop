@@ -534,6 +534,7 @@ export const enLocale: LocalePlugin = {
     "chat.branchSwitchCancelled": "An extension cancelled the branch switch.",
     "chat.branchSummaryFailed": "Couldn't summarize the branch: {error}",
     "chat.attachImage": "Attach image",
+    "chat.attachFiles": "Add files",
     "chat.dropFilesHint": "Drop to add to chat",
     "chat.dropFilesDetail": "Images attach to the message. Other files are copied into the project and inserted as @paths.",
     "chat.dropNeedsProject": "Open a project before dropping files into chat",
