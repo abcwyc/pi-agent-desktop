@@ -53,9 +53,9 @@ export async function POST(req: Request) {
       throw new Error("provider and modelId must be provided together");
     }
     const explicitThinkingLevel = parseThinkingLevel(thinkingLevel);
-    // A chat never exposes tools. Ignore a stale or hand-crafted client
-    // selection so the workspace policy is enforced server-side.
-    const toolNames = chatWorkspace ? [] : requestedToolNames;
+    // A chat has no tool preset. Ignore a stale or hand-crafted client selection:
+    // the workspace policy (lib/chat-workspace-policy.ts) decides, server-side.
+    const toolNames = chatWorkspace ? undefined : requestedToolNames;
 
     // Must be unique per request: startRpcSession coalesces concurrent callers
     // that share a key onto one session. Date.now() (ms resolution) collides for

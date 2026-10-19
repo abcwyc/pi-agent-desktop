@@ -65,6 +65,14 @@ import {
   validateSessionToolSelection,
 } from "./session-tool-selection";
 import { isChatWorkspacePath } from "./chat-workspace";
+import {
+  CHAT_BLOCKED_TOOL_NAMES,
+  CHAT_READ_TOOL_NAME,
+  CHAT_WORKSPACE_PROMPT,
+  createChatWorkspaceExtension,
+  isChatToolAllowed,
+  withoutAgentDelegation,
+} from "./chat-workspace-policy";
 
 // ============================================================================
 // Types
@@ -213,6 +221,14 @@ export interface RpcSessionStartOptions {
 }
 
 const CODING_TOOL_NAMES = ["read", "bash", "powershell", "edit", "write", "grep", "find", "ls"];
+/** The names a chat may keep active (lib/chat-workspace-policy.ts decides which tools those are). */
+function restrictToChatTools(session: AgentSessionLike, names: readonly string[]): string[] {
+  const registered = new Map(session.getAllTools().map((tool) => [tool.name, tool]));
+  return names.filter((name) => isChatToolAllowed(registered.get(name) ?? { name }));
+}
+
+// A tool that hands work to another agent. A chat loads no extension that registers one.
+const CHAT_DELEGATION_TOOL_NAMES: ReadonlySet<string> = new Set(SUBAGENT_CONTROL_TOOL_NAMES);
 const THINKING_LEVEL_NAMES = new Set<ThinkingLevel>(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
 // Extensions require a complete Theme, while the web UI applies its own styling.
@@ -600,7 +616,8 @@ export class AgentSessionWrapper {
 
   /** Apply a coding tool selection; `carry` defaults to the tools active now. */
   setActiveToolSelection(toolNames: string[], carry: readonly string[] = this.inner.getActiveToolNames()): void {
-    this.inner.setActiveToolsByName(resolveActiveToolNames(this.inner, toolNames, carry));
+    const names = resolveActiveToolNames(this.inner, toolNames, carry);
+    this.inner.setActiveToolsByName(this.chatWorkspace ? restrictToChatTools(this.inner, names) : names);
   }
 
   /**
@@ -617,6 +634,15 @@ export class AgentSessionWrapper {
     const result = await this.inner.navigateTree(targetId, options);
     if (result.cancelled || this.chatOnly) {
       return { cancelled: result.cancelled, ...(result.aborted ? { aborted: true } : {}) };
+    }
+    if (this.chatWorkspace) {
+      // The target branch's transcript may declare coding tools a chat must not have.
+      const activeAfter = this.inner.getActiveToolNames();
+      this.setActiveToolSelection(
+        [CHAT_READ_TOOL_NAME],
+        [...activeAfter, ...activeBefore.filter((name) => SESSION_TOOL_NAMES.has(name))],
+      );
+      return { cancelled: false };
     }
 
     const entries = this.inner.sessionManager.getEntries() as unknown as SessionEntry[];
@@ -1170,9 +1196,11 @@ export class AgentSessionWrapper {
       }
 
       case "get_tools": {
-        if (this.chatWorkspace) return [];
-        // A hidden tool is withdrawn: pi ignores it when setting the active tools.
-        const all: ToolInfo[] = this.inner.getAllTools().filter((t) => t.exposure !== "hidden");
+        // A hidden tool is withdrawn: pi ignores it when setting the active tools. A chat
+        // never lists the coding tools it blocks.
+        const all: ToolInfo[] = this.inner.getAllTools().filter((t) => (
+          t.exposure !== "hidden" && !(this.chatWorkspace && CHAT_BLOCKED_TOOL_NAMES.has(t.name))
+        ));
         const active = new Set<string>(this.inner.getActiveToolNames());
         // The definition's description is not always what the model gets: `prepareLoadout`
         // hooks rewrite the declared ones (codemode lists its nested tools and the MCP types).
@@ -1190,7 +1218,6 @@ export class AgentSessionWrapper {
       }
 
       case "get_commands": {
-        if (this.chatWorkspace) return { commands: [] };
         const commands: SlashCommandInfo[] = [];
         for (const registered of this.inner.extensionRunner.getRegisteredCommands()) {
           commands.push({
@@ -2495,10 +2522,12 @@ export async function startRpcSession(
   const persistedToolNames = subagentResources
     ? undefined
     : readSessionToolSelection(sessionManager.getEntries() as unknown as SessionEntry[]);
+  // A chat has no tool preset to pick: it loads what a project session loads, and the
+  // chat policy extension withholds the coding tools (lib/chat-workspace-policy.ts).
   const selectedToolNames = chatWorkspace
-    ? []
+    ? undefined
     : subagentResources?.tools ?? persistedToolNames ?? requestedToolNames;
-  if (!subagentResources && persistedToolNames === undefined && requestedToolNames !== undefined) {
+  if (!chatWorkspace && !subagentResources && persistedToolNames === undefined && requestedToolNames !== undefined) {
     appendSessionToolSelection(sessionManager, requestedToolNames);
   }
   const subagentLoadsResources = Boolean(
@@ -2533,9 +2562,14 @@ export async function startRpcSession(
       ? subagentLoadsResources
         ? projectTrustReloadOptions(sessionCwd, agentDir)
         : undefined
-      : chatOnly
+      : chatOnly || chatWorkspace
         ? undefined
         : projectTrustReloadOptions(sessionCwd, agentDir);
+    // The chat policy reads the session's own skills and cwd, which exist only once the
+    // session does, so the extension reaches them through this ref.
+    const chatSessionRef: {
+      current?: { resourceLoader: { getSkills(): { skills: { filePath: string; baseDir: string }[] } } };
+    } = {};
     const settingsManager = SettingsManager.create(sessionCwd, agentDir);
     // Chat-only sessions and subagents that replace Pi's prompt send an exact
     // system prompt. The prompt is resolved at prompt time through this inline
@@ -2569,12 +2603,25 @@ export async function startRpcSession(
             appendSystemPrompt: subagentResources.appendSystemPrompt,
             ...(usesExactSystemPrompt ? { extensionFactories: [exactSystemPromptExtension] } : {}),
           }
+        : chatWorkspace
+          ? {
+              // Extensions, skills, prompt templates and MCP load as in a project, but no
+              // global, ancestor or project instructions may leak into a chat's prompt.
+              noContextFiles: true,
+              systemPrompt: CHAT_WORKSPACE_PROMPT,
+              extensionFactories: [
+                ...(builtins?.extensions ?? []),
+                createArtifactGuideExtension(),
+                createChatWorkspaceExtension({
+                  getSkills: () => chatSessionRef.current?.resourceLoader.getSkills().skills ?? [],
+                  getCwd: () => sessionCwd,
+                }),
+              ],
+              extensionsOverride: (base) => withoutAgentDelegation(base, CHAT_DELEGATION_TOOL_NAMES),
+            }
         : chatOnly
           ? {
               ...CHAT_ONLY_RESOURCE_LOADER_OPTIONS,
-              // A chat is deliberately model-only: no global, ancestor, or
-              // project instructions may leak into its prompt.
-              ...(chatWorkspace ? { noContextFiles: true } : {}),
               extensionFactories: [exactSystemPromptExtension],
             }
         : {
@@ -2642,25 +2689,29 @@ export async function startRpcSession(
       ...(subagentResources ? { excludeTools: [...SUBAGENT_CONTROL_TOOL_NAMES] } : {}),
     });
 
+    chatSessionRef.current = inner;
+
     // A pinned selection replaces only the coding tools of the SDK's initial loadout, which
     // already holds the extension tools pi activates on registration and whatever
     // `defaultTools` names (such as `+codemode`), so installed extensions stay usable in
-    // Pi Web just like in the `pi` CLI.
+    // Pi Web just like in the `pi` CLI. A chat keeps `read` alone among the coding tools:
+    // its policy extension confines it to skill files, which is how a skill loads.
     if (!subagentResources && !chatOnly) {
       const initialToolNames = inner.getActiveToolNames();
-      inner.setActiveToolsByName(
-        resolveActiveToolNames(inner, selectedToolNames ?? initialToolNames, initialToolNames),
+      const activeToolNames = resolveActiveToolNames(
+        inner,
+        chatWorkspace ? [CHAT_READ_TOOL_NAME] : selectedToolNames ?? initialToolNames,
+        initialToolNames,
       );
+      inner.setActiveToolsByName(chatWorkspace ? restrictToChatTools(inner, activeToolNames) : activeToolNames);
     }
 
     const exactSystemPrompt = subagentResources?.exactSystemPrompt !== undefined
       ? () => subagentResources.exactSystemPrompt!
       : chatOnly
-        ? chatWorkspace
-          ? () => ""
-          : subagentResources
-            ? () => subagentResources.appendSystemPrompt[0] ?? ""
-            : () => contextFilesSystemPrompt(inner.resourceLoader.getAgentsFiles().agentsFiles)
+        ? subagentResources
+          ? () => subagentResources.appendSystemPrompt[0] ?? ""
+          : () => contextFilesSystemPrompt(inner.resourceLoader.getAgentsFiles().agentsFiles)
         : undefined;
     exactSystemPromptRef.current = exactSystemPrompt;
     const wrapper = new AgentSessionWrapper(inner, {

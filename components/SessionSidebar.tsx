@@ -40,6 +40,7 @@ import { getDesktopPlatform, type DesktopPlatform } from "@/lib/desktop-window";
 import { useWindowDrag } from "./desktop";
 import { SessionSearch } from "./SessionSearch";
 import { ProjectViewMenu, type ProjectViewMode } from "./ProjectViewMenu";
+import { ChatsSectionMenu } from "./ChatsSectionMenu";
 import { ScheduledSidebarRow } from "./scheduled/ScheduledSidebarRow";
 import { isScheduledRunSession } from "@/hooks/useScheduledTasks";
 import { prefetchSessionData } from "@/lib/session-data-cache";
@@ -259,7 +260,17 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [chatWorkspaceCwd, setChatWorkspaceCwd] = useState<string | null>(null);
-  const [chatVisibleCount, setChatVisibleCount] = useState(MAX_VISIBLE_CHAT_SESSIONS);
+  // Same fold model as a project: folding drops the extra pages, so the next
+  // unfold starts again from the first five chats.
+  const [chatsCollapsed, setChatsCollapsed] = useState(() => getPref(APP_PREF_KEYS.collapsedChats) === "1");
+  const [chatSessionPages, setChatSessionPages] = useState(() => {
+    const stored = getPrefJson<unknown>(APP_PREF_KEYS.chatSessionPages);
+    return typeof stored === "number" && Number.isInteger(stored) && stored > 0 ? stored : 0;
+  });
+  const [chatsMenuOpen, setChatsMenuOpen] = useState(false);
+  const [chatsMenuPos, setChatsMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const chatsMenuRef = useRef<HTMLDivElement>(null);
+  const chatsMenuButtonRef = useRef<HTMLButtonElement>(null);
   // Tracked in a ref only: the version is compared against the polled value to
   // decide whether the list needs reloading, and no render reads it.
   const sessionListVersionRef = useRef<number | null>(null);
@@ -423,6 +434,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   );
   const projectMenuRef = useRef<HTMLDivElement>(null);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  // The chat whose conversation is being copied into a project (the picker is open for it).
+  const [continueChat, setContinueChat] = useState<SessionInfo | null>(null);
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
   const [unreadSessionIds, setUnreadSessionIds] = useState<Set<string>>(() => loadUnreadSessionIds());
   const previousRunningSessionIdsRef = useRef<Set<string>>(new Set());
@@ -545,6 +558,16 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   }, [collapsedProjects]);
 
   useEffect(() => {
+    if (chatsCollapsed) setPref(APP_PREF_KEYS.collapsedChats, "1");
+    else removePref(APP_PREF_KEYS.collapsedChats);
+  }, [chatsCollapsed]);
+
+  useEffect(() => {
+    if (chatSessionPages === 0) removePref(APP_PREF_KEYS.chatSessionPages);
+    else setPrefJson(APP_PREF_KEYS.chatSessionPages, chatSessionPages);
+  }, [chatSessionPages]);
+
+  useEffect(() => {
     if (Object.keys(projectSessionPages).length === 0) removePref(APP_PREF_KEYS.expandedProjects);
     else setPrefJson(APP_PREF_KEYS.expandedProjects, projectSessionPages);
   }, [projectSessionPages]);
@@ -647,6 +670,33 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       window.removeEventListener("resize", closeOnViewportChange);
     };
   }, [projectViewMenuOpen, projectViewMenuPos]);
+
+  useEffect(() => {
+    if (!chatsMenuOpen || !chatsMenuPos) return;
+    const close = () => {
+      setChatsMenuOpen(false);
+      setChatsMenuPos(null);
+    };
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (chatsMenuRef.current?.contains(target)) return;
+      if (chatsMenuButtonRef.current?.contains(target)) return;
+      close();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isImeComposing(event)) close();
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [chatsMenuOpen, chatsMenuPos]);
 
   useEffect(() => {
     onRunningSessionIdsChange?.(runningSessionIds);
@@ -1023,6 +1073,35 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     onSelectSession(s, false, entryId, blockIndex);
   }, [onSelectSession]);
 
+  const continueChatInProject = useCallback(async (chat: SessionInfo, cwd: string) => {
+    setContinueChat(null);
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(chat.id)}/continue-in-project`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cwd }),
+      });
+      const data = await res.json().catch(() => ({})) as { sessionId?: string; path?: string | null; cwd?: string; error?: string };
+      if (!res.ok || !data.sessionId) throw new Error(data.error ?? `HTTP ${res.status}`);
+      const now = new Date().toISOString();
+      activateProject(cwd);
+      handleSelectSessionFromList({
+        ...chat,
+        id: data.sessionId,
+        path: data.path ?? "",
+        cwd: data.cwd ?? cwd,
+        workspaceKind: "project",
+        projectRoot: projectRootFor(cwd) ?? cwd,
+        created: now,
+        modified: now,
+        parentSessionId: chat.id,
+      });
+      void loadSessions(false, true);
+    } catch (e) {
+      appNotify.error({ message: t("sidebar.continueInProjectFailed", { error: e instanceof Error ? e.message : String(e) }) });
+    }
+  }, [activateProject, handleSelectSessionFromList, loadSessions, projectRootFor, t]);
+
   const handleNewSession = useCallback((cwdOverride?: string, workspaceKindOverride?: SessionWorkspaceKind) => {
     const cwd = cwdOverride ?? selectedCwd ?? chatWorkspaceCwd;
     if (!cwd) return;
@@ -1200,9 +1279,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const selectedProjectRoot = selectedProjectObject?.kind === "project"
     ? selectedProjectObject.root
     : null;
+  // A search always lists every match, folded or not.
+  const chatsFolded = !trimmedSessionQuery && chatsCollapsed;
   let visibleChatFamilies = trimmedSessionQuery
     ? chatFamilies
-    : chatFamilies.slice(0, chatVisibleCount);
+    : chatFamilies.slice(0, MAX_VISIBLE_CHAT_SESSIONS * (chatSessionPages + 1));
   if (!trimmedSessionQuery && selectedSessionId) {
     const selectedFamily = chatFamilies.find((family) => (
       family.root.id === selectedSessionId
@@ -1213,6 +1294,16 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     }
   }
   const hiddenChatFamilyCount = chatFamilies.length - visibleChatFamilies.length;
+  const chatRunningCount = chatFamilies.filter((family) => (
+    [family.root, ...family.subagents].some((session) => runningSessionIds.has(session.id))
+  )).length;
+  const chatUnreadCount = chatFamilies.filter((family) => (
+    [family.root, ...family.subagents].some((session) => unreadSessionIds.has(session.id))
+  )).length;
+  const setChatsFolded = (folded: boolean) => {
+    setChatsCollapsed(folded);
+    if (folded) setChatSessionPages(0);
+  };
 
   const renderProjectGroup = (group: ReturnType<typeof groupByProject>[number]) => {
     const isCollapsed = !trimmedSessionQuery && collapsedProjects.has(group.projectRoot);
@@ -1450,6 +1541,59 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     closeProjectViewMenu();
   };
 
+  const closeChatsMenu = () => {
+    setChatsMenuOpen(false);
+    setChatsMenuPos(null);
+  };
+
+  const openChatsDomMenu = (anchor: HTMLElement) => {
+    const rect = anchor.getBoundingClientRect();
+    const width = 216;
+    const estimatedHeight = 96;
+    const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+    const top = rect.bottom + 4 + estimatedHeight > window.innerHeight - 8
+      ? Math.max(8, rect.top - estimatedHeight - 4)
+      : rect.bottom + 4;
+    setChatsMenuPos({ top, left });
+    setChatsMenuOpen(true);
+  };
+
+  const toggleChatsMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (chatsMenuOpen && chatsMenuPos) {
+      closeChatsMenu();
+      return;
+    }
+    if (chatsMenuOpen) return;
+    closeProjectViewMenu();
+    const anchor = event.currentTarget;
+    if (!canUseNativeMenu()) {
+      openChatsDomMenu(anchor);
+      return;
+    }
+    const entries: NativeMenuEntry[] = [
+      {
+        label: t("sidebar.collapseChats"),
+        disabled: chatsCollapsed,
+        onSelect: () => setChatsFolded(true),
+      },
+      {
+        label: t("sidebar.expandChats"),
+        disabled: !chatsCollapsed,
+        onSelect: () => setChatsFolded(false),
+      },
+    ];
+    setChatsMenuOpen(true);
+    setChatsMenuPos(null);
+    void showNativeMenu(entries, menuPointBelow(anchor, "right")).then((shown) => {
+      if (shown) {
+        setChatsMenuOpen(false);
+        return;
+      }
+      openChatsDomMenu(anchor);
+    });
+  };
+
   const openProjectViewDomMenu = (anchor: HTMLElement) => {
     const rect = anchor.getBoundingClientRect();
     const width = 216;
@@ -1469,6 +1613,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       return;
     }
     if (projectViewMenuOpen) return;
+    closeChatsMenu();
     setProjectMenu(null);
     setProjectMenuPos(null);
     const anchor = event.currentTarget;
@@ -1626,22 +1771,71 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         aria-label={`${t("sidebar.chats")} / ${t("sidebar.projects")}`}
         onScroll={handleListScroll}
       >
-        <div className="sidebar-project-tree-header sidebar-chats-header">
-          <span className="sidebar-project-tree-title">{t("sidebar.chats")}</span>
+        <div className={`sidebar-project-tree-header sidebar-chats-header${chatsMenuOpen ? " is-menu-open" : ""}`}>
           <button
             type="button"
-            className="sidebar-chats-add"
-            onClick={() => handleNewSession(chatWorkspaceCwd ?? undefined, "chat")}
-            disabled={!chatWorkspaceCwd}
-            title={t("sidebar.newChatTitle")}
-            aria-label={t("sidebar.newChatTitle")}
+            className="sidebar-chats-title"
+            data-sidebar-tree-row
+            aria-expanded={!chatsFolded}
+            title={t(chatsFolded ? "sidebar.expandChats" : "sidebar.collapseChats")}
+            onClick={() => setChatsFolded(!chatsCollapsed)}
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
+            <span className="sidebar-project-tree-title">{t("sidebar.chats")}</span>
+            {/* A folded section hides its rows, so the count and any running or
+                unread chips stay readable on the header, like a folded project. */}
+            {chatsFolded && chatFamilies.length > 0 && (
+              <span className="sidebar-project-tree-count" title={t("sidebar.sessionCount", { count: chatFamilies.length })}>
+                ({chatFamilies.length})
+              </span>
+            )}
+            {chatsFolded && (
+              <span className="sidebar-project-tree-meta">
+                {chatRunningCount > 0 && (
+                  <span className="sidebar-project-tree-chip is-running" title={t("sidebar.runningCount", { count: chatRunningCount })}>
+                    {chatRunningCount}
+                  </span>
+                )}
+                {chatUnreadCount > 0 && (
+                  <span className="sidebar-project-tree-chip is-unread" title={t("sidebar.unreadCount", { count: chatUnreadCount })}>
+                    {chatUnreadCount}
+                  </span>
+                )}
+              </span>
+            )}
           </button>
+          <div className="sidebar-project-tree-tools">
+            <button
+              ref={chatsMenuButtonRef}
+              type="button"
+              className={`sidebar-project-tree-menu${chatsMenuOpen ? " is-open" : ""}`}
+              title={t("sidebar.chatsMenu")}
+              aria-label={t("sidebar.chatsMenu")}
+              aria-haspopup="menu"
+              aria-expanded={chatsMenuOpen}
+              onClick={toggleChatsMenu}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="5" cy="12" r="1.6" />
+                <circle cx="12" cy="12" r="1.6" />
+                <circle cx="19" cy="12" r="1.6" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="sidebar-project-tree-add"
+              onClick={() => handleNewSession(chatWorkspaceCwd ?? undefined, "chat")}
+              disabled={!chatWorkspaceCwd}
+              title={t("sidebar.newChatTitle")}
+              aria-label={t("sidebar.newChatTitle")}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
+          </div>
         </div>
+        {!chatsFolded && (
         <div className="sidebar-project-tree-children sidebar-chats-list">
           {visibleChatFamilies.map((family) => {
             const [node] = buildSessionTree([family.root, ...family.subagents]);
@@ -1656,6 +1850,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 unreadSessionIds={unreadSessionIds}
                 onSelectSession={handleSelectSessionFromList}
                 onRenamed={loadSessions}
+                onContinueInProject={setContinueChat}
                 onSessionDeleted={(id) => {
                   onSessionDeleted?.(id);
                   loadSessions();
@@ -1672,7 +1867,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             <button
               type="button"
               className="sidebar-project-tree-show-more"
-              onClick={() => setChatVisibleCount((count) => count + MAX_VISIBLE_CHAT_SESSIONS)}
+              onClick={() => setChatSessionPages((pages) => pages + 1)}
             >
               {t("sidebar.showMoreSessions", {
                 count: Math.min(MAX_VISIBLE_CHAT_SESSIONS, hiddenChatFamilyCount),
@@ -1680,6 +1875,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             </button>
           )}
         </div>
+        )}
 
         <div className={`sidebar-project-tree-header${projectViewMenuOpen ? " is-menu-open" : ""}`}>
           <span className="sidebar-project-tree-title">{t("sidebar.projects")}</span>
@@ -1759,6 +1955,22 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           : activeProjects.map((group) => renderProjectGroup(group))}
       </div>
       </SessionSearch>
+      {chatsMenuOpen && chatsMenuPos && (
+        <ChatsSectionMenu
+          menuRef={chatsMenuRef}
+          pos={chatsMenuPos}
+          canCollapse={!chatsCollapsed}
+          canExpand={chatsCollapsed}
+          onCollapse={() => {
+            setChatsFolded(true);
+            closeChatsMenu();
+          }}
+          onExpand={() => {
+            setChatsFolded(false);
+            closeChatsMenu();
+          }}
+        />
+      )}
       {projectViewMenuOpen && projectViewMenuPos && (
         <ProjectViewMenu
           menuRef={projectViewMenuRef}
@@ -1815,6 +2027,20 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           onCreateWorktree={() => void worktreeActions.create(projectMenu.root)}
         />
       )}
+      {continueChat && (
+        <div className="project-picker-modal-overlay" role="dialog" aria-modal="true" aria-label={t("sidebar.continueInProject")} onClick={() => setContinueChat(null)}>
+          <div className="project-picker-modal-shell" onClick={(e) => e.stopPropagation()}>
+            <ProjectPicker
+              recentProjects={recentProjects}
+              selectedCwd={null}
+              selectedProject={null}
+              homeDir={homeDir}
+              onSelectCwd={(cwd) => void continueChatInProject(continueChat, cwd)}
+              variant="block"
+            />
+          </div>
+        </div>
+      )}
       {projectPickerOpen && (
         <div className="project-picker-modal-overlay" role="dialog" aria-modal="true" onClick={() => setProjectPickerOpen(false)}>
           <div className="project-picker-modal-shell" onClick={(e) => e.stopPropagation()}>
@@ -1845,6 +2071,7 @@ function SessionFamilyItem({
   onSelectSession,
   onRenamed,
   onSessionDeleted,
+  onContinueInProject,
   familySessions,
   subtitle,
 }: {
@@ -1857,6 +2084,8 @@ function SessionFamilyItem({
   onSelectSession: (s: SessionInfo) => void;
   onRenamed?: () => void;
   onSessionDeleted?: (id: string) => void;
+  /** Chats only: copy the conversation into a project. */
+  onContinueInProject?: (session: SessionInfo) => void;
   /** Cross-project context, shown by the chronological sidebar view. */
   subtitle?: string;
 }) {
@@ -1884,6 +2113,7 @@ function SessionFamilyItem({
           onClick={() => onSelectSession(node.session)}
           onRenamed={onRenamed}
           onDeleted={(id) => onSessionDeleted?.(id)}
+          onContinueInProject={depth === 0 ? onContinueInProject : undefined}
           hasChildren={hasChildren}
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((v) => !v)}
@@ -2028,6 +2258,7 @@ function SessionItem({
   onClick,
   onRenamed,
   onDeleted,
+  onContinueInProject,
   hasChildren = false,
   collapsed = false,
   onToggleCollapse,
@@ -2041,6 +2272,7 @@ function SessionItem({
   onClick: () => void;
   onRenamed?: () => void;
   onDeleted?: (id: string) => void;
+  onContinueInProject?: (session: SessionInfo) => void;
   hasChildren?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -2151,6 +2383,9 @@ function SessionItem({
     setMenuOpen(true);
     const shown = await showNativeMenu([
       { label: t("sidebar.rename"), onSelect: startRename },
+      ...(onContinueInProject
+        ? [{ label: t("sidebar.continueInProject"), onSelect: () => onContinueInProject(session) }]
+        : []),
       { label: t("sidebar.delete"), onSelect: beginDeleteConfirmation },
       { kind: "separator" },
       {
@@ -2164,7 +2399,7 @@ function SessionItem({
     ], at);
     setMenuOpen(false);
     return shown;
-  }, [beginDeleteConfirmation, locale, session.compactionCount, session.messageCount, session.modified, session.transient, session.worktreeBranch, startRename, t]);
+  }, [beginDeleteConfirmation, onContinueInProject, session, locale, startRename, t]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const handled = dispatchSessionRowContextMenu({
@@ -2196,7 +2431,7 @@ function SessionItem({
     if (menuOpen) { setMenuOpen(false); return; }
     const rect = e.currentTarget.getBoundingClientRect();
     const openDomMenu = () => {
-      const estHeight = 124;
+      const estHeight = onContinueInProject ? 154 : 124;
       const left = Math.max(8, Math.min(rect.right - MENU_WIDTH, window.innerWidth - MENU_WIDTH - 8));
       let top = rect.bottom + 4;
       if (top + estHeight > window.innerHeight - 8) top = rect.top - estHeight - 4;
@@ -2210,7 +2445,7 @@ function SessionItem({
       return;
     }
     openDomMenu();
-  }, [menuOpen, showNativeSessionMenu]);
+  }, [menuOpen, onContinueInProject, showNativeSessionMenu]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -2500,6 +2735,24 @@ function SessionItem({
                 </svg>
                 {t("sidebar.rename")}
               </button>
+              {onContinueInProject && (
+                <button
+                  role="menuitem"
+                  onClick={() => { setMenuOpen(false); onContinueInProject(session); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    width: "100%", height: 30, padding: "0 8px",
+                    background: "transparent", border: 0, borderRadius: 7,
+                    color: "var(--text)", cursor: "pointer",
+                    fontSize: 13, textAlign: "left",
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+                  </svg>
+                  {t("sidebar.continueInProject")}
+                </button>
+              )}
               <button
                 role="menuitem"
                 className="is-danger"

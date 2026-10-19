@@ -20,6 +20,10 @@ export const APP_PREF_KEYS = {
   collapsedProjects: "pi-web:collapsed-projects",
   /** Project root -> additional five-session pages shown past the preview cap. */
   expandedProjects: "pi-web:expanded-projects",
+  /** "1" while the sidebar Chats section is folded. */
+  collapsedChats: "pi-web:collapsed-chats",
+  /** Additional five-chat pages shown past the Chats preview cap. */
+  chatSessionPages: "pi-web:chat-session-pages",
   updateSnooze: "pi-web:update-snooze",
   closeQuits: "pi-desktop-close-quits",
   notifyOnComplete: "pi-desktop-notify-on-complete",

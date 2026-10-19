@@ -2169,27 +2169,32 @@ html.dark .sidebar-view-switcher-thumb {
   margin-top: 2px;
 }
 
-.sidebar-chats-add {
+/* The section title doubles as the fold toggle, like a project row. */
+.sidebar-chats-title {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
+  gap: 5px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
   padding: 0;
   border: 0;
-  border-radius: 5px;
   background: transparent;
-  color: var(--text-dim);
+  box-shadow: none;
+  color: inherit;
+  text-align: left;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
 }
 
-.sidebar-chats-add:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text);
+.sidebar-chats-title .sidebar-project-tree-title {
+  flex: 0 1 auto;
 }
 
-.sidebar-chats-add:disabled {
+.sidebar-chats-title:hover .sidebar-project-tree-title {
+  color: var(--text-muted);
+}
+
+.sidebar-project-tree-add:disabled {
   cursor: default;
   opacity: 0.4;
 }
@@ -8226,4 +8231,108 @@ html.native-desktop :is(
   margin-left: 5px;
   color: var(--text);
   font-variant-numeric: tabular-nums;
+}
+
+
+/* Chat attachments: text files chosen in the composer, and the chips a sent message shows. */
+.composer-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 2px 4px 2px 8px;
+  border: var(--hairline) solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+}
+
+.composer-file-chip-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-file-chip-size {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+}
+
+.composer-file-chip-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.composer-file-chip-remove:hover {
+  background: var(--bg-selected);
+  color: var(--text);
+}
+
+.message-attached-files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.message-attached-file {
+  min-width: 0;
+  border: var(--hairline) solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+}
+
+.message-attached-file-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+  text-align: left;
+  cursor: pointer;
+}
+
+.message-attached-file-name {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-attached-file-size {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+}
+
+.message-attached-file-body {
+  max-height: 260px;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-top: var(--hairline) solid var(--border);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

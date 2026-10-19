@@ -11,6 +11,7 @@ import { basename, join } from "node:path";
 import { createInterface } from "node:readline";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { writePrivateFileAtomicSync } from "./atomic-file";
+import { attachmentAwareTitle } from "./chat-attachments";
 
 export interface ScannedSessionInfo {
 	path: string;
@@ -211,7 +212,7 @@ export async function scanSessionFileInfo(
 
 			const textContent = extractTextContent(message);
 			if (!textContent) continue;
-			if (!firstMessage && message.role === "user") firstMessage = textContent;
+			if (!firstMessage && message.role === "user") firstMessage = attachmentAwareTitle(textContent);
 		}
 
 		if (!header) return null;

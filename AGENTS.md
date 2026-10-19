@@ -179,7 +179,7 @@ Fork notes:
 - [fork-files-security.md](docs/agents/fork-files-security.md): security posture (web password, OAuth tokens, preview sandboxes), worktrees and branch switching, the file access allow-list, web password throttling.
 - [fork-desktop.md](docs/agents/fork-desktop.md): the Tauri shell (desktop token, native menus in Rust, file context menu, window state, tauri plugin version pairing), workspace terminals and node-pty / quickjs staging, Windows overwrite installs.
 - [fork-ui.md](docs/agents/fork-ui.md): who contains whom in the topbar / chat column / right panel, the settings dialog tabs, touch affordances, completion sound, plugins and skills.
-- [fork-chat-workspace.md](docs/agents/fork-chat-workspace.md): the non-project Chats section, the hidden `chat-workspace` cwd and `workspaceKind` identity, project-workbench suppression, and the server-enforced no-tools / no-shell / no-context-files policy.
+- [fork-chat-workspace.md](docs/agents/fork-chat-workspace.md): the non-project Chats section, the hidden `chat-workspace` cwd and `workspaceKind` identity, project-workbench suppression, and the server-enforced chat policy (skills and MCP yes; no file, shell or other extension tools; no context files), text attachments, and continuing a chat in a project.
 
 ### AgentSession lifecycle (`lib/rpc-manager.ts`)
 - One `AgentSessionWrapper` per session id, keyed in `globalThis.__piSessions`
@@ -208,7 +208,7 @@ Each one undid a real regression; the linked note has the reasoning.
 - After an SDK bump run `npm run desktop:prepare && npm run desktop:verify`; never hard-code a nested staging destination; keep all three Windows `node_modules` guards. ([fork-desktop](docs/agents/fork-desktop.md))
 - Layout: the center column contains topbar and chat; the right-panel block is a full-height sibling inside the outer row; no `paddingLeft: sidebarResizer.width` on the topbar. Pinned by `AppShell.right-panel-row.test.mjs`. ([fork-ui](docs/agents/fork-ui.md))
 - `SettingsPanel` keeps the `onBusyChange` guard so a desktop update cannot be dismissed mid-install. ([fork-ui](docs/agents/fork-ui.md))
-- Chats use a server-owned hidden cwd and `workspaceKind`; never derive that path in the browser, group it with projects, or expose it to project trust / worktrees / files / terminals. Server policy must keep chats tool-less, shell-less, and context-file-free even for persisted sessions. ([fork-chat-workspace](docs/agents/fork-chat-workspace.md))
+- Chats use a server-owned hidden cwd and `workspaceKind`; never derive that path in the browser, group it with projects, or expose it to project trust / worktrees / files / terminals. Server policy must keep chats off the user's files and shell, off every tool but `read` (skill files only), `codemode`, `tool_search` and MCP, and context-file-free, even for persisted sessions. ([fork-chat-workspace](docs/agents/fork-chat-workspace.md))
 
 ---
 

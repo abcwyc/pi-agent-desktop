@@ -13,6 +13,7 @@ import type {
 } from "@/lib/types";
 import { isBlockingExtensionUiRequest } from "@/lib/browser-notifications";
 import { normalizeToolCalls } from "@/lib/normalize";
+import { attachmentAwareTitle } from "@/lib/chat-attachments";
 import { isPromptRejectedError, sendAgentCommand } from "@/lib/agent-client";
 import { fetchWithRetry } from "@/lib/fetch-timeout";
 import type { ModelScopeWarning } from "@/lib/model-scope-warnings";
@@ -990,7 +991,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       created: new Date().toISOString(),
       modified: new Date().toISOString(),
       messageCount,
-      firstMessage,
+      firstMessage: attachmentAwareTitle(firstMessage),
       transient: true,
       workspaceKind: chatWorkspace ? "chat" : "project",
     }, provisionalDraftKey);

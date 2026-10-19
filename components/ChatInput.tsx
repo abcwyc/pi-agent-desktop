@@ -41,6 +41,13 @@ import { useChatAppearance } from "@/hooks/useChatAppearance";
 import type { ToolPreset } from "@/lib/tool-presets";
 import { SelectorRow } from "./SelectorRow";
 import { ModelSelector } from "./ModelSelector";
+import {
+  composeMessageWithAttachedFiles,
+  formatAttachmentSize,
+  readChatTextAttachments,
+  type ChatAttachmentRejection,
+  type ChatTextAttachment,
+} from "@/lib/chat-attachments";
 import { SessionMentionMenu } from "./SessionMentionMenu";
 import { SessionAutomationMenu } from "./SessionAutomationMenu";
 import { ComposerProjectChip, getProjectLabel } from "./ComposerProjectChip";
@@ -158,6 +165,8 @@ export interface ChatInputHandle {
   replaceMessage: (message: UserMessage) => void;
   prependText: (text: string) => void;
   addImages: (files: File[]) => void;
+  /** Chats only: read text files into chips that travel inside the next message. */
+  addTextFiles: (files: File[]) => Promise<ChatAttachmentRejection[]>;
   focus: () => void;
   rekeyDraft: (previousKey: string, nextKey: string) => void;
   restoreSubmission: (text: string, images?: ChatDraftImage[], targetDraftKey?: string) => void;
@@ -846,6 +855,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>(() => (
     draftKey ? draftImagesToAttachedImages(getDraft(draftKey)?.images) : []
   ));
+  const [attachedFiles, setAttachedFiles] = useState<ChatTextAttachment[]>([]);
+  const attachedFilesRef = useRef(attachedFiles);
+  attachedFilesRef.current = attachedFiles;
   const projectLabel = getProjectLabel(projectPath, projectOptions);
   const trimmedValue = value.trimStart();
   const bashMode = !chatOnly && attachedImages.length === 0 && trimmedValue.startsWith("!");
@@ -1090,6 +1102,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     addImages(files: File[]) {
       processImageFiles(files);
     },
+    async addTextFiles(files: File[]) {
+      const { accepted, rejected } = await readChatTextAttachments(files, attachedFilesRef.current);
+      if (accepted.length > 0) {
+        const next = [...attachedFilesRef.current, ...accepted];
+        attachedFilesRef.current = next;
+        setAttachedFiles(next);
+      }
+      return rejected;
+    },
     focus() {
       textareaRef.current?.focus();
     },
@@ -1156,6 +1177,17 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     });
   }, []);
 
+  const clearAttachedFiles = useCallback(() => {
+    attachedFilesRef.current = [];
+    setAttachedFiles([]);
+  }, []);
+
+  const removeAttachedFile = useCallback((id: string) => {
+    const next = attachedFilesRef.current.filter((file) => file.id !== id);
+    attachedFilesRef.current = next;
+    setAttachedFiles(next);
+  }, []);
+
   const clearInput = useCallback(() => {
     valueRef.current = "";
     setValue("");
@@ -1165,10 +1197,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (draftKey) clearDraft(draftKey);
     if (draftKeyRef.current && draftKeyRef.current !== draftKey) clearDraft(draftKeyRef.current);
     clearImages();
+    clearAttachedFiles();
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [clearImages, draftKey, setHashQuery]);
+  }, [clearAttachedFiles, clearImages, draftKey, setHashQuery]);
 
   useEffect(() => {
     if (!draftKey || draftKeyRef.current !== draftKey) return;
@@ -1254,7 +1287,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, []);
 
   const runBuiltinCommand = useCallback(async (msg: string): Promise<boolean> => {
-    if (attachedImages.length || !msg.startsWith("/") || !onBuiltinCommand) return false;
+    if (attachedImages.length || attachedFilesRef.current.length || !msg.startsWith("/") || !onBuiltinCommand) return false;
     if (builtinCommandPendingRef.current) return true;
     builtinCommandPendingRef.current = true;
     setBuiltinCommandPending(true);
@@ -1271,14 +1304,17 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   const handleSend = useCallback(async () => {
     const msg = value.trim();
-    if (!msg && !attachedImages.length) return;
+    if (!msg && !attachedImages.length && !attachedFilesRef.current.length) return;
     onAudioUnlock?.();
     const builtinAllowed = !isStreaming || offersBuiltinSlashCommandWhileStreaming(msg);
     if (builtinAllowed && await runBuiltinCommand(msg)) return;
     if (isStreaming) return;
     // A run cannot start in a cwd that is gone; keep the draft until it is back or another project is picked.
     if (workspaceUnavailable) return;
-    const resolvedMessage = await resolveSessionReferences(msg, sessionMentionTargetsRef.current);
+    const resolvedMessage = composeMessageWithAttachedFiles(
+      await resolveSessionReferences(msg, sessionMentionTargetsRef.current),
+      attachedFilesRef.current,
+    );
     onSend(resolvedMessage, attachedImages.length ? attachedImages : undefined);
     clearInput();
   }, [value, attachedImages, workspaceUnavailable, isStreaming, runBuiltinCommand, onSend, clearInput, onAudioUnlock, sessionMentionTargetsRef]);
@@ -1316,7 +1352,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     ? t(slashQuery ? "chat.match" : "chat.command")
     : t(slashQuery ? "chat.matches" : "chat.commands", { count: filteredSlashCommands.length });
   const hasInputText = Boolean(value.trim());
-  const canQueueStreamingMessage = hasInputText || attachedImages.length > 0;
+  const canQueueStreamingMessage = hasInputText || attachedImages.length > 0 || attachedFiles.length > 0;
   const canSend = canQueueStreamingMessage && !workspaceUnavailable;
   // Warn when images are attached but the selected model is known not to accept
   // image input (#584), including a resolved default. Unknown models stay silent.
@@ -1515,13 +1551,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   const sendQueued = useCallback(async (mode: "steer" | "followup") => {
     const msg = value.trim();
-    if (!msg && !attachedImages.length) return;
+    if (!msg && !attachedImages.length && !attachedFilesRef.current.length) return;
     onAudioUnlock?.();
     const images = attachedImages.length ? attachedImages : undefined;
     const queue = async () => {
-      const resolvedMessage = await resolveSessionReferences(msg, sessionMentionTargetsRef.current);
+      const resolvedMessage = composeMessageWithAttachedFiles(
+        await resolveSessionReferences(msg, sessionMentionTargetsRef.current),
+        attachedFilesRef.current,
+      );
       const streamingBehavior = mode === "steer" ? "steer" : "followUp";
-      if (msg.startsWith("/") && onPromptWithStreamingBehavior) {
+      if (msg.startsWith("/") && !attachedFilesRef.current.length && onPromptWithStreamingBehavior) {
         clearInput();
         onPromptWithStreamingBehavior(resolvedMessage, streamingBehavior, images);
         return;
@@ -1533,11 +1572,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         onFollowUp(resolvedMessage, images);
       }
     };
-    if (!attachedImages.length && onBuiltinCommand && canRunBuiltinSlashCommandWhileStreaming(msg)) {
+    if (!attachedImages.length && !attachedFilesRef.current.length && onBuiltinCommand && canRunBuiltinSlashCommandWhileStreaming(msg)) {
       void runBuiltinCommand(msg);
       return;
     }
-    if (!attachedImages.length && onBuiltinCommand && isBareMcpCommand(msg)) {
+    if (!attachedImages.length && !attachedFilesRef.current.length && onBuiltinCommand && isBareMcpCommand(msg)) {
       // Settings > MCP opens when pi's built-in MCP extension owns /mcp; another
       // extension's /mcp is queued as before. The composer is disabled meanwhile.
       void runBuiltinCommand(msg).then((handled) => {
@@ -1995,7 +2034,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       {!compact && <input
         ref={fileInputRef}
         type="file"
-        accept={chatOnly || !onAttachFiles ? "image/*" : undefined}
+        accept={!onAttachFiles ? "image/*" : undefined}
         multiple
         style={{ display: "none" }}
         onChange={(e) => {
@@ -2209,6 +2248,27 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   </svg>
                 </button>
               </div>
+            ))}
+          </div>
+        )}
+
+        {attachedFiles.length > 0 && (
+          <div className="composer-file-chips" style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+            {attachedFiles.map((file) => (
+              <span key={file.id} className="composer-file-chip" title={`${file.name} · ${formatAttachmentSize(file.size)}`}>
+                <span className="composer-file-chip-name">{file.name}</span>
+                <span className="composer-file-chip-size">{formatAttachmentSize(file.size)}</span>
+                <button
+                  type="button"
+                  className="composer-file-chip-remove"
+                  onClick={() => removeAttachedFile(file.id)}
+                  aria-label={t("chat.removeAttachment", { name: file.name })}
+                >
+                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+                    <line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" />
+                  </svg>
+                </button>
+              </span>
             ))}
           </div>
         )}
@@ -2594,10 +2654,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              title={t(chatOnly || !onAttachFiles ? "chat.attachImage" : "chat.attachFiles")}
-              aria-label={t(chatOnly || !onAttachFiles ? "chat.attachImage" : "chat.attachFiles")}
+              title={t(!onAttachFiles ? "chat.attachImage" : "chat.attachFiles")}
+              aria-label={t(!onAttachFiles ? "chat.attachImage" : "chat.attachFiles")}
               className="native-toolbar-button composer-attach-button"
-              data-active={attachedImages.length > 0 || undefined}
+              data-active={attachedImages.length > 0 || attachedFiles.length > 0 || undefined}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <line x1="12" y1="5" x2="12" y2="19" />

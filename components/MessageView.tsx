@@ -18,6 +18,8 @@ import { isThinkingExpandedByDefault, THINKING_EXPANDED_EVENT } from "@/lib/thin
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
 import type { WrittenFile } from "@/lib/turn-written-files";
 import { skillExpansionToCommand } from "@/lib/slash-display";
+import { splitAttachedFiles } from "@/lib/chat-attachments";
+import { AttachedFileList } from "./AttachedFileList";
 import type { SubagentToolDetails } from "@/lib/subagent-extension";
 import { CODEMODE_TOOL_NAME, codemodeCalls, codemodeScript, codemodeScriptPreview, stripCodemodeHeader } from "@/lib/codemode-view";
 import { CodemodeCallList } from "./CodemodeToolView";
@@ -364,6 +366,9 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
       ? []
       : message.content.filter((b): b is ImageContent => b.type === "image");
 
+  // Files attached in a chat travel inside the text; show them as chips, not a wall of text.
+  const { text: bodyText, files: attachedFiles } = splitAttachedFiles(content);
+
   const commandText = skillExpansionToCommand(content);
   const commandSeparator = commandText?.search(/\s/) ?? -1;
   const commandName = commandText
@@ -486,7 +491,8 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
           ) : (
             <>
               {imageBlocksNode}
-              {content && <CollapsibleUserText text={content} cwd={cwd} onOpenFile={onOpenFile} />}
+              {attachedFiles.length > 0 && <AttachedFileList files={attachedFiles} />}
+              {bodyText && <CollapsibleUserText text={bodyText} cwd={cwd} onOpenFile={onOpenFile} />}
             </>
           )}
         </div>

@@ -142,14 +142,14 @@ test("Chats sit beside Projects and never enter project grouping", () => {
   assert.match(source, /const sessionFamilies = listSessionFamilies\(projectSessions\)/);
   assert.match(source, /groupByProject\(projectSessions,/);
   assert.match(source, /getRecentProjects\(allSessions\)/);
-  assert.match(source, /<div className="sidebar-project-tree-header sidebar-chats-header">/);
+  assert.match(source, /sidebar-project-tree-header sidebar-chats-header/);
   assert.match(source, /handleNewSession\(chatWorkspaceCwd \?\? undefined, "chat"\)/);
 });
 
 test("Chats show five families at a time even when there are no projects", () => {
   assert.match(source, /const MAX_VISIBLE_CHAT_SESSIONS = 5/);
-  assert.match(source, /: chatFamilies\.slice\(0, chatVisibleCount\)/);
-  assert.match(source, /setChatVisibleCount\(\(count\) => count \+ MAX_VISIBLE_CHAT_SESSIONS\)/);
+  assert.match(source, /: chatFamilies\.slice\(0, MAX_VISIBLE_CHAT_SESSIONS \* \(chatSessionPages \+ 1\)\)/);
+  assert.match(source, /setChatSessionPages\(\(pages\) => pages \+ 1\)/);
   assert.match(source, /!loading && !error && chatFamilies\.length === 0/);
   assert.match(source, /sidebar-chats-empty/);
   // The Chats section renders before the Projects empty state, so it remains
@@ -158,6 +158,40 @@ test("Chats show five families at a time even when there are no projects", () =>
     source,
     /sidebar-chats-header[\s\S]*?\{allProjects\.length === 0 \? \(/,
   );
+});
+
+test("Chats fold like a project and unfold back to the first five", () => {
+  // Folding drops the extra pages so the next unfold starts at five again.
+  assert.match(source, /const setChatsFolded = \(folded: boolean\) => \{\s*setChatsCollapsed\(folded\);\s*if \(folded\) setChatSessionPages\(0\);/);
+  // A search lists every match regardless of the fold.
+  assert.match(source, /const chatsFolded = !trimmedSessionQuery && chatsCollapsed/);
+  assert.match(source, /\{!chatsFolded && \(\s*<div className="sidebar-project-tree-children sidebar-chats-list">/);
+  // The fold and the page count survive a reload.
+  assert.match(source, /APP_PREF_KEYS\.collapsedChats/);
+  assert.match(source, /APP_PREF_KEYS\.chatSessionPages/);
+});
+
+test("the Chats header shows its menu and add buttons only on hover, like Projects", () => {
+  const header = source.slice(
+    source.indexOf("sidebar-project-tree-header sidebar-chats-header"),
+    source.indexOf("{!chatsFolded && ("),
+  );
+  // Same hover-revealed tools container the Projects header uses.
+  assert.match(header, /className="sidebar-project-tree-tools"/);
+  assert.match(header, /sidebar-project-tree-menu/);
+  assert.match(header, /sidebar-project-tree-add/);
+  assert.match(header, /handleNewSession\(chatWorkspaceCwd \?\? undefined, "chat"\)/);
+  assert.doesNotMatch(source, /sidebar-chats-add/);
+});
+
+test("a chat's row menu can continue it in a project", () => {
+  // Chats only: project rows and subagent children are never given the callback.
+  assert.match(source, /onContinueInProject=\{setContinueChat\}/);
+  assert.match(source, /onContinueInProject=\{depth === 0 \? onContinueInProject : undefined\}/);
+  assert.match(source, /t\("sidebar\.continueInProject"\)/);
+  assert.match(source, /\/continue-in-project`/);
+  // The picker reuses the project picker and never offers the chat workspace itself.
+  assert.match(source, /\{continueChat && \(/);
 });
 
 test("a chat cwd skips worktree lookup and stays out of project pickers", () => {

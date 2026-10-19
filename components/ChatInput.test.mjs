@@ -14,6 +14,7 @@ const { renderToStaticMarkup } = await jiti.import("react-dom/server");
 const { ChatInput, ModelErrorBanner, ModelScopeWarningBanner, canClearBuiltinCommandInput, canRestoreUserMessage, canRunBuiltinSlashCommandWhileStreaming, compressImageFile, cycleListIndex, filterModelOptions, getTopbarBoundary, getUpwardMenuMaxHeight, getUserMessageText, getUserMessageDraftImages, isExactSlashCommand, modelSupportsImageInput, replaceLinksWithMarkdown, shouldCompressImageFile, offersBuiltinSlashCommandWhileStreaming, submitsSlashCommandOnEnter} = await jiti.import("./ChatInput.tsx");
 
 const { isBareMcpCommand } = await jiti.import("@/lib/mcp-command.ts");
+const { composeMessageWithAttachedFiles } = await jiti.import("@/lib/chat-attachments.ts");
 const { ModelSelector } = await jiti.import("./ModelSelector.tsx");
 const { clearDraft, getDraft, mergeRestoredSubmissionDraft, mergeRestoredSubmissionText, rekeyDraft, setDraft } = await jiti.import("@/lib/draft-store.ts");
 const { I18nProvider } = await jiti.import("@/hooks/useI18n");
@@ -577,6 +578,7 @@ test("locks built-in command submission until it settles", async () => {
     compilerOptions: { target: ts.ScriptTarget.ES2020 },
   }).outputText).runInNewContext({
     attachedImages: [],
+    attachedFilesRef: { current: [] }, composeMessageWithAttachedFiles,
     attachedImagesRef: { current: [] },
     builtinCommandPendingRef: { current: false },
     canClearBuiltinCommandInput,
@@ -656,6 +658,7 @@ test("while a run streams, a bare /mcp opens Settings or is queued as before", a
     const calls = { builtin: [], prompts: [], cleared: 0 };
     const sendQueued = chatInputCallback("sendQueued", {
       value,
+      attachedFilesRef: { current: [] }, composeMessageWithAttachedFiles,
       attachedImages: images,
       onAudioUnlock() {},
       clearInput() { calls.cleared += 1; },
@@ -691,6 +694,7 @@ test("handleSend lets a handled /mcp through while streaming and sends an unowne
     const calls = { builtin: [], sent: [] };
     const handleSend = chatInputCallback("handleSend", {
       value,
+      attachedFilesRef: { current: [] }, composeMessageWithAttachedFiles,
       attachedImages: [],
       onAudioUnlock() {},
       isStreaming,
@@ -936,6 +940,7 @@ test("handleSend sends exactly once and routes builtin commands through the pend
     let builtinCalls = 0;
     const handler = script.runInNewContext({
       value, attachedImages, isStreaming: false, workspaceUnavailable,
+      attachedFilesRef: { current: [] }, composeMessageWithAttachedFiles,
       onAudioUnlock() {},
       runBuiltinCommand: async () => {
         builtinCalls += 1;
@@ -999,7 +1004,7 @@ test("chat-only composer keeps shell, file and session mentions out of the input
 
   assert.match(html, /accept="image\/\*"/);
   assert.match(html, /aria-label="Attach image"/);
-  assert.match(html, /Chat only · \/ commands · images/);
+  assert.match(html, /Chat · \/ commands · images &amp; text files/);
   assert.doesNotMatch(html, /@ files/);
   assert.doesNotMatch(html, /# sessions/);
   assert.doesNotMatch(html, />Shell</);
