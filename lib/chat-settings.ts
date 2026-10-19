@@ -1,7 +1,9 @@
 import { getPiWebSettingsPath, readStored, updatePiWebSettings } from "./artifact-settings";
 import {
+  CHAT_ALLOWED_TOOLS_MAX,
   CHAT_INSTRUCTIONS_MAX_CHARS,
   CHAT_THINKING_LEVELS,
+  CHAT_TOOL_NAME_PATTERN,
   EMPTY_CHAT_SETTINGS,
   type ChatSettings,
   type ChatThinkingLevel,
@@ -14,6 +16,7 @@ import {
  * overridden by this block.
  */
 export {
+  CHAT_ALLOWED_TOOLS_MAX,
   CHAT_INSTRUCTIONS_MAX_CHARS,
   CHAT_THINKING_LEVELS,
   EMPTY_CHAT_SETTINGS,
@@ -39,7 +42,12 @@ export function parseChatSettings(raw: unknown): ChatSettings {
   const instructions = typeof raw.instructions === "string"
     ? raw.instructions.slice(0, CHAT_INSTRUCTIONS_MAX_CHARS)
     : "";
-  return { model, thinkingLevel, instructions };
+  const allowedTools = Array.isArray(raw.allowedTools)
+    ? [...new Set(raw.allowedTools.filter((name): name is string => (
+      typeof name === "string" && CHAT_TOOL_NAME_PATTERN.test(name)
+    )))].slice(0, CHAT_ALLOWED_TOOLS_MAX)
+    : [];
+  return { model, thinkingLevel, instructions, allowedTools };
 }
 
 /** The chat preferences; an unreadable file reads as "not set" rather than failing a session start. */
@@ -55,6 +63,7 @@ export type ChatSettingsPatch = {
   model?: ChatSettings["model"];
   thinkingLevel?: ChatSettings["thinkingLevel"];
   instructions?: string;
+  allowedTools?: string[];
 };
 
 /** Validate a client patch; throws a message for the first invalid field. */
@@ -83,6 +92,16 @@ export function validateChatSettingsPatch(body: unknown): ChatSettingsPatch {
     }
     patch.instructions = body.instructions;
   }
+  if ("allowedTools" in body) {
+    if (!Array.isArray(body.allowedTools) || body.allowedTools.some((name) => typeof name !== "string")) {
+      throw new Error("allowedTools must be an array of tool names");
+    }
+    const names = [...new Set(body.allowedTools as string[])];
+    const invalid = names.find((name) => !CHAT_TOOL_NAME_PATTERN.test(name));
+    if (invalid !== undefined) throw new Error(`"${invalid}" is not a valid tool name`);
+    if (names.length > CHAT_ALLOWED_TOOLS_MAX) throw new Error(`at most ${CHAT_ALLOWED_TOOLS_MAX} tools can be allowed`);
+    patch.allowedTools = names;
+  }
   return patch;
 }
 
@@ -93,6 +112,7 @@ export function writeChatSettings(patch: ChatSettingsPatch, settingsPath = getPi
       ...(next.model ? { model: next.model } : {}),
       ...(next.thinkingLevel ? { thinkingLevel: next.thinkingLevel } : {}),
       ...(next.instructions.trim() ? { instructions: next.instructions } : {}),
+      ...(next.allowedTools.length > 0 ? { allowedTools: next.allowedTools } : {}),
     },
   }, settingsPath);
   return readChatSettings(settingsPath);

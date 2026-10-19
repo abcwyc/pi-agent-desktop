@@ -39,10 +39,21 @@ export const CHAT_READ_TOOL_NAME = "read";
  */
 const CHAT_ALLOWED_TOOL_NAMES: ReadonlySet<string> = new Set([CHAT_READ_TOOL_NAME, "codemode", "tool_search"]);
 
-export function isChatToolAllowed(tool: { name: string; sourceInfo?: unknown }): boolean {
+/**
+ * `extraAllowed` is the user's own list (Settings › Chats). It can add an extension tool
+ * but never one of the blocked coding tools, which stay off whoever asks.
+ */
+export function isChatToolAllowed(
+  tool: { name: string; sourceInfo?: unknown },
+  extraAllowed: ReadonlySet<string> = NO_EXTRA_TOOLS,
+): boolean {
   if (CHAT_BLOCKED_TOOL_NAMES.has(tool.name)) return false;
-  return CHAT_ALLOWED_TOOL_NAMES.has(tool.name) || isMcpTool({ name: tool.name, sourceInfo: tool.sourceInfo as never });
+  return CHAT_ALLOWED_TOOL_NAMES.has(tool.name)
+    || extraAllowed.has(tool.name)
+    || isMcpTool({ name: tool.name, sourceInfo: tool.sourceInfo as never });
 }
+
+const NO_EXTRA_TOOLS: ReadonlySet<string> = new Set();
 
 export function chatUnavailableToolReason(toolName: string): string {
   return `"${toolName}" is not available in a chat. Chats can use skills and MCP tools; open a project to use other tools.`;
@@ -173,6 +184,8 @@ export function createChatWorkspaceExtension(options: {
   getCwd: () => string;
   /** The user's own chat instructions, read on every run so an edit applies to the next prompt. */
   getInstructions?: () => string | undefined;
+  /** Extension tools the user allows in chats; read on every run and call. */
+  getExtraTools?: () => readonly string[];
 }): InlineExtension {
   return {
     name: CHAT_WORKSPACE_EXTENSION_NAME,
@@ -183,7 +196,8 @@ export function createChatWorkspaceExtension(options: {
         // tool_search switched on cannot reach the model's declarations.
         const registered = new Map(pi.getAllTools().map((tool) => [tool.name, tool]));
         const selected = event.systemPromptOptions.selectedTools;
-        const allowed = selected.filter((name) => isChatToolAllowed(registered.get(name) ?? { name }));
+        const extra = new Set(options.getExtraTools?.() ?? []);
+        const allowed = selected.filter((name) => isChatToolAllowed(registered.get(name) ?? { name }, extra));
         if (allowed.length !== selected.length) event.systemPromptOptions.selectedTools = allowed;
         event.systemPromptOptions.sections.date = chatDateSection();
         const instructions = options.getInstructions?.();
@@ -199,7 +213,7 @@ export function createChatWorkspaceExtension(options: {
           return { block: true, reason: chatBlockedToolReason(event.toolName) };
         }
         const tool = pi.getAllTools().find((candidate) => candidate.name === event.toolName);
-        if (!isChatToolAllowed(tool ?? { name: event.toolName })) {
+        if (!isChatToolAllowed(tool ?? { name: event.toolName }, new Set(options.getExtraTools?.() ?? []))) {
           return { block: true, reason: chatUnavailableToolReason(event.toolName) };
         }
         if (event.toolName === CHAT_READ_TOOL_NAME) {

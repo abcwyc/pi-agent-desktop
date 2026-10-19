@@ -44,6 +44,7 @@ import { SelectorRow } from "./SelectorRow";
 import { ModelSelector } from "./ModelSelector";
 import {
   composeMessageWithAttachedFiles,
+  extractDocxText,
   formatAttachmentSize,
   readChatTextAttachments,
   type ChatAttachmentRejection,
@@ -1108,7 +1109,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       processImageFiles(files);
     },
     async addTextFiles(files: File[]) {
-      const { accepted, rejected } = await readChatTextAttachments(files, attachedFilesRef.current);
+      const { accepted, rejected } = await readChatTextAttachments(files, attachedFilesRef.current, extractDocxText);
       if (accepted.length > 0) {
         const next = [...attachedFilesRef.current, ...accepted];
         attachedFilesRef.current = next;

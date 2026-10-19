@@ -10,6 +10,8 @@
 export const CHAT_ATTACHMENT_MAX_FILE_BYTES = 256 * 1024;
 export const CHAT_ATTACHMENT_MAX_TOTAL_BYTES = 512 * 1024;
 export const CHAT_ATTACHMENT_MAX_FILES = 5;
+/** A Word file is unzipped on the server, so its own size is capped separately from its text. */
+export const CHAT_ATTACHMENT_EXTRACT_MAX_BYTES = 10 * 1024 * 1024;
 
 export interface ChatTextAttachment {
   id: string;
@@ -50,6 +52,25 @@ export function isChatTextAttachment(file: { name: string; type?: string }): boo
   return TEXT_EXTENSIONS.has(extensionOf(file.name));
 }
 
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+/** A Word document (.docx): read as plain text by the server, which has the parser. */
+export function isChatDocxAttachment(file: { name: string; type?: string }): boolean {
+  return file.type === DOCX_MIME || extensionOf(file.name) === "docx";
+}
+
+/** Ask the server for a Word document's text; throws a rejection reason on failure. */
+export async function extractDocxText(file: File): Promise<string> {
+  const response = await fetch("/api/chat-attachments/extract", {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream" },
+    body: file,
+  });
+  const data = await response.json().catch(() => ({})) as { text?: unknown; error?: unknown };
+  if (response.ok && typeof data.text === "string") return data.text;
+  throw new Error(data.error === "too-large" ? "too-large" : "not-text");
+}
+
 export type ChatAttachmentRejection =
   | { name: string; reason: "unsupported" }
   | { name: string; reason: "too-large"; limit: number }
@@ -69,6 +90,8 @@ export interface ChatAttachmentReadResult {
 export async function readChatTextAttachments(
   files: readonly File[],
   existing: readonly ChatTextAttachment[] = [],
+  /** Reads a Word file's text; the composer passes `extractDocxText`. Without it .docx is unsupported. */
+  extractDocx?: (file: File) => Promise<string>,
 ): Promise<ChatAttachmentReadResult> {
   const accepted: ChatTextAttachment[] = [];
   const rejected: ChatAttachmentRejection[] = [];
@@ -76,12 +99,42 @@ export async function readChatTextAttachments(
   let totalBytes = existing.reduce((sum, file) => sum + file.size, 0);
 
   for (const file of files) {
-    if (!isChatTextAttachment(file)) {
+    const docx = Boolean(extractDocx) && isChatDocxAttachment(file);
+    if (!docx && !isChatTextAttachment(file)) {
       rejected.push({ name: file.name, reason: "unsupported" });
       continue;
     }
     if (count >= CHAT_ATTACHMENT_MAX_FILES) {
       rejected.push({ name: file.name, reason: "too-many", limit: CHAT_ATTACHMENT_MAX_FILES });
+      continue;
+    }
+    if (docx && extractDocx) {
+      if (file.size > CHAT_ATTACHMENT_EXTRACT_MAX_BYTES) {
+        rejected.push({ name: file.name, reason: "too-large", limit: CHAT_ATTACHMENT_EXTRACT_MAX_BYTES });
+        continue;
+      }
+      let extracted: string;
+      try {
+        extracted = await extractDocx(file);
+      } catch (error) {
+        rejected.push(error instanceof Error && error.message === "too-large"
+          ? { name: file.name, reason: "too-large", limit: CHAT_ATTACHMENT_MAX_FILE_BYTES }
+          : { name: file.name, reason: "not-text" });
+        continue;
+      }
+      const bytes = new TextEncoder().encode(extracted).length;
+      if (totalBytes + bytes > CHAT_ATTACHMENT_MAX_TOTAL_BYTES) {
+        rejected.push({ name: file.name, reason: "total-too-large", limit: CHAT_ATTACHMENT_MAX_TOTAL_BYTES });
+        continue;
+      }
+      count += 1;
+      totalBytes += bytes;
+      accepted.push({
+        id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        name: file.name,
+        size: bytes,
+        text: extracted,
+      });
       continue;
     }
     if (file.size > CHAT_ATTACHMENT_MAX_FILE_BYTES) {

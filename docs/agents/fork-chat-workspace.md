@@ -54,7 +54,7 @@ derivation. It uses `workspaceKind`, the `/api/chat-workspace` answer, or the
 
 `lib/chat-settings.ts` keeps the chat-only preferences under `chats` in Pi Web's own
 `pi-web/settings.json` (never pi's settings.json): a default model, a reasoning level and
-the user's own instructions (8000 characters). Unset means "follow the global default" and
+the user's own instructions (8000 characters) and the extra tool names above. Unset means "follow the global default" and
 the block never writes the global default, so a saved reasoning level of `max` stays `max`
 for projects. `lib/chat-settings-shared.ts` holds the client-safe constants: the Settings
 panel is a client component and must not import the server module.
@@ -85,9 +85,11 @@ Client checks are affordances only; the server enforces the policy
 A chat loads extensions, skills, prompt templates and the codemode / tool-search /
 MCP built-ins like a project session, but never the user's files or shell:
 
-- Allowed tools: `read`, `codemode`, `tool_search` and every MCP tool
-  (`isChatToolAllowed`). Every other tool an installed extension registers (file
-  readers, computer or browser control, sub-agents, web tools) stays off: the
+- Allowed tools: `read`, `codemode`, `tool_search`, every MCP tool and the names the user
+  lists in Settings › Chats › "Extra tools allowed in chats" (`isChatToolAllowed`; the list
+  is stored as `chats.allowedTools`, validated by name, read on every run and call, and
+  never lifts a blocked coding tool). Every other tool an installed extension registers
+  (file readers, computer or browser control, sub-agents, web tools) stays off: the
   `before_agent_start` handler narrows `selectedTools` on every run, startup,
   reload and tree navigation filter the active set, and a `tool_call` guard blocks
   the rest, nested codemode calls included. `bash`, `powershell`, `edit`, `write`,
@@ -122,8 +124,10 @@ per message, UTF-8 without NUL) becomes a chip in the composer and travels insid
 message as an `<attached_file name="...">` block appended after the typed text.
 `MessageView` renders those blocks as expandable chips (`AttachedFileList`),
 `attachmentAwareTitle()` keeps them out of session titles, and the session scanner
-uses it for `firstMessage`. Images keep their own path. PDF and Office files are
-rejected with a message; they need a parser dependency.
+uses it for `firstMessage`. Images keep their own path. A Word `.docx` is read as plain
+text by `POST /api/chat-attachments/extract` (mammoth, body-only, 10 MB in, the same 256 KB
+of text out, nothing written to disk) and then attached like any text file. PDF and other
+Office files are rejected with a message; a PDF needs a parser dependency.
 
 ## Continue in a project
 

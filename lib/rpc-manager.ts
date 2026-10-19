@@ -228,7 +228,8 @@ const CODING_TOOL_NAMES = ["read", "bash", "powershell", "edit", "write", "grep"
 /** The names a chat may keep active (lib/chat-workspace-policy.ts decides which tools those are). */
 function restrictToChatTools(session: AgentSessionLike, names: readonly string[]): string[] {
   const registered = new Map(session.getAllTools().map((tool) => [tool.name, tool]));
-  return names.filter((name) => isChatToolAllowed(registered.get(name) ?? { name }));
+  const extra = new Set(readChatSettings().allowedTools);
+  return names.filter((name) => isChatToolAllowed(registered.get(name) ?? { name }, extra));
 }
 
 // A tool that hands work to another agent. A chat loads no extension that registers one.
@@ -2665,6 +2666,7 @@ export async function startRpcSession(
                   getSkills: () => chatSessionRef.current?.resourceLoader.getSkills().skills ?? [],
                   getCwd: () => sessionCwd,
                   getInstructions: () => chatInstructionsSection(readChatSettings()),
+                  getExtraTools: () => readChatSettings().allowedTools,
                 }),
               ],
               extensionsOverride: (base) => withoutAgentDelegation(base, CHAT_DELEGATION_TOOL_NAMES),

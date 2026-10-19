@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { AppSelect } from "./AppSelect";
-import { CHAT_THINKING_LEVELS, type ChatSettings } from "@/lib/chat-settings-shared";
+import { CHAT_THINKING_LEVELS, parseToolNameList, type ChatSettings } from "@/lib/chat-settings-shared";
 
 type Loaded = ChatSettings & { instructionsMaxChars: number };
 type ModelOption = { id: string; name: string; provider: string };
@@ -23,10 +23,13 @@ export function ChatsSettingsSection() {
   const [settings, setSettings] = useState<Loaded | null>(null);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [draft, setDraft] = useState("");
+  const [toolsDraft, setToolsDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
   const draftRef = useRef(draft);
   draftRef.current = draft;
+  const toolsDraftRef = useRef(toolsDraft);
+  toolsDraftRef.current = toolsDraft;
 
   useEffect(() => {
     let cancelled = false;
@@ -36,6 +39,7 @@ export function ChatsSettingsSection() {
         if (cancelled) return;
         setSettings(data);
         setDraft(data.instructions);
+        setToolsDraft(data.allowedTools.join("\n"));
       })
       .catch(() => { if (!cancelled) setFailed(true); });
     // The model list is scoped by the same enabled-models setting a chat starts from.
@@ -48,7 +52,7 @@ export function ChatsSettingsSection() {
     return () => { cancelled = true; };
   }, []);
 
-  const save = useCallback((patch: Partial<Pick<ChatSettings, "model" | "thinkingLevel" | "instructions">>) => {
+  const save = useCallback((patch: Partial<Pick<ChatSettings, "model" | "thinkingLevel" | "instructions" | "allowedTools">>) => {
     setSaving(true);
     setFailed(false);
     return fetch("/api/chat-settings", {
@@ -60,6 +64,7 @@ export function ChatsSettingsSection() {
       .then((data: Loaded) => {
         setSettings(data);
         if ("instructions" in patch) setDraft(data.instructions);
+        if ("allowedTools" in patch) setToolsDraft(data.allowedTools.join("\n"));
       })
       .catch(() => setFailed(true))
       .finally(() => setSaving(false));
@@ -71,6 +76,8 @@ export function ChatsSettingsSection() {
   ));
   const maxChars = settings?.instructionsMaxChars ?? 8000;
   const dirty = settings !== null && draft !== settings.instructions;
+  const toolsDirty = settings !== null
+    && parseToolNameList(toolsDraft).join("\n") !== settings.allowedTools.join("\n");
 
   return (
     <section className="settings-general-section">
@@ -134,6 +141,22 @@ export function ChatsSettingsSection() {
               ? t("settings.chatsFailed")
               : saving ? t("i18n.saving") : t("settings.chatsInstructionsHint", { count: draft.length, max: maxChars })}
           </span>
+        </div>
+        <div className="settings-chat-option settings-chats-field settings-chats-tools">
+          <label htmlFor="settings-chats-tools">{t("settings.chatsTools")}</label>
+          <textarea
+            id="settings-chats-tools"
+            className="settings-chats-control"
+            rows={3}
+            value={toolsDraft}
+            disabled={settings === null}
+            aria-describedby={`${hintId}-tools`}
+            placeholder={t("settings.chatsToolsPlaceholder")}
+            spellCheck={false}
+            onChange={(event) => setToolsDraft(event.target.value)}
+            onBlur={() => { if (toolsDirty) void save({ allowedTools: parseToolNameList(toolsDraftRef.current) }); }}
+          />
+          <span id={`${hintId}-tools`} className="settings-chats-hint">{t("settings.chatsToolsHint")}</span>
         </div>
       </div>
     </section>
