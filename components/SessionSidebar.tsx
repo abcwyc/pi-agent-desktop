@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState, useCallback, useRef, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useState, useCallback, useRef, type ReactNode } from "react";
 import type { SessionInfo, SessionWorkspaceKind } from "@/lib/types";
 import { listSessionFamilies } from "@/lib/session-family";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
@@ -41,6 +41,7 @@ import { useWindowDrag } from "./desktop";
 import { SessionSearch } from "./SessionSearch";
 import { ProjectViewMenu, type ProjectViewMode } from "./ProjectViewMenu";
 import { ChatsSectionMenu } from "./ChatsSectionMenu";
+import { groupChatFamilies, toggleId, type ChatGroupId } from "@/lib/chat-groups";
 import { ScheduledSidebarRow } from "./scheduled/ScheduledSidebarRow";
 import { isScheduledRunSession } from "@/hooks/useScheduledTasks";
 import { prefetchSessionData } from "@/lib/session-data-cache";
@@ -138,6 +139,12 @@ interface SessionTreeNode {
 
 const MAX_VISIBLE_PROJECT_SESSIONS = 5;
 const MAX_VISIBLE_CHAT_SESSIONS = 5;
+const CHAT_GROUP_LABEL_KEYS: Record<ChatGroupId, string> = {
+  pinned: "sidebar.chatsPinned",
+  today: "sidebar.chatsToday",
+  week: "sidebar.chatsThisWeek",
+  earlier: "sidebar.chatsEarlier",
+};
 
 const SESSION_LIST_ITEM_HEIGHT = 54;
 
@@ -256,6 +263,13 @@ function buildSessionTree(sessions: SessionInfo[]): SessionTreeNode[] {
   return roots;
 }
 
+function readIdSetPref(key: Parameters<typeof getPrefJson>[0]): Set<string> {
+  const stored = getPrefJson<unknown>(key);
+  return Array.isArray(stored)
+    ? new Set(stored.filter((id): id is string => typeof id === "string"))
+    : new Set();
+}
+
 export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onChatWorkspaceCwdChange, onProjectsChange, onBackgroundTaskDone, onRunningSessionIdsChange, onSessionsChange, headerControls, onOpenTerminal, onOpenScheduled, scheduledOpen = false }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
@@ -267,6 +281,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     const stored = getPrefJson<unknown>(APP_PREF_KEYS.chatSessionPages);
     return typeof stored === "number" && Number.isInteger(stored) && stored > 0 ? stored : 0;
   });
+  const [pinnedChats, setPinnedChats] = useState<Set<string>>(() => readIdSetPref(APP_PREF_KEYS.pinnedChats));
+  const [archivedChats, setArchivedChats] = useState<Set<string>>(() => readIdSetPref(APP_PREF_KEYS.archivedChats));
+  const [showArchivedChats, setShowArchivedChats] = useState(false);
   const [chatsMenuOpen, setChatsMenuOpen] = useState(false);
   const [chatsMenuPos, setChatsMenuPos] = useState<{ top: number; left: number } | null>(null);
   const chatsMenuRef = useRef<HTMLDivElement>(null);
@@ -561,6 +578,16 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     if (chatsCollapsed) setPref(APP_PREF_KEYS.collapsedChats, "1");
     else removePref(APP_PREF_KEYS.collapsedChats);
   }, [chatsCollapsed]);
+
+  useEffect(() => {
+    if (pinnedChats.size === 0) removePref(APP_PREF_KEYS.pinnedChats);
+    else setPrefJson(APP_PREF_KEYS.pinnedChats, [...pinnedChats]);
+  }, [pinnedChats]);
+
+  useEffect(() => {
+    if (archivedChats.size === 0) removePref(APP_PREF_KEYS.archivedChats);
+    else setPrefJson(APP_PREF_KEYS.archivedChats, [...archivedChats]);
+  }, [archivedChats]);
 
   useEffect(() => {
     if (chatSessionPages === 0) removePref(APP_PREF_KEYS.chatSessionPages);
@@ -1252,7 +1279,15 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const projectSessions = filteredSessions.filter(
     (session) => session.workspaceKind !== "chat" && !isChatCwd(session.cwd),
   );
-  const chatFamilies = listSessionFamilies(chatSessions);
+  const allChatFamilies = listSessionFamilies(chatSessions);
+  // Pinned first, then by recency. Archived chats leave the list unless a search is looking for them.
+  const { ordered: orderedChatFamilies, groupOf: chatGroupOf } = groupChatFamilies(allChatFamilies, pinnedChats);
+  const chatFamilies = trimmedSessionQuery
+    ? orderedChatFamilies
+    : orderedChatFamilies.filter((family) => !archivedChats.has(family.root.id));
+  const archivedChatFamilies = trimmedSessionQuery
+    ? []
+    : orderedChatFamilies.filter((family) => archivedChats.has(family.root.id));
   const sessionFamilies = listSessionFamilies(projectSessions);
   const allProjects = groupByProject(projectSessions, { runningIds: runningSessionIds, unreadIds: unreadSessionIds });
   const activeProjects = allProjects.filter((group) => !archivedProjectRoots.has(group.projectRoot));
@@ -1303,6 +1338,34 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const setChatsFolded = (folded: boolean) => {
     setChatsCollapsed(folded);
     if (folded) setChatSessionPages(0);
+  };
+
+  const renderChatFamily = (family: (typeof chatFamilies)[number]) => {
+    const [node] = buildSessionTree([family.root, ...family.subagents]);
+    if (!node) return null;
+    const id = family.root.id;
+    return (
+      <SessionFamilyItem
+        node={node}
+        familySessions={[family.root, ...family.subagents]}
+        selectedSessionId={selectedSessionId}
+        runningSessionIds={runningSessionIds}
+        unreadSessionIds={unreadSessionIds}
+        onSelectSession={handleSelectSessionFromList}
+        onRenamed={loadSessions}
+        onContinueInProject={setContinueChat}
+        chatActions={{
+          pinned: pinnedChats.has(id),
+          archived: archivedChats.has(id),
+          onTogglePin: () => setPinnedChats((current) => toggleId(current, id)),
+          onToggleArchive: () => setArchivedChats((current) => toggleId(current, id)),
+        }}
+        onSessionDeleted={(deletedId) => {
+          onSessionDeleted?.(deletedId);
+          loadSessions();
+        }}
+      />
+    );
   };
 
   const renderProjectGroup = (group: ReturnType<typeof groupByProject>[number]) => {
@@ -1837,25 +1900,18 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         </div>
         {!chatsFolded && (
         <div className="sidebar-project-tree-children sidebar-chats-list">
-          {visibleChatFamilies.map((family) => {
-            const [node] = buildSessionTree([family.root, ...family.subagents]);
-            if (!node) return null;
+          {visibleChatFamilies.map((family, index) => {
+            const group = chatGroupOf.get(family.root.id) ?? "earlier";
+            const previousGroup = index > 0 ? chatGroupOf.get(visibleChatFamilies[index - 1].root.id) : undefined;
             return (
-              <SessionFamilyItem
-                key={family.root.id}
-                node={node}
-                familySessions={[family.root, ...family.subagents]}
-                selectedSessionId={selectedSessionId}
-                runningSessionIds={runningSessionIds}
-                unreadSessionIds={unreadSessionIds}
-                onSelectSession={handleSelectSessionFromList}
-                onRenamed={loadSessions}
-                onContinueInProject={setContinueChat}
-                onSessionDeleted={(id) => {
-                  onSessionDeleted?.(id);
-                  loadSessions();
-                }}
-              />
+              <Fragment key={family.root.id}>
+                {group !== previousGroup && (
+                  <div className="sidebar-chats-group-label" role="presentation">
+                    {t(CHAT_GROUP_LABEL_KEYS[group])}
+                  </div>
+                )}
+                {renderChatFamily(family)}
+              </Fragment>
             );
           })}
           {!loading && !error && chatFamilies.length === 0 && (
@@ -1874,6 +1930,23 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               })}
             </button>
           )}
+          {archivedChatFamilies.length > 0 && (
+            <button
+              type="button"
+              className="sidebar-project-tree-show-more sidebar-chats-archived-toggle"
+              aria-expanded={showArchivedChats}
+              onClick={() => setShowArchivedChats((open) => !open)}
+            >
+              {t(showArchivedChats ? "sidebar.hideArchivedChats" : "sidebar.showArchivedChats", {
+                count: archivedChatFamilies.length,
+              })}
+            </button>
+          )}
+          {showArchivedChats && archivedChatFamilies.map((family) => (
+            <div key={family.root.id} className="sidebar-chats-archived-row">
+              {renderChatFamily(family)}
+            </div>
+          ))}
         </div>
         )}
 
@@ -2072,6 +2145,7 @@ function SessionFamilyItem({
   onRenamed,
   onSessionDeleted,
   onContinueInProject,
+  chatActions,
   familySessions,
   subtitle,
 }: {
@@ -2086,6 +2160,8 @@ function SessionFamilyItem({
   onSessionDeleted?: (id: string) => void;
   /** Chats only: copy the conversation into a project. */
   onContinueInProject?: (session: SessionInfo) => void;
+  /** Chats only: pin and archive, which the row menu offers beside the other actions. */
+  chatActions?: ChatRowActions;
   /** Cross-project context, shown by the chronological sidebar view. */
   subtitle?: string;
 }) {
@@ -2114,6 +2190,7 @@ function SessionFamilyItem({
           onRenamed={onRenamed}
           onDeleted={(id) => onSessionDeleted?.(id)}
           onContinueInProject={depth === 0 ? onContinueInProject : undefined}
+          chatActions={depth === 0 ? chatActions : undefined}
           hasChildren={hasChildren}
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((v) => !v)}
@@ -2250,6 +2327,13 @@ function showProjectActivity(
   );
 }
 
+interface ChatRowActions {
+  pinned: boolean;
+  archived: boolean;
+  onTogglePin: () => void;
+  onToggleArchive: () => void;
+}
+
 function SessionItem({
   session,
   isSelected,
@@ -2259,6 +2343,7 @@ function SessionItem({
   onRenamed,
   onDeleted,
   onContinueInProject,
+  chatActions,
   hasChildren = false,
   collapsed = false,
   onToggleCollapse,
@@ -2273,6 +2358,7 @@ function SessionItem({
   onRenamed?: () => void;
   onDeleted?: (id: string) => void;
   onContinueInProject?: (session: SessionInfo) => void;
+  chatActions?: ChatRowActions;
   hasChildren?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -2383,8 +2469,14 @@ function SessionItem({
     setMenuOpen(true);
     const shown = await showNativeMenu([
       { label: t("sidebar.rename"), onSelect: startRename },
+      ...(chatActions
+        ? [{ label: t(chatActions.pinned ? "sidebar.unpinChat" : "sidebar.pinChat"), onSelect: chatActions.onTogglePin }]
+        : []),
       ...(onContinueInProject
         ? [{ label: t("sidebar.continueInProject"), onSelect: () => onContinueInProject(session) }]
+        : []),
+      ...(chatActions
+        ? [{ label: t(chatActions.archived ? "sidebar.unarchiveChat" : "sidebar.archiveChat"), onSelect: chatActions.onToggleArchive }]
         : []),
       { label: t("sidebar.delete"), onSelect: beginDeleteConfirmation },
       { kind: "separator" },
@@ -2399,7 +2491,7 @@ function SessionItem({
     ], at);
     setMenuOpen(false);
     return shown;
-  }, [beginDeleteConfirmation, onContinueInProject, session, locale, startRename, t]);
+  }, [beginDeleteConfirmation, chatActions, onContinueInProject, session, locale, startRename, t]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const handled = dispatchSessionRowContextMenu({
@@ -2431,7 +2523,7 @@ function SessionItem({
     if (menuOpen) { setMenuOpen(false); return; }
     const rect = e.currentTarget.getBoundingClientRect();
     const openDomMenu = () => {
-      const estHeight = onContinueInProject ? 154 : 124;
+      const estHeight = 124 + (onContinueInProject ? 30 : 0) + (chatActions ? 60 : 0);
       const left = Math.max(8, Math.min(rect.right - MENU_WIDTH, window.innerWidth - MENU_WIDTH - 8));
       let top = rect.bottom + 4;
       if (top + estHeight > window.innerHeight - 8) top = rect.top - estHeight - 4;
@@ -2445,7 +2537,7 @@ function SessionItem({
       return;
     }
     openDomMenu();
-  }, [menuOpen, onContinueInProject, showNativeSessionMenu]);
+  }, [chatActions, menuOpen, onContinueInProject, showNativeSessionMenu]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -2635,6 +2727,11 @@ function SessionItem({
           >
             {title}
           </span>
+          {chatActions?.pinned && (
+            <svg className="session-item-pin" aria-label={t("sidebar.unpinChat")} width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 17v5M9 3h6l-1 6 3 3v2H7v-2l3-3z" />
+            </svg>
+          )}
           {subtitle && (
             <span className="session-item-project" title={subtitle}>
               {subtitle}
@@ -2735,6 +2832,24 @@ function SessionItem({
                 </svg>
                 {t("sidebar.rename")}
               </button>
+              {chatActions && (
+                <button
+                  role="menuitem"
+                  onClick={() => { setMenuOpen(false); chatActions.onTogglePin(); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    width: "100%", height: 30, padding: "0 8px",
+                    background: "transparent", border: 0, borderRadius: 7,
+                    color: "var(--text)", cursor: "pointer",
+                    fontSize: 13, textAlign: "left",
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <path d="M12 17v5M9 3h6l-1 6 3 3v2H7v-2l3-3z" />
+                  </svg>
+                  {t(chatActions.pinned ? "sidebar.unpinChat" : "sidebar.pinChat")}
+                </button>
+              )}
               {onContinueInProject && (
                 <button
                   role="menuitem"
@@ -2751,6 +2866,25 @@ function SessionItem({
                     <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
                   </svg>
                   {t("sidebar.continueInProject")}
+                </button>
+              )}
+              {chatActions && (
+                <button
+                  role="menuitem"
+                  onClick={() => { setMenuOpen(false); chatActions.onToggleArchive(); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    width: "100%", height: 30, padding: "0 8px",
+                    background: "transparent", border: 0, borderRadius: 7,
+                    color: "var(--text)", cursor: "pointer",
+                    fontSize: 13, textAlign: "left",
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <rect x="3" y="4" width="18" height="4" rx="1" />
+                    <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" />
+                  </svg>
+                  {t(chatActions.archived ? "sidebar.unarchiveChat" : "sidebar.archiveChat")}
                 </button>
               )}
               <button

@@ -138,7 +138,7 @@ test("Chats sit beside Projects and never enter project grouping", () => {
     source,
     /const chatSessions = filteredSessions[\s\S]*?session\.workspaceKind === "chat" \|\| isChatCwd\(session\.cwd\)[\s\S]*?const projectSessions = filteredSessions\.filter\(/,
   );
-  assert.match(source, /const chatFamilies = listSessionFamilies\(chatSessions\)/);
+  assert.match(source, /const allChatFamilies = listSessionFamilies\(chatSessions\)/);
   assert.match(source, /const sessionFamilies = listSessionFamilies\(projectSessions\)/);
   assert.match(source, /groupByProject\(projectSessions,/);
   assert.match(source, /getRecentProjects\(allSessions\)/);
@@ -182,6 +182,24 @@ test("the Chats header shows its menu and add buttons only on hover, like Projec
   assert.match(header, /sidebar-project-tree-add/);
   assert.match(header, /handleNewSession\(chatWorkspaceCwd \?\? undefined, "chat"\)/);
   assert.doesNotMatch(source, /sidebar-chats-add/);
+});
+
+test("chats can be pinned, grouped by recency and archived", () => {
+  // Pinned first, then recency; archived chats leave the list unless a search is running.
+  assert.match(source, /groupChatFamilies\(allChatFamilies, pinnedChats\)/);
+  assert.match(source, /trimmedSessionQuery\s*\? orderedChatFamilies\s*: orderedChatFamilies\.filter\(\(family\) => !archivedChats\.has\(family\.root\.id\)\)/);
+  // A group label appears where the group changes, and the +5 paging still runs over the whole order.
+  assert.match(source, /group !== previousGroup/);
+  assert.match(source, /sidebar-chats-group-label/);
+  assert.match(source, /: chatFamilies\.slice\(0, MAX_VISIBLE_CHAT_SESSIONS \* \(chatSessionPages \+ 1\)\)/);
+  // Archived chats stay reachable and recoverable.
+  assert.match(source, /sidebar\.showArchivedChats/);
+  assert.match(source, /APP_PREF_KEYS\.pinnedChats/);
+  assert.match(source, /APP_PREF_KEYS\.archivedChats/);
+  // Row menu: only chat rows (depth 0) get the actions, in both the native and DOM menus.
+  assert.match(source, /chatActions=\{depth === 0 \? chatActions : undefined\}/);
+  assert.match(source, /t\(chatActions\.pinned \? "sidebar\.unpinChat" : "sidebar\.pinChat"\)/);
+  assert.match(source, /t\(chatActions\.archived \? "sidebar\.unarchiveChat" : "sidebar\.archiveChat"\)/);
 });
 
 test("a chat's row menu can continue it in a project", () => {

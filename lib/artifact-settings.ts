@@ -12,7 +12,7 @@ export function getPiWebSettingsPath(agentDir = getAgentDir()): string {
   return join(agentDir, "pi-web", "settings.json");
 }
 
-function readStored(settingsPath: string): StoredSettings {
+export function readStored(settingsPath: string): StoredSettings {
   if (!existsSync(settingsPath)) return {};
   const parsed: unknown = JSON.parse(readFileSync(settingsPath, "utf8"));
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -39,4 +39,11 @@ export function writeArtifactsPromptEnabled(enabled: boolean, settingsPath = get
   mkdirSync(dirname(settingsPath), { recursive: true });
   writePrivateFileAtomicSync(settingsPath, JSON.stringify({ ...stored, version: 1, artifactsPrompt: enabled }, null, 2));
   return isArtifactsPromptEnabled(settingsPath);
+}
+
+/** Merge keys into Pi Web's settings file, leaving every other key as it was. */
+export function updatePiWebSettings(patch: Record<string, unknown>, settingsPath = getPiWebSettingsPath()): void {
+  const stored = readStored(settingsPath);
+  mkdirSync(dirname(settingsPath), { recursive: true });
+  writePrivateFileAtomicSync(settingsPath, JSON.stringify({ ...stored, version: 1, ...patch }, null, 2));
 }

@@ -8336,3 +8336,59 @@ html.native-desktop :is(
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+
+/* Chats: date group labels, the pin mark and archived rows. */
+.sidebar-chats-group-label {
+  padding: 6px 10px 2px 31px;
+  color: var(--text-dim);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.session-item-pin {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  opacity: 0.8;
+}
+
+.sidebar-chats-archived-toggle {
+  margin-top: 2px;
+}
+
+.sidebar-chats-archived-row {
+  opacity: 0.62;
+}
+
+
+/* Settings › General › Chats: stacked label + control rows. */
+.settings-chats-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  font-size: var(--fs-small);
+}
+
+.settings-chats-control {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: var(--hairline) solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.settings-chats-instructions textarea {
+  min-height: 96px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.settings-chats-hint {
+  color: var(--text-dim);
+  font-size: var(--fs-small);
+}

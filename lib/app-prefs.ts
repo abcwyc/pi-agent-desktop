@@ -24,6 +24,10 @@ export const APP_PREF_KEYS = {
   collapsedChats: "pi-web:collapsed-chats",
   /** Additional five-chat pages shown past the Chats preview cap. */
   chatSessionPages: "pi-web:chat-session-pages",
+  /** Chat session ids pinned to the top of the Chats section. */
+  pinnedChats: "pi-web:pinned-chats",
+  /** Chat session ids hidden from the Chats section until "Show archived". */
+  archivedChats: "pi-web:archived-chats",
   updateSnooze: "pi-web:update-snooze",
   closeQuits: "pi-desktop-close-quits",
   notifyOnComplete: "pi-desktop-notify-on-complete",

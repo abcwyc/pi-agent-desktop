@@ -11,6 +11,8 @@ import {
 import { resolveVisibleModels, selectInitialModelScope } from "@/lib/model-scope";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
 import { projectTrustReloadOptions } from "@/lib/project-trust";
+import { isChatWorkspacePath } from "@/lib/chat-workspace";
+import { readChatSettings, resolveChatStartDefaults } from "@/lib/chat-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +68,14 @@ async function loadModels(cwd: string): Promise<ModelsData> {
 
   const defaultProvider = settings.getDefaultProvider();
   const defaultModelId = settings.getDefaultModel();
+  // A new chat starts on the model and reasoning level chosen in Settings › Chats, so the
+  // composer must show the same ones the server will start with.
+  const chatStart = isChatWorkspacePath(cwd)
+    ? resolveChatStartDefaults(readChatSettings(), visible)
+    : {};
   const initial = selectInitialModelScope(scope, {
+    ...(chatStart.requestedModel ? { requestedModel: chatStart.requestedModel } : {}),
+    ...(chatStart.thinkingLevel ? { thinkingLevel: chatStart.thinkingLevel } : {}),
     ...(defaultProvider && defaultModelId
       ? { defaultModel: { provider: defaultProvider, modelId: defaultModelId } }
       : {}),

@@ -65,6 +65,8 @@ import {
   validateSessionToolSelection,
 } from "./session-tool-selection";
 import { isChatWorkspacePath } from "./chat-workspace";
+import { deriveSessionPolicy, type SessionPolicy } from "./session-policy";
+import { chatInstructionsSection, readChatSettings, resolveChatStartDefaults } from "./chat-settings";
 import {
   CHAT_BLOCKED_TOOL_NAMES,
   CHAT_READ_TOOL_NAME,
@@ -323,8 +325,8 @@ export class AgentSessionWrapper {
   private extensionBindingPromise: Promise<void> | null = null;
   private extensionBindingError: unknown = null;
   private readonly exactSystemPrompt?: () => string;
-  private readonly chatOnly: boolean;
-  private readonly chatWorkspace: boolean;
+  /** What this session may reach; computed once at start (lib/session-policy.ts). */
+  private readonly policy: SessionPolicy;
   private readonly onAgentRunComplete?: AgentRunCompleteListener;
   private readonly suppressCompletionNotifications: boolean;
   private readonly mcpHost?: Pick<McpHost, "prepareForPrompt" | "dispose">;
@@ -351,8 +353,7 @@ export class AgentSessionWrapper {
     options: AgentSessionWrapperOptions = {},
   ) {
     this.exactSystemPrompt = options.exactSystemPrompt;
-    this.chatOnly = options.chatOnly ?? false;
-    this.chatWorkspace = options.chatWorkspace ?? false;
+    this.policy = deriveSessionPolicy({ chatOnly: options.chatOnly, chatWorkspace: options.chatWorkspace });
     this.onAgentRunComplete = options.onAgentRunComplete;
     this.suppressCompletionNotifications = options.suppressCompletionNotifications ?? false;
     this.mcpHost = options.mcpHost;
@@ -419,6 +420,16 @@ export class AgentSessionWrapper {
 
   getPendingPromptPreview() {
     return this.pendingPromptPreview;
+  }
+
+  /** A project session pinned to an empty tool list (exact prompt, nothing loaded). */
+  private get chatOnly(): boolean {
+    return this.policy.kind === "chat-only";
+  }
+
+  /** The hidden non-project workspace (skills and MCP, never files or shell). */
+  private get chatWorkspace(): boolean {
+    return this.policy.kind === "chat";
   }
 
   isChatOnly(): boolean {
@@ -2533,7 +2544,11 @@ export async function startRpcSession(
   const subagentLoadsResources = Boolean(
     subagentResources?.loadExtensions || subagentResources?.loadSkills,
   );
-  const chatOnly = selectedToolNames?.length === 0 && !subagentLoadsResources;
+  const sessionPolicy = deriveSessionPolicy({
+    chatWorkspace,
+    chatOnly: selectedToolNames?.length === 0 && !subagentLoadsResources,
+  });
+  const chatOnly = sessionPolicy.kind === "chat-only";
   const finishStartingSession = trackStartingSession(sessionCwd);
   const starting = (async () => {
     // Some extensions access the SDK's global theme even outside the terminal UI.
@@ -2615,6 +2630,7 @@ export async function startRpcSession(
                 createChatWorkspaceExtension({
                   getSkills: () => chatSessionRef.current?.resourceLoader.getSkills().skills ?? [],
                   getCwd: () => sessionCwd,
+                  getInstructions: () => chatInstructionsSection(readChatSettings()),
                 }),
               ],
               extensionsOverride: (base) => withoutAgentDelegation(base, CHAT_DELEGATION_TOOL_NAMES),
@@ -2669,12 +2685,19 @@ export async function startRpcSession(
     const restoredModel = savedModel
       ? services.modelRuntime.getModel(savedModel.provider, savedModel.modelId)
       : undefined;
+    // A new chat may start on the model and reasoning level chosen in Settings › Chats; an
+    // explicit pick for this session still wins, and unset fields follow the global defaults.
+    const chatStart = chatWorkspace && !hasExistingMessages
+      ? resolveChatStartDefaults(readChatSettings(), scope.visible)
+      : {};
     const initial = hasExistingMessages ? null : selectInitialModelScope(scope, {
-        ...(effectiveInitialModel ? { requestedModel: effectiveInitialModel } : {}),
+        ...((effectiveInitialModel ?? chatStart.requestedModel)
+          ? { requestedModel: effectiveInitialModel ?? chatStart.requestedModel }
+          : {}),
         ...(defaultProvider && defaultModelId
           ? { defaultModel: { provider: defaultProvider, modelId: defaultModelId } }
           : {}),
-        ...(thinkingLevel ? { thinkingLevel } : {}),
+        ...((thinkingLevel ?? chatStart.thinkingLevel) ? { thinkingLevel: thinkingLevel ?? chatStart.thinkingLevel } : {}),
       });
     const startupModel = restoredModel && services.modelRuntime.hasConfiguredAuth(restoredModel.provider)
       ? restoredModel

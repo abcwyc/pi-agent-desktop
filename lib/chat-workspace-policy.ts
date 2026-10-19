@@ -171,6 +171,8 @@ export function chatDateSection(now: Date = new Date()): string {
 export function createChatWorkspaceExtension(options: {
   getSkills: () => readonly { filePath: string; baseDir?: string }[];
   getCwd: () => string;
+  /** The user's own chat instructions, read on every run so an edit applies to the next prompt. */
+  getInstructions?: () => string | undefined;
 }): InlineExtension {
   return {
     name: CHAT_WORKSPACE_EXTENSION_NAME,
@@ -184,6 +186,9 @@ export function createChatWorkspaceExtension(options: {
         const allowed = selected.filter((name) => isChatToolAllowed(registered.get(name) ?? { name }));
         if (allowed.length !== selected.length) event.systemPromptOptions.selectedTools = allowed;
         event.systemPromptOptions.sections.date = chatDateSection();
+        const instructions = options.getInstructions?.();
+        if (instructions) event.systemPromptOptions.sections.instructions = instructions;
+        else delete event.systemPromptOptions.sections.instructions;
         // Pi appends the working directory to every prompt; a chat has none worth naming.
         event.systemPromptOptions.cwd = "(none)";
         return undefined;
