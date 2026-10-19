@@ -249,6 +249,7 @@ export function ModelSelector({
         return (
           <div
             ref={panelRef}
+            className="native-popover app-menu"
             role="listbox"
             aria-label={ariaLabel}
             style={{

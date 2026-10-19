@@ -24,8 +24,10 @@ test("the npm package ships the handoff helper and no other lib file", async () 
     await writeFile(join(dir, "bin/pi-web.js"), "#!/usr/bin/env node\n");
 
     const packed = spawnSync(
-      "npm",
-      ["pack", "--dry-run", "--json", "--ignore-scripts"],
+      process.platform === "win32" ? "cmd.exe" : "npm",
+      process.platform === "win32"
+        ? ["/d", "/s", "/c", "npm pack --dry-run --json --ignore-scripts"]
+        : ["pack", "--dry-run", "--json", "--ignore-scripts"],
       { cwd: dir, encoding: "utf8" },
     );
     assert.equal(packed.status, 0, packed.stderr);

@@ -103,7 +103,7 @@ function MenuPanel({
   return (
     <div
       ref={panelRef}
-      className="dom-context-menu native-popover"
+      className="dom-context-menu native-popover app-menu"
       role="menu"
       aria-label={label}
       tabIndex={-1}

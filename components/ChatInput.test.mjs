@@ -15,7 +15,7 @@ const { ChatInput, ModelErrorBanner, ModelScopeWarningBanner, canClearBuiltinCom
 
 const { isBareMcpCommand } = await jiti.import("@/lib/mcp-command.ts");
 const { ModelSelector } = await jiti.import("./ModelSelector.tsx");
-const { clearDraft, getDraft, mergeRestoredSubmissionDraft, mergeRestoredSubmissionText, rekeyDraft, setDraft } = await jiti.import("@/lib/draft-store.ts");
+const { clearDraft, getDraft, mergeRestoredSubmissionDraft, mergeRestoredSubmissionText, rekeyDraft, setDraft } = await jiti.import("@/lib/draft-store");
 const { I18nProvider } = await jiti.import("@/hooks/useI18n");
 
 function renderWithI18n(element) {
@@ -118,7 +118,7 @@ test("follow-up shortcuts preserve newline, IME, mobile and completion behavior"
     compilerOptions: { target: ts.ScriptTarget.ES2020 },
   }).outputText);
   const cases = [
-    ["Enter steers", {}, {}, "steer"],
+    ["Enter queues a follow-up", {}, {}, "followup"],
     ["Alt+Enter follows up", { altKey: true }, {}, "followup"],
     ["idle Alt+Enter sends", { altKey: true }, { isStreaming: false }, "send"],
     ["Shift+Enter inserts a newline", { shiftKey: true }, {}, "native"],
@@ -142,7 +142,7 @@ test("follow-up shortcuts preserve newline, IME, mobile and completion behavior"
     ["history selection takes priority", { altKey: true }, { historyMenuOpen: true }, "history"],
     ["Ctrl+Enter mode: Enter inserts a newline", {}, { enterSendMode: "ctrlEnter", isStreaming: false }, "native"],
     ["Ctrl+Enter mode: Ctrl+Enter sends", { ctrlKey: true }, { enterSendMode: "ctrlEnter", isStreaming: false }, "send"],
-    ["Ctrl+Enter mode: Cmd+Enter steers", { metaKey: true }, { enterSendMode: "ctrlEnter" }, "steer"],
+    ["Ctrl+Enter mode: Cmd+Enter queues a follow-up", { metaKey: true }, { enterSendMode: "ctrlEnter" }, "followup"],
     ["Ctrl+Enter mode: composition grace blocks the newline", {}, { enterSendMode: "ctrlEnter", lastCompositionEndAtRef: { current: 950 } }, "prevented"],
     ["Ctrl+Enter mode: Enter picks a file", {}, { enterSendMode: "ctrlEnter", atMenuOpen: true, atQuery: {} }, "file"],
     ["Ctrl+Enter mode: Enter picks from history", {}, { enterSendMode: "ctrlEnter", historyMenuOpen: true }, "history"],
@@ -240,15 +240,13 @@ test("cycleListIndex wraps in both directions", () => {
   assert.equal(cycleListIndex(-1, 4, 1), 0);
 });
 
-test("shows the follow-up shortcut in the button tooltip", () => {
-  const html = renderToStaticMarkup(
-    React.createElement(I18nProvider, null, React.createElement(ChatInput, {
-      onSend() {}, onAbort() {}, onFollowUp() {}, isStreaming: true,
-    })),
-  );
-
-  assert.match(html, /title="Queue this message after the agent finishes \(Alt\/Option\+Enter\)"/);
-  assert.match(html, /aria-keyshortcuts="Alt\+Enter"/);
+test("streaming with an empty draft has one circular Stop and no competing send controls", () => {
+  const html = renderWithI18n(React.createElement(ChatInput, {
+    onSend() {}, onAbort() {}, onSteer() {}, onFollowUp() {}, isStreaming: true,
+  }));
+  assert.match(html, /data-action="stop"/);
+  assert.equal((html.match(/aria-label="Stop agent"/g) || []).length, 1);
+  assert.doesNotMatch(html, /composer-queue-button|composer-stop-button|Alt\+Enter/);
 });
 
 test("renders the upstream model error", () => {
@@ -366,6 +364,7 @@ test("renders the compact composer with the standard Send button and no session 
   );
 
   assert.match(html, /<textarea/);
+  assert.match(html, /class="native-primary-button"[^>]*aria-label="Send"/);
   assert.match(html, />Send<\/button>/);
   assert.equal((html.match(/<button\b/g) ?? []).length, 1);
   assert.doesNotMatch(html, /type="file"|Attach image|Change tool preset/);
@@ -667,7 +666,7 @@ test("while a run streams, a bare /mcp opens Settings or is queued as before", a
       runBuiltinCommand: async (message) => { calls.builtin.push(message); return handled; },
       onPromptWithStreamingBehavior: (message, behavior, attached) => calls.prompts.push([message, behavior, attached?.length ?? 0]),
       onSteer() { throw new Error("slash messages are prompts"); },
-      onFollowUp() { throw new Error("slash messages are prompts"); },
+      onFollowUp: (message, attached) => calls.prompts.push([message, "followUp", attached?.length ?? 0]),
     });
     sendQueued(mode);
     await new Promise((resolve) => setImmediate(resolve));
@@ -981,7 +980,7 @@ test("a missing workspace replaces the model error and disables Send", () => {
   const source = readFileSync(new URL("./ChatInput.tsx", import.meta.url), "utf8");
   assert.match(source, /workspaceUnavailable\s*\?\s*<WorkspaceUnavailableBanner[\s\S]*?:\s*<ModelErrorBanner error=\{modelError\} \/>/);
   assert.match(source, /const canSend = canQueueStreamingMessage && !workspaceUnavailable;/);
-  assert.match(source, /onClick=\{handleSend\}\s*disabled=\{!canSend\}/);
+  assert.match(source, /disabled=\{!showStop && \(!canSend/);
 });
 
 test("chat-only composer keeps shell, file and session mentions out of the input", () => {

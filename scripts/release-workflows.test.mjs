@@ -4,9 +4,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+const readText = async (...args) => (await readFile(...args)).replace(/\r\n/g, "\n");
+
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
-const componentUpdates = await readFile(
+const componentUpdates = await readText(
   join(root, ".github", "workflows", "component-updates.yml"),
   "utf8",
 );
@@ -45,7 +47,7 @@ test("a manually requested direct sync is gated on the fork boundary", () => {
 });
 
 test("the signed release workflow is manual-only", async () => {
-  const release = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
+  const release = await readText(join(root, ".github", "workflows", "release.yml"), "utf8");
   assert.match(release, /on:\s*\n\s*workflow_dispatch:/);
   assert.doesNotMatch(release, /\bpush:/);
 });
@@ -62,7 +64,8 @@ test("npm test covers every test directory, recursively", async () => {
   // sync gate once ran only lib/ and scripts/, silently skipping them nightly.
   // The globs must recurse too: a flat components/*.test.mjs skips the
   // fork-owned tests under components/desktop/.
-  const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+  const pkg = JSON.parse(await readText(join(root, "package.json"), "utf8"));
+  assert.doesNotMatch(pkg.scripts.test, /'[^']*\.test\.mjs'/, "Windows cmd passes single quotes literally, silently running zero tests");
   for (const dir of ["app", "lib", "scripts", "components", "hooks"]) {
     assert.match(
       pkg.scripts.test,
@@ -112,7 +115,7 @@ test("a failed sync is reported instead of failing silently", () => {
 test("failure alerts do not depend on Issues being enabled", async () => {
   // This repository has Issues disabled, so the original issue-only alerts
   // failed silently and reported nothing at all. The job summary always works.
-  const release = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
+  const release = await readText(join(root, ".github", "workflows", "release.yml"), "utf8");
 
   for (const [name, workflow] of [["component-updates", componentUpdates], ["release", release]]) {
     assert.match(workflow, /GITHUB_STEP_SUMMARY/, `${name} must always write a job summary`);
@@ -140,7 +143,7 @@ test("history is never rewritten on main", () => {
 test("a failed release build is reported instead of failing silently", async () => {
   // Four consecutive v0.1.3 builds failed on Windows with no notification, and
   // the draft was published by hand with macOS artifacts and no manifest.
-  const workflow = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
+  const workflow = await readText(join(root, ".github", "workflows", "release.yml"), "utf8");
 
   assert.match(workflow, /if: failure\(\)/);
   assert.match(workflow, /gh issue create/);
@@ -152,7 +155,7 @@ test("the manifest job only publishes when every platform succeeded", async () =
   // `needs: build` covers the whole matrix, so one failed platform keeps the
   // release a draft. Publishing a release that is missing a platform's
   // installer or its component manifest breaks updates for that platform.
-  const workflow = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
+  const workflow = await readText(join(root, ".github", "workflows", "release.yml"), "utf8");
   const manifestJob = workflow.slice(workflow.indexOf("\n  manifest:"), workflow.indexOf("\n  notify:"));
 
   assert.match(manifestJob, /needs: build/);
@@ -161,7 +164,7 @@ test("the manifest job only publishes when every platform succeeded", async () =
 });
 
 test("release workflow publishes Apple Silicon, Linux x64, and Windows x64 installers", async () => {
-  const workflow = await readFile(
+  const workflow = await readText(
     join(root, ".github", "workflows", "release.yml"),
     "utf8",
   );
@@ -196,10 +199,13 @@ test("nothing reintroduces a literal homedir() into an fs call", async () => {
     "lib/skill-lock.ts",
     "app/api/cwd/validate/route.ts",
     "lib/default-cwd.ts",
+    "lib/enabled-models-runtime.ts",
+    "lib/linked-directory.ts",
+    "app/api/skills/route.ts",
   ];
 
   for (const file of guarded) {
-    const source = await readFile(join(root, file), "utf8");
+    const source = await readText(join(root, file), "utf8");
     const code = source.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
     assert.doesNotMatch(
       code,
@@ -211,7 +217,7 @@ test("nothing reintroduces a literal homedir() into an fs call", async () => {
 });
 
 test("the Windows debug workflow cannot release or sign anything", async () => {
-  const workflow = await readFile(
+  const workflow = await readText(
     join(root, ".github", "workflows", "windows-build-debug.yml"),
     "utf8",
   );
@@ -227,7 +233,7 @@ test("the Windows debug workflow cannot release or sign anything", async () => {
 });
 
 test("desktop staging ships node-pty native prebuilds with executable helpers", async () => {
-  const prepareSource = await readFile(new URL("./prepare-desktop.mjs", import.meta.url), "utf8");
+  const prepareSource = await readText(new URL("./prepare-desktop.mjs", import.meta.url), "utf8");
   // Next's tracer cannot follow node-pty's runtime-computed prebuilds path;
   // staging must copy the tree and fix the macOS spawn-helper bits for both
   // darwin variants (a staged build may run on either architecture).
@@ -237,7 +243,7 @@ test("desktop staging ships node-pty native prebuilds with executable helpers", 
 });
 
 test("desktop staging ships the Amazon Bedrock SDK the file tracer cannot see", async () => {
-  const prepareSource = await readFile(new URL("./prepare-desktop.mjs", import.meta.url), "utf8");
+  const prepareSource = await readText(new URL("./prepare-desktop.mjs", import.meta.url), "utf8");
   // bedrock-converse-stream.lazy.js imports through a variable specifier on
   // purpose, so Next never traces @aws-sdk/client-bedrock-runtime into the
   // standalone server. Packaging must stage that closure itself.
@@ -259,8 +265,8 @@ test("the Tauri crates stay on the npm packages' major/minor", async () => {
   // 2.4.0 while Cargo.lock kept 2.10.1 / 2.3.3. Both halves are committed
   // files, so the comparison the CLI performs belongs in this suite rather than
   // on three runners.
-  const cargoLock = await readFile(join(root, "src-tauri", "Cargo.lock"), "utf8");
-  const npmLock = JSON.parse(await readFile(join(root, "package-lock.json"), "utf8"));
+  const cargoLock = await readText(join(root, "src-tauri", "Cargo.lock"), "utf8");
+  const npmLock = JSON.parse(await readText(join(root, "package-lock.json"), "utf8"));
   const release = (version) => version.split(".").slice(0, 2).join(".");
 
   const crateVersions = new Map();

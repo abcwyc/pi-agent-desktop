@@ -1770,6 +1770,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           onModeChange={changeProjectViewMode}
           onCollapseAll={collapseAllProjects}
           onExpandAll={expandAllProjects}
+          onClose={() => setProjectViewMenuPos(null)}
         />
       )}
       {projectMenu && projectMenuPos && (
@@ -1795,6 +1796,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           onShowWorktrees={() => showProjectMenuView(projectMenu.root, "worktrees")}
           onShowNewWorktree={() => showProjectMenuView(projectMenu.root, "new-worktree")}
           onBackToActions={() => showProjectMenuView(projectMenu.root, "actions")}
+          onClose={closeProjectMenu}
           onOpenTerminal={onOpenTerminal ? () => {
             const cwd = projectMenu.root;
             closeProjectMenu();
@@ -2475,7 +2477,7 @@ function SessionItem({
           {menuOpen && menuPos && createPortal(
             <div
               ref={menuRef}
-              className="native-popover session-item-menu"
+              className="native-popover app-menu session-item-menu"
               role="menu"
               onClick={(e) => e.stopPropagation()}
               style={{

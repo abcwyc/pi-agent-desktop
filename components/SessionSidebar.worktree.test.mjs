@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const source = await readFile(new URL("./SessionSidebar.tsx", import.meta.url), "utf8");
+const source = (await readFile(new URL("./SessionSidebar.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 
 test("uses the server-resolved current worktree identity", () => {
   assert.match(source, /currentWorktreePath: string \| null/);

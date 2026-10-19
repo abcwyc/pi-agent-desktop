@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const source = readFileSync(new URL("./AppShell.tsx", import.meta.url), "utf8");
+// The checkout may use CRLF (Windows); normalize so the exact multiline
+// probes below match regardless of line endings.
+const source = readFileSync(new URL("./AppShell.tsx", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 /**
  * Layout sentinels.
@@ -75,7 +77,7 @@ test("file panel stays a full-height embedded pane", () => {
     /borderLeft: "var\(--hairline\) solid var\(--separator\)"/,
     "the embedded pane must keep a neutral fallback edge for full-width mode",
   );
-  const css = readFileSync(new URL("../app/native-theme.css", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../app/native-theme.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
   assert.match(css, /Right panel as an embedded workbench/);
   assert.match(css, /\.right-panel-container:not\(\.right-panel-full-width\) \{\s*\n\s*border-left: var\(--hairline\) solid var\(--separator\) !important;/);
 });

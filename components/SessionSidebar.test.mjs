@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const source = await readFile(new URL("./SessionSidebar.tsx", import.meta.url), "utf8");
+const source = (await readFile(new URL("./SessionSidebar.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const sessionItemSource = source.slice(source.indexOf("function SessionItem("));
 
 test("only Shift+click bypasses session deletion confirmation", () => {
@@ -207,7 +207,7 @@ test("project header shows a session count and chips only while folded", () => {
 });
 
 test("project header keeps its actions hover-only and no separate chevron", async () => {
-  const css = await readFile(new URL("../app/native-theme.css", import.meta.url), "utf8");
+  const css = (await readFile(new URL("../app/native-theme.css", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
   // The folder glyph already shows open / closed; a chevron would repeat it.
   assert.doesNotMatch(source, /sidebar-project-tree-chevron/);
   assert.match(source, /aria-expanded=\{!isCollapsed\}/);

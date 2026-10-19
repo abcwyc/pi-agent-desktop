@@ -4,7 +4,9 @@ import { homedir } from "os";
  * The user's home directory, resolved at runtime rather than at build time.
  *
  * Use this instead of `os.homedir()` anywhere the result reaches a filesystem
- * call — `readdir`, `stat`, `join` feeding one of those, and so on.
+ * call — `readdir`, `stat`, `join` feeding one of those, and so on. Path display
+ * helpers must also use this: NFT can infer directory assets from string
+ * operations even without an fs call (see displaySettingsPath).
  *
  * Next's file tracer (@vercel/nft) statically evaluates the arguments to fs
  * calls. When it can fold an expression down to the home directory it globs

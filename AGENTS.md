@@ -37,7 +37,8 @@ Typecheck: `node_modules/.bin/tsc --noEmit` · Lint: `npm run lint`
   fails tests that pin newer SDK behaviour. `npm test` runs `npm run check:deps` first and
   stops with the mismatched packages; `npm ci` fixes it.
 - **`next dev` rewrites `AGENTS.md`**: it appends a "This is NOT the Next.js you know" block
-  to this file on every start. Run `git checkout -- AGENTS.md` before committing; it is not part of the work.
+  to this file on every start. Preserve the project and user instructions here; review generated
+  additions separately and never reset the entire file to discard development output.
 
 ---
 
@@ -249,6 +250,17 @@ Location: `~/.pi/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl`
 `SessionContext.entryIds[]` parallels `messages[]`: each displayed message's `.jsonl` entry id, used for fork and navigate_tree.
 
 ## Styling: fork CSS lives only in `app/native-theme.css`
+
+**UI consistency is mandatory (user requirement).** Every application menu, dropdown,
+option picker and autocomplete popup must use the shared `.app-menu` surface and menu
+tokens in `app/native-theme.css`. Form choices use `components/AppSelect.tsx`; do not
+introduce raw `<select>` controls or OS-native application option menus. Preserve the
+same palette, nested radii, inset, row spacing, selected/disabled states and focus
+treatment in both themes. Use the existing design as the reference, consult the
+sources in `docs/ui-menu-audit.md`, and inspect actual rendered states at desktop and
+narrow widths before claiming visual consistency. System file/directory dialogs are
+separate OS tasks. Run `node --test scripts/ui-menu-consistency.test.mjs` after menu work;
+changes to shared choices also run `node e2e/option-controls.mjs`.
 
 `app/globals.css` and `app/settings.css` are pi-web's and stay byte-identical to upstream — `scripts/upstream-css-baseline.test.mjs` fails on any edit. Put every fork rule in `app/native-theme.css` (imported last in `app/layout.tsx`); overrides of upstream rules that other theme rules must beat go in its "fork base layer" at the top. After an upstream merge run `node scripts/upstream-css-baseline.mjs update <upstream-ref>` (the sync workflow does). Layout of the theme file and the design intent to restore after a merge: `docs/native-theme.md`.
 

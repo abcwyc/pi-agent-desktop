@@ -161,8 +161,8 @@ test("the branch page leads with a fetch row that shows its progress", () => {
 
 test("the new-worktree page suggests local branches and only creates with a name", () => {
   const empty = render({ view: "new-worktree" });
-  assert.match(empty, /<input[^>]*list="pi-project-worktree-branches"/);
-  for (const branch of ["main", "feature", "dev"]) assert.ok(empty.includes(`<option value="${branch}">`), branch);
+  assert.match(empty, /<input[^>]*role="combobox"/);
+  assert.doesNotMatch(empty, /<datalist|<select/);
   assert.match(empty, /sidebar-project-context-menu-primary"[^>]*disabled/);
   const named = render({ view: "new-worktree", newBranch: "topic" });
   assert.doesNotMatch(named, /sidebar-project-context-menu-primary"[^>]*disabled/);

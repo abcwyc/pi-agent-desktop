@@ -1,8 +1,8 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { isExistingPathWithinRoots, isPathWithinRoots, resolveRealRoots } from "./path-security";
 import { samePath } from "./paths";
+import { userHome } from "./user-home";
 
 /**
  * The canonical target of a directory link (a symlink, or a junction on
@@ -27,7 +27,7 @@ export function getOutsideLinkTarget(linkPath: string, realRoots: Set<string>): 
 function enclosesProjectOrHome(target: string, realRoots: Set<string>): boolean {
   const enclosed = [...realRoots];
   try {
-    enclosed.push(fs.realpathSync(os.homedir()));
+    enclosed.push(fs.realpathSync(userHome()));
   } catch {
     // No resolvable home folder to protect.
   }

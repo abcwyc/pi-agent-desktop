@@ -1,5 +1,7 @@
 "use client";
 
+import { AppSelect } from "./AppSelect";
+
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -640,9 +642,8 @@ export function AgentsConfig({
                       </div>
                     </Field>
                     <Field label={t("agents.thinking")}>
-                      <select aria-label={t("agents.thinking")} value={draft.thinking ?? ""} disabled={disabled} onChange={(event) => update("thinking", (event.target.value || undefined) as EditableProfile["thinking"])} style={controlStyle}>
-                        {THINKING_OPTIONS.map((value) => <option key={value || "default"} value={value}>{value || t("agents.inherit")}</option>)}
-                      </select>
+                      <AppSelect aria-label={t("agents.thinking")} value={draft.thinking ?? ""} disabled={disabled} onValueChange={(value) => update("thinking", (value || undefined) as EditableProfile["thinking"])} style={controlStyle}
+                        options={THINKING_OPTIONS.map((value) => ({ value, label: value || t("agents.inherit") }))} />
                     </Field>
                     <Field label={t("agents.maxTurns")}>
                       <input aria-label={t("agents.maxTurns")} type="number" min={1} value={draft.maxTurns ?? ""} disabled={disabled} onChange={(event) => update("maxTurns", event.target.value ? Number(event.target.value) : undefined)} style={controlStyle} />

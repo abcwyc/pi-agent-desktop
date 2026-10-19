@@ -1,5 +1,5 @@
-import { homedir } from "os";
 import { join, sep } from "path";
+import { userHome } from "./user-home";
 import { getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import {
@@ -202,7 +202,8 @@ export interface EnabledModelsSettings {
 
 /** `~/.pi/agent/settings.json` reads better in a banner than the full path. */
 export function displaySettingsPath(path: string): string {
-  const home = homedir();
+  // Even path display logic can make Next's tracer enumerate a static home path.
+  const home = userHome();
   if (!home || !path.startsWith(home)) return path;
   const rest = path.slice(home.length);
   return rest === "" || rest.startsWith(sep) ? `~${rest}` : path;

@@ -1,5 +1,7 @@
 "use client";
 
+import { AppSelect } from "./AppSelect";
+
 import { useState, useEffect, useCallback, useId, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import type { ModelCatalogPreset, ModelCatalogRecommendation } from "@/lib/model-catalog";
@@ -287,14 +289,12 @@ function NumInput({ value, onChange, placeholder }: { value: string; onChange: (
   return <input type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={inputStyle} />;
 }
 
-function Select({ value, onChange, options, required }: { value: string; onChange: (v: string) => void; options: readonly string[]; required?: boolean }) {
+function Select({ value, onChange, options, required, label }: { value: string; onChange: (v: string) => void; options: readonly string[]; required?: boolean; label: string }) {
   const { t } = useI18n();
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}
-      style={{ ...inputStyle, color: value ? "var(--text)" : "var(--text-dim)" }}>
-       {!required && <option value="">— {t("i18n.default")} / none —</option>}
-      {options.map((o) => <option key={o} value={o}>{o}</option>)}
-    </select>
+    <AppSelect value={value} onValueChange={onChange} aria-label={label}
+      style={{ ...inputStyle, color: value ? "var(--text)" : "var(--text-dim)" }}
+      options={[...(!required ? [{ value: "", label: `— ${t("i18n.default")} / none —` }] : []), ...options.map((option) => ({ value: option, label: option }))]} />
   );
 }
 
@@ -450,7 +450,7 @@ function ProviderDetail({ name, editingName, provider, onChange, onEditingNameCh
       </Field>
 
       <Field label="API">
-        <Select value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={API_OPTIONS} required />
+        <Select label="API" value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={API_OPTIONS} required />
       </Field>
 
       <Field label="Headers">
@@ -1319,7 +1319,7 @@ function ModelDetail({
         {advancedOpen && (
           <div id="model-advanced-settings" style={{ display: "flex", flexDirection: "column", gap: 14, padding: "4px 0 16px" }}>
             <Field label={t("models.apiOverride")}>
-              <Select value={model.api ?? ""} onChange={(v) => set("api", v || undefined)} options={API_OPTIONS} />
+              <Select label={t("models.apiOverride")} value={model.api ?? ""} onChange={(v) => set("api", v || undefined)} options={API_OPTIONS} />
             </Field>
 
             <Field label={t("models.headers")}>

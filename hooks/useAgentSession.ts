@@ -14,6 +14,7 @@ import type {
 import { isBlockingExtensionUiRequest } from "@/lib/browser-notifications";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { isPromptRejectedError, sendAgentCommand } from "@/lib/agent-client";
+import { mergeComposerQueueSnapshot, type ComposerQueueActionResult, type PendingComposerMessage } from "@/lib/composer-queue-types";
 import { fetchWithRetry } from "@/lib/fetch-timeout";
 import type { ModelScopeWarning } from "@/lib/model-scope-warnings";
 import { rememberScrollPosition, sessionScrollTops } from "@/lib/scroll-memory";
@@ -116,7 +117,7 @@ type AgentStateResponse = {
   extensionWidgets?: ExtensionWidgetItem[];
   routedModel?: RoutedModelInfo;
   cacheWarming?: CacheWarmingInfo;
-  queuedMessages?: { steering?: string[]; followUp?: string[] } | null;
+  queuedMessages?: { steering?: string[]; followUp?: string[]; pending?: PendingComposerMessage[]; pendingVersion?: number } | null;
   autoCompactionEnabled?: boolean;
   autoRetryEnabled?: boolean;
   steeringMode?: string;
@@ -128,10 +129,12 @@ export type { SessionAutomation } from "@/hooks/useSessionAutomation";
 export interface QueuedMessages {
   steering: string[];
   followUp: string[];
+  pending?: PendingComposerMessage[];
+  pendingVersion?: number;
 }
 
-function normalizeQueuedMessages(q?: { steering?: string[]; followUp?: string[] } | null): QueuedMessages {
-  return { steering: q?.steering ?? [], followUp: q?.followUp ?? [] };
+function mergeQueuedMessages(previous: QueuedMessages, q?: AgentStateResponse["queuedMessages"]): QueuedMessages {
+  return { steering: q?.steering ?? [], followUp: q?.followUp ?? [], ...mergeComposerQueueSnapshot(previous, q ?? {}) };
 }
 
 type ExtensionUiDialogRequest = Extract<ExtensionUiRequest, { method: "select" | "confirm" | "input" | "editor" }>;
@@ -869,7 +872,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (liveState.systemPrompt !== undefined) setSystemPrompt(liveState.systemPrompt ?? null);
           if (liveState.extensionStatuses !== undefined) setExtensionStatuses(liveState.extensionStatuses ?? []);
           if (liveState.extensionWidgets !== undefined) setExtensionWidgets(liveState.extensionWidgets ?? []);
-          if (liveState.queuedMessages !== undefined) setQueuedMessages(normalizeQueuedMessages(liveState.queuedMessages));
+          if (liveState.queuedMessages !== undefined) setQueuedMessages(previous => mergeQueuedMessages(previous, liveState.queuedMessages));
         } else if (!agentState.running) {
           setQueuedMessages({ steering: [], followUp: [] });
         }
@@ -1504,7 +1507,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // would otherwise leave the "Stop compaction" UI stuck. No state
       // (wrapper destroyed) means nothing is compacting.
       setIsCompacting(state?.isCompacting ?? false);
-      setQueuedMessages(normalizeQueuedMessages(state?.queuedMessages));
+      setQueuedMessages(previous => mergeQueuedMessages(previous, state?.queuedMessages));
       const busy = data.running && state
         && (state.isStreaming || state.isPromptRunning || state.isCompacting);
       if (busy) {
@@ -1616,7 +1619,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               if (d.state?.extensionWidgets !== undefined) setExtensionWidgets(d.state.extensionWidgets ?? []);
               // Aborted turns can leave messages queued in pi (delivered with the
               // next turn); dead wrapper (no state) means the queue is gone.
-              setQueuedMessages(normalizeQueuedMessages(d.state?.queuedMessages));
+              setQueuedMessages(previous => mergeQueuedMessages(previous, d.state?.queuedMessages));
             })
             .catch(() => {});
         }
@@ -1807,10 +1810,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         break;
       }
       case "queue_update":
-        setQueuedMessages({
+        setQueuedMessages(previous => ({
+          ...previous,
           steering: [...((event.steering as string[] | undefined) ?? [])],
           followUp: [...((event.followUp as string[] | undefined) ?? [])],
-        });
+        }));
+        break;
+      case "composer_queue_update":
+        setQueuedMessages(previous => ({ ...previous, ...mergeComposerQueueSnapshot(previous, {
+          pending: event.items as PendingComposerMessage[], pendingVersion: event.pendingVersion as number | undefined,
+        }) }));
         break;
       case "auto_retry_start":
         setRetryInfo({ attempt: event.attempt as number, maxAttempts: event.maxAttempts as number, errorMessage: event.errorMessage as string | undefined });
@@ -2488,8 +2497,49 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [sendStreamingPrompt]);
 
   const handleFollowUp = useCallback(async (message: string, images?: AttachedImage[]) => {
-    await sendStreamingPrompt(message, "followUp", images);
-  }, [sendStreamingPrompt]);
+    const sid = sessionIdRef.current;
+    const generation = sessionGenerationRef.current;
+    if (!sid || editEntryId) {
+      restoreSubmission(message, images, composerDraftKey);
+      return;
+    }
+    try {
+      await sendAgentCommand(sid, {
+        type: "queue_composer", message,
+        images: images?.map(image => ({ type: "image", data: image.data, mimeType: image.mimeType })),
+      });
+    } catch (error) {
+      // Only explicit server rejection proves the outbox did not accept it.
+      if (error instanceof Error && "status" in error) restoreSubmission(message, images, composerDraftKey);
+      if (sessionGenerationRef.current === generation) addNotice({ type: "error", message: String(error) });
+    }
+  }, [addNotice, composerDraftKey, editEntryId, restoreSubmission]);
+
+  const handleQueuedMessageAction = useCallback(async (id: string, action: "send" | "edit" | "delete") => {
+    const sid = sessionIdRef.current;
+    const generation = sessionGenerationRef.current;
+    if (!sid) return;
+    const key = composerDraftKey;
+    try {
+      const result = await sendAgentCommand<ComposerQueueActionResult>(sid, {
+        type: action === "send" ? "send_composer_message" : "take_composer_message", id,
+      });
+      if (sessionGenerationRef.current === generation) {
+        setQueuedMessages(previous => ({ ...previous, ...mergeComposerQueueSnapshot(previous, result) }));
+      }
+      const item = result.item;
+      if (action === "edit" && item) {
+        const images = item.images?.map(image => ({
+          data: image.data, mimeType: image.mimeType,
+          previewUrl: `data:${image.mimeType};base64,${image.data}`,
+        }));
+        // Restores into the captured session draft, preserving any text already typed.
+        restoreSubmission(item.message, images, key);
+      }
+    } catch (error) {
+      if (sessionGenerationRef.current === generation) addNotice({ type: "error", message: error instanceof Error ? error.message : String(error) });
+    }
+  }, [addNotice, composerDraftKey, restoreSubmission]);
 
   const handleAbortCompaction = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -2508,7 +2558,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const result = await sendAgentCommand<{ steering?: string[]; followUp?: string[] }>(sid, { type: "clear_queue" });
       // clearQueue also emits an empty queue_update, but that only reaches us
       // while SSE is connected — clear locally so idle recalls update the UI.
-      setQueuedMessages({ steering: [], followUp: [] });
+      setQueuedMessages(previous => ({ ...previous, steering: [], followUp: [] }));
       const texts = [...(result?.steering ?? []), ...(result?.followUp ?? [])];
       if (texts.length > 0) {
         opts.chatInputRef?.current?.prependText(texts.join("\n\n"));
@@ -2743,7 +2793,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (agentState.state.systemPrompt !== undefined) setSystemPrompt(agentState.state.systemPrompt ?? null);
           if (agentState.state.extensionStatuses !== undefined) setExtensionStatuses(agentState.state.extensionStatuses ?? []);
           if (agentState.state.extensionWidgets !== undefined) setExtensionWidgets(agentState.state.extensionWidgets ?? []);
-          if (agentState.state.queuedMessages !== undefined) setQueuedMessages(normalizeQueuedMessages(agentState.state.queuedMessages));
+          if (agentState.state.queuedMessages !== undefined) setQueuedMessages(previous => mergeQueuedMessages(previous, agentState.state?.queuedMessages));
         }
       });
     }
@@ -2973,7 +3023,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // Actions
     branchSummaryPending, handleAbortBranchSummary, routedModel,
     handleSend, handleAbort, handleAbortRetry, handleFork, handleNavigate, handleModelChange,
-    handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
+    handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction, handleQueuedMessageAction,
     handleRecallQueue,
     handleBuiltinSlashCommand,
     handleEditContent,

@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const source = await readFile(new URL("./ChatWindow.tsx", import.meta.url), "utf8");
-const inputSource = await readFile(new URL("./ChatInput.tsx", import.meta.url), "utf8");
+// The checkout may use CRLF (Windows); normalize so the multiline
+// assertions below match regardless of line endings.
+const source = (await readFile(new URL("./ChatWindow.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+const inputSource = (await readFile(new URL("./ChatInput.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 
 test("keeps the message scrollbar track so the column cannot move with content", () => {
   assert.match(

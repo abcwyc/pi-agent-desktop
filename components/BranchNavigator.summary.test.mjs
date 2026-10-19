@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const navigatorSource = await readFile(new URL("./BranchNavigator.tsx", import.meta.url), "utf8");
-const chatInputSource = await readFile(new URL("./ChatInput.tsx", import.meta.url), "utf8");
-const hookSource = await readFile(new URL("../hooks/useAgentSession.ts", import.meta.url), "utf8");
-const branchSummarySource = await readFile(new URL("../hooks/useBranchSummary.ts", import.meta.url), "utf8");
-const themeSource = await readFile(new URL("../app/native-theme.css", import.meta.url), "utf8");
+const navigatorSource = (await readFile(new URL("./BranchNavigator.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+const chatInputSource = (await readFile(new URL("./ChatInput.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+const hookSource = (await readFile(new URL("../hooks/useAgentSession.ts", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+const branchSummarySource = (await readFile(new URL("../hooks/useBranchSummary.ts", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+const themeSource = (await readFile(new URL("../app/native-theme.css", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 
 test("a plain click stays a plain switch; the summarized switch is its own action", () => {
   // Rows are also how branches are browsed, so asking on every click would get in the way.

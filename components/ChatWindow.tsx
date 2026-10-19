@@ -308,7 +308,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     lastUserMsgRef, promptAnchorActive,
     branchSummaryPending, handleAbortBranchSummary, routedModel,
     handleSend, handleAbort, handleAbortRetry, handleFork, handleEditContent, cancelEdit, handleModelChange,
-    handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
+    handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction, handleQueuedMessageAction,
     retryLoad,
     dismissModelScopeWarnings,
     handleRecallQueue,
@@ -1163,6 +1163,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
       automation={automation}
       onSetAutomation={handleSetAutomation}
       queuedMessages={queuedMessages}
+      onQueuedMessageAction={handleQueuedMessageAction}
       inputHistory={inputHistory}
       onRecallQueue={handleRecallQueue}
       slashCommands={slashCommands}

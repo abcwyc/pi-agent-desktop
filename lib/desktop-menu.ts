@@ -16,8 +16,9 @@ export type { NativeMenuEntry } from "./desktop-menu-model";
  */
 
 /**
- * Native popups are on in the desktop shell; `NEXT_PUBLIC_NATIVE_POPUP_MENUS=0`
- * at build time switches them off, and every caller then uses its DOM menu.
+ * Application option menus always use the shared theme on every platform.
+ * Keep this invariant independent of build flags, so releases cannot silently
+ * switch back to visually unrelated system popups.
  * Opening Settings froze the app for a user in 0.6.x, and the suspect was the
  * way menus used to be driven from JS: tauri's `menu.popup` command holds the
  * webview's resource-table lock while the main thread runs the menu. Menus now
@@ -25,7 +26,7 @@ export type { NativeMenuEntry } from "./desktop-menu-model";
  * the picked id back as the command's result; a test build with this on was
  * checked by the user who reported the freeze.
  */
-export const NATIVE_POPUP_MENUS_ENABLED = process.env.NEXT_PUBLIC_NATIVE_POPUP_MENUS !== "0";
+export const NATIVE_POPUP_MENUS_ENABLED = false;
 
 /** Whether a caller should try a native popup at all (desktop shell and not switched off). */
 export function canUseNativeMenu(): boolean {

@@ -22,6 +22,7 @@ export function SessionMentionMenu({ loaded, matches, activeIndex, itemRefs, onP
   const matchCountLabel = matches.length === 1 ? t("chat.match") : t("chat.matches", { count: matches.length });
   return (
     <div
+      className="native-popover app-menu app-suggestion-menu"
       style={{
         position: "absolute",
         left: 0,

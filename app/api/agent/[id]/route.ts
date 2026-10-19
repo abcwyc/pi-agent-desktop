@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveSessionPath } from "@/lib/session-reader";
 import { startRpcSession, getRpcSession, setRpcSessionTools } from "@/lib/rpc-manager";
+import { getComposerQueueVersion, getPendingComposerMessages } from "@/lib/composer-queue";
 
 // POST /api/agent/[id] - Send a command to an existing session
 export async function POST(
@@ -79,7 +80,8 @@ export async function GET(
   try {
     const session = getRpcSession(id);
     if (!session || !session.isAlive()) {
-      return NextResponse.json({ running: false });
+      const pending = getPendingComposerMessages(id);
+      return NextResponse.json({ running: false, ...(pending.length ? { state: { queuedMessages: { pending, pendingVersion: getComposerQueueVersion(id) } } } : {}) });
     }
 
     const state = await session.send({ type: "get_state" });
