@@ -1778,6 +1778,7 @@ select {
    matches the inline lineHeight: 1.6 on .chat-input-textarea. */
 .chat-input-textarea::placeholder {
   line-height: 1.6;
+  color: var(--text-dim);
 }
 
 button:focus-visible,
@@ -3175,6 +3176,12 @@ html:not(.dark) .session-item.is-selected .session-item-time {
   gap: 1px;
 }
 
+/* Only the first trailing group absorbs free space. A second auto margin on
+   Windows/Linux would strand the chat actions in the middle of the title bar. */
+.app-topbar > :is(.app-topbar-actions, .main-file-toggle) ~ .window-controls {
+  margin-left: 12px;
+}
+
 /* Wrapper divs (BranchNavigator, More menu anchor) must center their 28px
    buttons vertically, otherwise they hug the top of the 34px row. */
 .app-topbar-actions > div {
@@ -3304,16 +3311,235 @@ html:not(.dark) .session-item.is-selected .session-item-time {
   color: var(--text) !important;
 }
 
-/* Project picker entries render as flush rows separated by divider lines
-   instead of individually rounded pills. */
-.native-popover button.project-picker-option {
-  border-radius: 0 !important;
+/* Project choices use the same inset rows as every other option menu. */
+.app-menu button.project-picker-option {
+  min-height: var(--menu-row-height);
+  border-radius: var(--menu-row-radius) !important;
+  border-bottom-color: transparent !important;
 }
 
 .native-popover input:not([type="checkbox"]):not([type="radio"]) {
   border-color: var(--separator) !important;
   border-radius: 7px !important;
   background: var(--surface-muted) !important;
+}
+
+/* One menu surface for settings, topbar actions and composer selectors. */
+:root {
+  --menu-radius: 14px;
+  --menu-inset: 6px;
+  --menu-row-radius: 8px;
+  --menu-row-height: 34px;
+  --menu-row-gap: 4px;
+  --menu-focus-ring: var(--text);
+}
+
+.app-menu {
+  padding: var(--menu-inset) !important;
+  max-width: calc(100vw - 16px);
+  border: 1px solid var(--separator) !important;
+  border-radius: var(--menu-radius) !important;
+  background: var(--surface-elevated) !important;
+  color: var(--text);
+  box-shadow: var(--shadow-popover) !important;
+  backdrop-filter: none;
+}
+
+.app-menu :is(button[role="menuitem"], button[role="menuitemcheckbox"], button[role="menuitemradio"], button[role="option"]) {
+  min-height: var(--menu-row-height);
+  border-radius: var(--menu-row-radius) !important;
+  color: var(--text);
+  font-size: var(--fs-small);
+  line-height: 1.4;
+}
+
+.app-menu :is(button[role="menuitem"], button[role="menuitemcheckbox"], button[role="menuitemradio"]) {
+  padding: 8px 10px;
+}
+
+.app-menu :is(button[role="menuitem"], button[role="menuitemcheckbox"], button[role="menuitemradio"], button[role="option"]):focus-visible {
+  outline: 2px solid var(--menu-focus-ring) !important;
+  outline-offset: -2px;
+  background: var(--bg-hover) !important;
+}
+
+.app-menu .app-option-row {
+  border-radius: var(--menu-row-radius);
+}
+
+.app-menu .app-option-row[data-selected] {
+  background: var(--bg-selected) !important;
+}
+
+.app-menu .app-option-row > button[role="option"] {
+  color: var(--text) !important;
+  font-weight: 500 !important;
+}
+
+.app-menu .app-option-row[data-selected] > button[role="option"] {
+  font-weight: 600 !important;
+}
+
+.app-menu button:not(.branch-summary-action):not(.branch-summary-confirm) {
+  border-radius: var(--menu-row-radius) !important;
+}
+
+/* Separate the painted rows, including a checked row next to a hovered one.
+   Space the SelectorRow wrapper, not its option/default-star buttons. Scope
+   this to flat choices so tree guides and horizontal form actions stay intact. */
+.app-menu :where(
+  .app-option-row,
+  .wt-row,
+  .sidebar-project-context-menu-row,
+  .app-select-option,
+  .app-menu-option,
+  .project-picker-option,
+  [role="menuitemradio"],
+  [role="menuitem"],
+  [role="menuitemcheckbox"],
+  .app-suggestion-menu button
+):not(:first-child) {
+  margin-block-start: var(--menu-row-gap) !important;
+}
+
+.app-menu .wt-row { border-bottom: 0 !important; }
+
+/* Grid completions and flex suggestion lists use gap instead of row margins,
+   so columns stay aligned and an existing gap cannot double the spacing. */
+.app-menu .app-menu-items { gap: var(--menu-row-gap) !important; }
+.app-menu .app-menu-items > * { margin-block-start: 0 !important; }
+.app-menu.project-view-menu { gap: 0; }
+
+.app-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-height);
+  padding: 6px 9px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-small);
+  line-height: 1.4;
+  text-align: start;
+  cursor: pointer;
+}
+.app-select-trigger > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-select-trigger:focus-visible {
+  outline: 2px solid var(--menu-focus-ring) !important;
+  outline-offset: 2px;
+}
+.app-select-trigger[aria-invalid="true"] { border-color: var(--danger); }
+.app-select-trigger:disabled { opacity: 0.5; cursor: default; }
+.app-select-trigger:hover:not(:disabled),
+.app-select-trigger[data-state="open"] { background: var(--bg-hover); }
+.app-select-chevron { display: inline-flex; flex: none; color: var(--text-muted); }
+.app-select-menu {
+  z-index: 2400;
+  min-width: min(var(--radix-select-trigger-width, 120px), calc(100vw - 16px));
+  max-width: min(440px, var(--radix-select-content-available-width, calc(100vw - 16px)));
+  max-height: min(360px, var(--radix-select-content-available-height, calc(100dvh - 16px)));
+  overflow: hidden;
+}
+.app-select-menu:not(.animated-native-popover) {
+  transform-origin: var(--radix-select-content-transform-origin, bottom center) !important;
+}
+.app-select-viewport { min-height: 0; overscroll-behavior: contain; scrollbar-width: thin !important; }
+.app-select-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--menu-row-height);
+  padding: 8px 10px;
+  border-radius: var(--menu-row-radius);
+  color: var(--text);
+  font-size: var(--fs-small);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  cursor: default;
+  outline-offset: -2px;
+}
+.app-select-option[data-state="checked"] { background: var(--bg-selected); font-weight: 600; }
+.app-select-option[data-highlighted] { background: var(--bg-hover); }
+.app-select-option:focus-visible { outline: 2px solid var(--menu-focus-ring); }
+.app-select-option[data-disabled] { opacity: 0.45; pointer-events: none; }
+.app-select-check { display: inline-flex; flex: 0 0 14px; }
+.app-combobox-menu { position: fixed; z-index: 2400; overflow-y: auto; overscroll-behavior: contain; }
+.app-menu-option {
+  display: flex;
+  width: 100%;
+  min-height: var(--menu-row-height);
+  align-items: center;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--menu-row-radius);
+  background: transparent;
+  color: var(--text);
+  text-align: start;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.app-menu-option[aria-selected="true"] { background: var(--bg-selected); }
+.app-menu :is(.app-menu-option, .project-picker-option)[aria-current="true"] {
+  background: var(--bg-selected) !important;
+  color: var(--text) !important;
+}
+.app-suggestion-menu button { min-height: var(--menu-row-height); }
+
+/* Keep the mobile-only section picker hidden on desktop after replacing select. */
+.settings-mobile-section-picker.app-select-trigger { display: none; }
+@media (max-width: 640px) {
+  .settings-mobile-section-picker.app-select-trigger { display: inline-flex; }
+}
+
+.app-menu-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  white-space: normal;
+}
+
+.app-menu-copy > small {
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  font-weight: 400;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.composer-tool-menu {
+  width: 304px;
+  max-width: calc(100vw - 32px);
+}
+
+.composer-tool-menu .app-option-row > button[role="option"] {
+  min-height: 50px;
+  padding: 8px 10px;
+  align-items: flex-start;
+}
+
+.composer-tool-menu .app-option-row > button[role="option"] > :first-child {
+  margin-top: 4px;
+}
+
+@media (pointer: coarse) {
+  :root { --menu-row-height: 44px; }
+  .app-select-option { min-height: 44px; }
+  .app-menu :is(button[role="menuitem"], button[role="menuitemcheckbox"], button[role="menuitemradio"], button[role="option"]) {
+    min-height: 44px;
+  }
 }
 
 /* In-app context menu (components/DomContextMenuHost.tsx): the DOM stand-in for
@@ -4204,11 +4430,15 @@ html:not(.dark) .session-item.is-selected .session-item-time {
 }
 
 .chat-composer {
+  --composer-send-size: 36px;
+  --composer-inset: 10px;
+  --composer-border-width: 1px;
   overflow: visible;
-  padding: 8px 9px;
+  padding: var(--composer-inset);
   background: var(--surface) !important;
-  border: var(--hairline) solid var(--border) !important;
-  border-radius: var(--radius-xl) !important;
+  border: var(--composer-border-width) solid var(--border) !important;
+  /* The outer bottom-right arc and the send circle share their center. */
+  border-radius: calc(var(--composer-send-size) / 2 + var(--composer-inset) + var(--composer-border-width)) !important;
   box-shadow: var(--shadow-composer) !important;
   transition:
     border-color 160ms ease,
@@ -4217,7 +4447,7 @@ html:not(.dark) .session-item.is-selected .session-item-time {
 }
 
 .chat-composer-editor {
-  padding: 4px 3px 6px 5px !important;
+  padding: 0 0 0 4px !important;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
@@ -4295,7 +4525,7 @@ html:not(.dark) .session-item.is-selected .session-item-time {
   height: 32px;
   padding: 0 8px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-muted);
   font-size: var(--fs-small);
@@ -4325,7 +4555,7 @@ html:not(.dark) .session-item.is-selected .session-item-time {
 }
 
 .chat-composer-controls .native-popover button {
-  border-radius: 7px;
+  border-radius: var(--radius-md);
 }
 
 /* Steer / Follow-up while a run is active. One shape, two theme hues; the
@@ -8392,3 +8622,125 @@ html.native-desktop :is(
   color: var(--text-dim);
   font-size: var(--fs-small);
 }
+/* Preserve the fork composer geometry after upstream layout and Send changes. */
+.native-primary-button.composer-send-button {
+  flex: 0 0 var(--composer-send-size);
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--composer-send-size);
+  height: var(--composer-send-size);
+  min-width: var(--composer-send-size);
+  min-height: var(--composer-send-size);
+  padding: 0;
+  border-radius: 50% !important;
+  box-shadow: none;
+}
+
+/* One action in the editor; editable pending messages dock above its surface. */
+.composer-outbox {
+  margin: 0 18px -12px;
+  padding: 4px 6px 16px;
+  max-height: 188px;
+  overflow-y: auto;
+  border: var(--hairline) solid var(--border);
+  border-bottom: 0;
+  border-radius: 18px 18px 0 0;
+  background: var(--surface);
+}
+.composer-outbox + .chat-composer { position: relative; }
+.composer-outbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  min-width: 0;
+  padding: 0 4px;
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+}
+.composer-outbox-row + .composer-outbox-row { margin-top: 4px; }
+.composer-outbox-mark { flex: 0 0 auto; color: var(--text-dim); }
+.composer-outbox button {
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.composer-outbox-preview {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  color: var(--text) !important;
+}
+.composer-outbox-image-count { color: var(--text-dim); }
+.composer-outbox-actions { display: flex; flex-shrink: 0; align-items: center; gap: 4px; }
+.composer-outbox-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 5px;
+}
+.composer-outbox-actions .composer-outbox-send { padding-inline: 7px; white-space: nowrap; }
+.composer-outbox button:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
+.composer-outbox button:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }
+.composer-outbox button:disabled { opacity: 0.5; cursor: default; }
+@media (max-width: 480px) {
+  .composer-outbox { margin-inline: 10px; }
+  .composer-outbox-row { gap: 4px; }
+  .composer-outbox-mark { display: none; }
+  .composer-outbox-send-label { display: none; }
+}
+@media (pointer: coarse) {
+  .composer-outbox-actions button { min-width: 44px; min-height: 44px; }
+  .composer-outbox-row { min-height: 44px; }
+  .composer-outbox-preview { padding-block: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .composer-outbox button { transition: none; }
+}
+
+.native-primary-button.composer-send-button:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: none;
+}
+
+.native-primary-button.composer-send-button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.composer-send-button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 3px;
+}
+
+@media (pointer: coarse) {
+  .chat-composer {
+    --composer-send-size: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-composer,
+  .native-primary-button.composer-send-button {
+    transition: none !important;
+  }
+
+  .native-primary-button.composer-send-button:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+
+.app-menu [role="menuitemradio"][aria-checked="true"] { background: var(--bg-selected) !important; }

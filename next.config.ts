@@ -14,14 +14,17 @@ const gfmAutolinkEmailLoader = join(configDir, "lib/gfm-autolink-email-loader.cj
 const nextConfig: NextConfig = {
   // Desktop packaging gets an isolated standalone build. Keeping it outside
   // `.next` prevents a Tauri release build from disrupting `npm run dev`.
-  // outputFileTracingRoot (set unconditionally above) pins standalone file
-  // tracing to this package; otherwise Windows builds can scan protected
-  // profile dirs (EPERM on "C:\Users\<user>\Application Data") and fail.
+  // outputFileTracingRoot roots standalone output in this package. Runtime
+  // home paths must still use userHome(): NFT's outside-root check can miss
+  // Windows paths on another drive and enumerate the user's profile.
   ...(isDesktopBuild
     ? { output: "standalone" as const, distDir: ".next-desktop" }
     : {}),
   outputFileTracingRoot: configDir,
   experimental: {
+    ...(isDesktopBuild
+      ? { webpackBuildWorker: true, webpackMemoryOptimizations: true }
+      : {}),
     // proxy.ts matches /api/:path*, and Next buffers the request body whenever
     // a proxy is present, capped at 10 MB by default. The upload route accepts
     // up to 100 MB per request, so raise the buffer above that or large uploads

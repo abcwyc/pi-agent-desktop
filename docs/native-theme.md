@@ -97,6 +97,23 @@ right-panel header row and the file-panel expand button.
 **Topbar.** There is one right-aligned toolbar group (history / branches / more). The "More"
 panels (session stats, system prompt, agents, tools) are opaque and share one surface,
 because they sit over chat content. Dropdowns align with the main column.
+The actions and file-panel toggle sit beside the Windows/Linux window controls with
+a fixed 12px gap. Only the first trailing group takes an auto margin; competing auto
+margins would split the available space and leave the actions floating mid-bar.
+
+**Menus.** UI consistency is mandatory. Desktop popups always use the same app-themed
+DOM menus as the browser; build flags must not switch application menus to system styling.
+Settings, More, project menus and composer selectors share `.app-menu`: an opaque
+theme surface, 14px outer corners, 6px inset, 8px row corners and 4px between flat
+choices (`--menu-row-gap`). Space the whole row, including rows with default stars
+or worktree actions. Grid/flex choice groups use `.app-menu-items` to apply the same
+gap without stacking margins or shifting columns. Tool presets show
+their description below the name; selected rows retain a check and a muted fill.
+Simple action/option menus support arrows, Home/End, Escape and focus restoration.
+Form option pickers use `AppSelect` (Radix Select); editable suggestions use
+`AppCombobox`. Raw `select`/`datalist` popups are prohibited. Shared tokens define
+geometry and interaction states; `scripts/ui-menu-consistency.test.mjs` checks every
+component for regressions. References, inventory and verification: [menu audit](ui-menu-audit.md).
 
 **Right panel / file workbench.** The header is one chrome row, and its strip keeps the
 topbar's background, so the row reads as one bar whether the panel is open or closed. A tab's
@@ -118,6 +135,12 @@ when on; buttons keep the near-black accent. Phones and the ≤640px picker are 
 instead of scrolling (this reverts upstream #650). While a run is busy, fork/navigate actions
 on user messages are hidden with CSS (`data-session-busy`), not props, so message memoization
 survives.
+
+The circular send button and the composer's bottom-right corner share a center. Keep the
+right and bottom insets equal; the outer radius is the button radius plus that inset and
+the border width. The card grows upward for multiline drafts while the button stays at the
+bottom. Touch sizing changes the shared `--composer-send-size`, so both radii update together.
+`e2e/composer-geometry.mjs` checks newlines, wrapping, the height limit, and shrinking back.
 
 ## After an upstream merge
 

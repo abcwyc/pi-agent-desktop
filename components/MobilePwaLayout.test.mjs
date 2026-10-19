@@ -88,8 +88,8 @@ test("collapses secondary composer chrome while the mobile keyboard is open", ()
   assert.match(cssSource, /html\[data-keyboard-open\] \.chat-input-shell \{\s*padding-bottom: 6px !important;/);
   // The main composer's send is icon-only (phone and desktop) but keeps an
   // accessible name; only the compact quote composer shows the label.
-  assert.match(chatInputSource, /aria-label=\{t\("chat\.send"\)\}/);
-  assert.match(chatInputSource, /\{compact && t\("chat\.send"\)\}/);
+  assert.match(chatInputSource, /aria-label=\{t\(showStop \? "chat\.stopAgent" : isStreaming \? "chat\.queueMessage" : "chat\.send"\)\}/);
+  assert.match(chatInputSource, /\{compact && t\(showStop \? "chat\.stop" : "chat\.send"\)\}/);
 });
 
 test("keeps Settings › MCP usable in the 190px phone sidebar", () => {

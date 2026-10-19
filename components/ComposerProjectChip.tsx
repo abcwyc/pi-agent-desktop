@@ -74,7 +74,7 @@ export function ComposerProjectChip({
       </button>
       {open && projectOptions.length > 0 && onProjectChange && (
         <div
-          className="native-popover"
+          className="native-popover app-menu"
           role="menu"
           style={{
             position: "absolute",

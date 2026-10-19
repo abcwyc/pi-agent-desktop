@@ -3,6 +3,7 @@
 import type { RefObject } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
+import { useMenuNavigation } from "@/hooks/useMenuNavigation";
 
 export type ProjectViewMode = "grouped" | "timeline";
 
@@ -16,6 +17,7 @@ interface ProjectViewMenuProps {
   onModeChange: (mode: ProjectViewMode) => void;
   onCollapseAll: () => void;
   onExpandAll: () => void;
+  onClose?: () => void;
 }
 
 /**
@@ -33,8 +35,10 @@ export function ProjectViewMenu({
   onModeChange,
   onCollapseAll,
   onExpandAll,
+  onClose = () => {},
 }: ProjectViewMenuProps) {
   const { t } = useI18n();
+  useMenuNavigation(true, menuRef, onClose);
 
   const modeItem = (value: ProjectViewMode) => {
     const selected = mode === value;
@@ -56,7 +60,7 @@ export function ProjectViewMenu({
   return createPortal(
     <div
       ref={menuRef}
-      className="project-view-menu native-popover"
+      className="project-view-menu native-popover app-menu"
       role="menu"
       aria-label={t("sidebar.projectViewMenu")}
       style={{ top: pos.top, left: pos.left }}

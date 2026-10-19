@@ -50,6 +50,8 @@ export function SelectorRow({
 
   return (
     <div
+      className="app-option-row"
+      data-selected={active || undefined}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onFocus={() => setFocused(true)}

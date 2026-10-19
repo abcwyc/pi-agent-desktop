@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getRpcSession } from "@/lib/rpc-manager";
 import { resolveSessionPath } from "@/lib/session-reader";
+import { getComposerQueueVersion, getPendingComposerMessages } from "@/lib/composer-queue";
 
 export async function GET(
   _req: Request,
@@ -17,7 +18,8 @@ export async function GET(
     if (!await resolveSessionPath(id)) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
-    return NextResponse.json({ running: false });
+    const pending = getPendingComposerMessages(id);
+    return NextResponse.json({ running: false, ...(pending.length ? { state: { queuedMessages: { pending, pendingVersion: getComposerQueueVersion(id) } } } : {}) });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

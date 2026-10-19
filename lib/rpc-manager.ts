@@ -75,6 +75,8 @@ import {
   isChatToolAllowed,
   withoutAgentDelegation,
 } from "./chat-workspace-policy";
+import { ComposerQueue } from "./composer-queue";
+import type { PendingComposerMessage } from "./composer-queue-types";
 
 // ============================================================================
 // Types
@@ -347,6 +349,7 @@ export class AgentSessionWrapper {
   // Set when shutdown() starts. The SDK session stays usable until destroy(),
   // but lookups must treat the wrapper as gone from this point on.
   private closing = false;
+  private readonly composerQueue: ComposerQueue;
 
   constructor(
     public readonly inner: AgentSessionLike,
@@ -357,6 +360,18 @@ export class AgentSessionWrapper {
     this.onAgentRunComplete = options.onAgentRunComplete;
     this.suppressCompletionNotifications = options.suppressCompletionNotifications ?? false;
     this.mcpHost = options.mcpHost;
+    this.composerQueue = new ComposerQueue(inner.sessionId, {
+      canDeliver: () => this.isAlive() && !this.isRunning(),
+      deliver: (item, steer) => this.send({
+        type: "prompt", message: item.message, images: item.images,
+        streamingBehavior: steer ? "steer" : "followUp",
+      }),
+      changed: (items, pendingVersion) => this.emit({ type: "composer_queue_update", items, pendingVersion }),
+      failed: error => this.emit({
+        type: "prompt_error",
+        errorMessage: error instanceof Error ? error.message : String(error),
+      }),
+    });
   }
 
   get sessionId(): string {
@@ -482,12 +497,16 @@ export class AgentSessionWrapper {
       ) {
         notifyRunningChange();
       }
-      if (event.type === "agent_settled") this.notifyAgentRunCompleteIfIdle();
+      if (event.type === "agent_settled") {
+        this.composerQueue.wake();
+        this.notifyAgentRunCompleteIfIdle();
+      }
     });
     this.resetIdleTimer();
     // A reopened wrapper may already be running (restored mid-run); make
     // connected sidebars reconcile instead of waiting for the next event.
     notifyRunningChange();
+    this.composerQueue.wake();
   }
 
   /**
@@ -512,7 +531,7 @@ export class AgentSessionWrapper {
   }
 
   private notifyAgentRunCompleteIfIdle(): void {
-    if (!this.agentRunNeedsCompletion || this.isRunning()) return;
+    if (!this.agentRunNeedsCompletion || this.isRunning() || this.composerQueue.snapshot().length) return;
     this.agentRunNeedsCompletion = false;
     if (this.suppressCompletionNotifications) return;
     try {
@@ -820,12 +839,22 @@ export class AgentSessionWrapper {
         throw new Error("Session is being copied to a new session");
       }
 
-      if (type === "prompt" || type === "steer" || type === "follow_up") {
+      if (type === "prompt" || type === "steer" || type === "follow_up" || type === "queue_composer") {
         const imageError = validateAgentImages(command.images);
         if (imageError) throw new Error(imageError);
       }
 
       switch (type) {
+      case "queue_composer":
+        return this.composerQueue.enqueue(command.message as string, command.images as PendingComposerMessage["images"]);
+      case "take_composer_message":
+        return {
+          item: this.composerQueue.take(command.id as string),
+          pending: this.composerQueue.snapshot(), pendingVersion: this.composerQueue.version,
+        };
+      case "send_composer_message":
+        await this.composerQueue.sendNow(command.id as string);
+        return { item: null, pending: this.composerQueue.snapshot(), pendingVersion: this.composerQueue.version };
       case "prompt": {
         // Serialize only admission. Once the preceding prompt has either
         // passed or failed preflight, the SDK can atomically decide whether
@@ -874,6 +903,7 @@ export class AgentSessionWrapper {
             // this broadcast the last frame on the running-events stream still
             // contains the session id and the sidebar spinner never stops.
             notifyRunningChange();
+            this.composerQueue.wake();
             this.notifyAgentRunCompleteIfIdle();
           };
 
@@ -973,6 +1003,7 @@ export class AgentSessionWrapper {
         return null;
 
       case "abort":
+        this.composerQueue.pause();
         this.forceShutdownOnIdle = true;
         // Arm the forced cleanup now: the reset above ran before this flag,
         // and the final reset only runs once the SDK run has unwound.
@@ -1009,10 +1040,12 @@ export class AgentSessionWrapper {
           followUpMode: this.inner.followUpMode,
           model: model ? { id: model.id, provider: model.provider } : undefined,
           messageCount: 0,
-          pendingMessageCount: this.inner.pendingMessageCount,
+          pendingMessageCount: (this.inner.pendingMessageCount ?? 0) + this.composerQueue.snapshot().length,
           queuedMessages: {
             steering: [...this.inner.getSteeringMessages()],
             followUp: [...this.inner.getFollowUpMessages()],
+            pending: this.composerQueue.snapshot(),
+            pendingVersion: this.composerQueue.version,
           },
           contextUsage: contextUsage
             ? { percent: contextUsage.percent, contextWindow: contextUsage.contextWindow, tokens: contextUsage.tokens }
@@ -1380,6 +1413,7 @@ export class AgentSessionWrapper {
   destroy(): void {
     if (!this._alive) return;
     this._alive = false;
+    this.composerQueue.dispose();
     this.disposeMcpHost();
     // Tell attached SSE listeners to drop this instance so the browser
     // EventSource errors and reconnects instead of staying OPEN on a dead wrapper.

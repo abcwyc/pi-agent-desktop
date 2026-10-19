@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { AppSelect } from "./AppSelect";
 import { CHAT_THINKING_LEVELS, type ChatSettings } from "@/lib/chat-settings-shared";
 
 type Loaded = ChatSettings & { instructionsMaxChars: number };
@@ -77,44 +78,42 @@ export function ChatsSettingsSection() {
       <div className="settings-chat-options">
         <div className="settings-chat-option settings-chats-field">
           <label htmlFor="settings-chats-model">{t("settings.chatsModel")}</label>
-          <select
+          <AppSelect
             id="settings-chats-model"
             className="settings-chats-control"
+            aria-label={t("settings.chatsModel")}
             value={modelValue}
             disabled={settings === null || saving}
-            onChange={(event) => {
-              const [provider, modelId] = event.target.value.split("\u0000");
+            onValueChange={(value) => {
+              const [provider, modelId] = value.split("\u0000");
               void save({ model: provider && modelId ? { provider, modelId } : null });
             }}
-          >
-            <option value="">{t("settings.chatsFollowDefault")}</option>
-            {!selectedKnown && settings?.model && (
-              <option value={modelValue}>{`${settings.model.provider}/${settings.model.modelId}`}</option>
-            )}
-            {models.map((model) => (
-              <option key={`${model.provider}\u0000${model.id}`} value={`${model.provider}\u0000${model.id}`}>
-                {model.name || model.id} · {model.provider}
-              </option>
-            ))}
-          </select>
+            options={[
+              { value: "", label: t("settings.chatsFollowDefault") },
+              ...(!selectedKnown && settings?.model
+                ? [{ value: modelValue, label: `${settings.model.provider}/${settings.model.modelId}` }]
+                : []),
+              ...models.map((model) => ({
+                value: `${model.provider}\u0000${model.id}`,
+                label: `${model.name || model.id} · ${model.provider}`,
+              })),
+            ]}
+          />
         </div>
         <div className="settings-chat-option settings-chats-field">
           <label htmlFor="settings-chats-thinking">{t("settings.chatsThinking")}</label>
-          <select
+          <AppSelect
             id="settings-chats-thinking"
             className="settings-chats-control"
+            aria-label={t("settings.chatsThinking")}
             value={settings?.thinkingLevel ?? ""}
             disabled={settings === null || saving}
-            onChange={(event) => {
-              const value = event.target.value;
-              void save({ thinkingLevel: value ? value as ChatSettings["thinkingLevel"] : null });
-            }}
-          >
-            <option value="">{t("settings.chatsFollowDefault")}</option>
-            {CHAT_THINKING_LEVELS.map((level) => (
-              <option key={level} value={level}>{t(THINKING_LABEL_KEYS[level])}</option>
-            ))}
-          </select>
+            onValueChange={(value) => void save({ thinkingLevel: value ? value as ChatSettings["thinkingLevel"] : null })}
+            options={[
+              { value: "", label: t("settings.chatsFollowDefault") },
+              ...CHAT_THINKING_LEVELS.map((level) => ({ value: level, label: t(THINKING_LABEL_KEYS[level]) })),
+            ]}
+          />
         </div>
         <div className="settings-chat-option settings-chats-field settings-chats-instructions">
           <label htmlFor="settings-chats-instructions">{t("settings.chatsInstructions")}</label>

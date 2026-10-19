@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { canUseNativeMenu, menuPointBelow, showNativeMenu } from "@/lib/desktop-menu";
 import { isImeComposing } from "@/lib/ime";
 import type { SettingsSection } from "@/lib/settings-navigation";
+import { useMenuNavigation } from "@/hooks/useMenuNavigation";
 import { useI18n } from "@/hooks/useI18n";
 import { SETTINGS_SECTION_ITEMS, SettingsSectionIcon } from "./SettingsPanel";
 
@@ -89,11 +90,12 @@ interface SettingsEntryMenuProps {
 export function SettingsEntryMenu({ menu, hasProject, onSelectSection }: SettingsEntryMenuProps) {
   const { t: translate } = useI18n();
   const { settingsMenuOpen, settingsMenuPos, settingsMenuRef, closeSettingsMenu } = menu;
+  useMenuNavigation(settingsMenuOpen && Boolean(settingsMenuPos), settingsMenuRef, closeSettingsMenu);
   if (!settingsMenuOpen || !settingsMenuPos) return null;
   return createPortal(
     <div
       ref={settingsMenuRef}
-      className="sidebar-project-context-menu settings-entry-menu native-popover"
+      className="sidebar-project-context-menu settings-entry-menu native-popover app-menu"
       style={{ top: settingsMenuPos.top, left: settingsMenuPos.left }}
       role="menu"
       aria-label={translate("common.settings")}

@@ -1,5 +1,8 @@
 "use client";
 
+import { AppSelect } from "../AppSelect";
+import { AppCombobox } from "../AppCombobox";
+
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { apiErrorText, scheduledApi, type CronPreview, type TaskInput } from "@/lib/scheduled-tasks/client";
@@ -284,10 +287,9 @@ export function ScheduledTaskEditor({ task, projectRoots, defaultCwd, onBrowseFo
       <div className="scheduled-field">
         <label htmlFor={`${ids}-cwd`}>{t("scheduled.field.folder")}</label>
         <div className="scheduled-row">
-          <input id={`${ids}-cwd`} className="scheduled-input scheduled-mono" value={form.cwd} list={`${ids}-roots`} spellCheck={false} onChange={(e) => set("cwd", e.target.value)} aria-describedby={`${ids}-cwd-hint`} />
+          <AppCombobox id={`${ids}-cwd`} className="scheduled-input scheduled-mono" aria-label={t("scheduled.field.folder")} value={form.cwd} options={projectRoots} spellCheck={false} onValueChange={(value) => set("cwd", value)} aria-describedby={`${ids}-cwd-hint`} />
           {onBrowseFolder && <button type="button" className="scheduled-button" onClick={() => void browse()}>{t("scheduled.browse")}</button>}
         </div>
-        <datalist id={`${ids}-roots`}>{projectRoots.map((root) => <option key={root} value={root} />)}</datalist>
         <p id={`${ids}-cwd-hint`} className="scheduled-hint">{t("scheduled.field.folderHint")}</p>
         {untrustedProject && <p className="scheduled-notice" role="note">{t("scheduled.trust.notice")}</p>}
       </div>
@@ -308,9 +310,8 @@ export function ScheduledTaskEditor({ task, projectRoots, defaultCwd, onBrowseFo
           {form.kind === "weekly" && (
             <label className="scheduled-inline">
               <span>{t("scheduled.schedule.day")}</span>
-              <select className="scheduled-input" value={form.weekday} onChange={(e) => set("weekday", Number(e.target.value))}>
-                {weekdays.map((day) => <option key={day.value} value={day.value}>{day.label}</option>)}
-              </select>
+              <AppSelect className="scheduled-input" aria-label={t("scheduled.schedule.day")} value={String(form.weekday)} onValueChange={(value) => set("weekday", Number(value))}
+                options={weekdays.map((day) => ({ value: String(day.value), label: day.label }))} />
             </label>
           )}
           {(form.kind === "daily" || form.kind === "weekdays" || form.kind === "weekly") && (
@@ -361,22 +362,18 @@ export function ScheduledTaskEditor({ task, projectRoots, defaultCwd, onBrowseFo
       <div className="scheduled-grid">
         <div className="scheduled-field">
           <label htmlFor={`${ids}-model`}>{t("scheduled.field.model")}</label>
-          <select id={`${ids}-model`} className="scheduled-input" value={form.model} onChange={(e) => set("model", e.target.value)}>
-            <option value="">{t("scheduled.model.default")}</option>
-            {task?.model && !models.some((m) => modelKey({ provider: m.provider, modelId: m.id }) === form.model) && form.model && (
-              <option value={form.model}>{task.model.provider}/{task.model.modelId}</option>
-            )}
-            {models.map((model) => (
-              <option key={`${model.provider}/${model.id}`} value={modelKey({ provider: model.provider, modelId: model.id })}>{model.name || model.id} · {model.provider}</option>
-            ))}
-          </select>
+          <AppSelect id={`${ids}-model`} className="scheduled-input" aria-label={t("scheduled.field.model")} value={form.model} onValueChange={(value) => set("model", value)}
+            options={[
+              { value: "", label: t("scheduled.model.default") },
+              ...(task?.model && !models.some((m) => modelKey({ provider: m.provider, modelId: m.id }) === form.model) && form.model
+                ? [{ value: form.model, label: `${task.model.provider}/${task.model.modelId}` }] : []),
+              ...models.map((model) => ({ value: modelKey({ provider: model.provider, modelId: model.id }), label: `${model.name || model.id} · ${model.provider}` })),
+            ]} />
         </div>
         <div className="scheduled-field">
           <label htmlFor={`${ids}-thinking`}>{t("scheduled.field.thinking")}</label>
-          <select id={`${ids}-thinking`} className="scheduled-input" value={form.thinking} onChange={(e) => set("thinking", e.target.value)}>
-            <option value="">{t("scheduled.thinking.default")}</option>
-            {THINKING_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}
-          </select>
+          <AppSelect id={`${ids}-thinking`} className="scheduled-input" aria-label={t("scheduled.field.thinking")} value={form.thinking} onValueChange={(value) => set("thinking", value)}
+            options={[{ value: "", label: t("scheduled.thinking.default") }, ...THINKING_LEVELS.map((level) => ({ value: level, label: level }))]} />
         </div>
         <div className="scheduled-field">
           <label htmlFor={`${ids}-limit`}>{t("scheduled.field.timeLimit")}</label>

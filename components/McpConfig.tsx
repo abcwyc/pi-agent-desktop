@@ -1,5 +1,7 @@
 "use client";
 
+import { AppSelect } from "./AppSelect";
+
 import { useCallback, useEffect, useId, useRef, useState, type Ref } from "react";
 import type { McpExposure } from "@earendil-works/pi-coding-agent";
 import type {
@@ -1601,25 +1603,20 @@ function McpServerDetail({
           <ConfigDetailGridRow label={t("mcp.detail.exposure")} tone="plain">
             <span className="mcp-config-lines">
               <span className="mcp-exposure-choice">
-                <select
+                <AppSelect
                   className="mcp-add-input mcp-exposure-select"
                   aria-label={t("mcp.exposure.label", { name })}
                   aria-describedby={[exposureId, block ? noteId : null].filter(Boolean).join(" ")}
                   value={server.exposure}
                   disabled={controlsBusy || block !== undefined}
-                  onChange={(event) => {
-                    const exposure = event.target.value as McpExposure;
+                  onValueChange={(value) => {
+                    const exposure = value as McpExposure;
                     if (exposure !== server.exposure) onExposureChange(server, exposure);
                   }}
-                >
-                  {MCP_EXPOSURE_OPTIONS.map((exposure) => (
-                    <option key={exposure} value={exposure}>
-                      {exposure === "codemode"
+                  options={MCP_EXPOSURE_OPTIONS.map((exposure) => ({ value: exposure, label: exposure === "codemode"
                         ? t("mcp.exposure.optionDefault", { label: t(MCP_EXPOSURE_SHORT_KEYS[exposure]) })
-                        : t(MCP_EXPOSURE_SHORT_KEYS[exposure])}
-                    </option>
-                  ))}
-                </select>
+                        : t(MCP_EXPOSURE_SHORT_KEYS[exposure]) }))}
+                />
                 {busy === `exposure:${key}` && <span role="status" className="mcp-config-line is-dim">{t("i18n.saving")}</span>}
               </span>
               <span id={exposureId} className="mcp-config-line">{t(MCP_EXPOSURE_KEYS[server.exposure])}</span>

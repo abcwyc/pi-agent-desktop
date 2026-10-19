@@ -4,6 +4,7 @@ import { constants } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 
 import {
   RISK_ORDER,
@@ -14,6 +15,15 @@ import {
 
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const manifest = await readForkOwnership();
+
+test("the standalone classifier reports overlap on Windows and POSIX paths", () => {
+  const result = spawnSync(process.execPath, [join(rootDir, "scripts/fork-ownership.mjs"), "classify", "-"], {
+    input: "components/ChatInput.tsx\n", encoding: "utf8", cwd: rootDir,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /components\/ChatInput\.tsx/);
+  assert.match(result.stdout, /Review each one for silent semantic conflicts/);
+});
 
 async function exists(relativePath) {
   try {
@@ -134,7 +144,8 @@ test("untouched and ignored files never trigger review", () => {
 
 test("the real v0.8.0 -> v0.8.1 changeset would have demanded review", () => {
   // Regression anchor: this is what upstream actually shipped in one patch
-  // release. Seven of these files carry fork drift, so the previous
+  // release. Eight of these files carry tracked fork drift (including the
+  // editable outbox hook), so the previous
   // push-straight-to-signed-release path was applying them unattended.
   // lib/directory-browser.ts is in both lists for a reason — v0.8.1 introduced
   // it, and its homedir() usage is what broke the Windows build.
@@ -159,7 +170,8 @@ test("the real v0.8.0 -> v0.8.1 changeset would have demanded review", () => {
 
   assert.equal(result.reviewRequired, true);
   assert.equal(result.highestRisk, "high");
-  assert.equal(result.overlaps.length, 7);
+  assert.equal(result.overlaps.length, 8);
+  assert.equal(result.overlaps.find(entry => entry.path === "hooks/useAgentSession.ts")?.risk, "high");
   assert.equal(result.overlaps[0].risk, "high", "the riskiest overlap must be reported first");
   assert.match(formatReport(result), /silent semantic conflicts/);
 });

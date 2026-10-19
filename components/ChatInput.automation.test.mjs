@@ -70,9 +70,11 @@ test("server supports the automation command set end to end", () => {
 });
 
 test("narrow screens keep Stop one tap away while streaming", () => {
-  const block = source.slice(source.indexOf("Stop must stay one tap away"));
-  assert.ok(block.length > 0);
-  assert.match(block.slice(0, 1400), /isNarrow && isStreaming && !controlsMenuOpen/);
+  const html = render({ isStreaming: true });
+  assert.equal((html.match(/data-action="stop"/g) ?? []).length, 1);
+  assert.ok(html.indexOf('data-action="stop"') < html.indexOf('class="chat-composer-controls"'), "Stop stays in the editor, outside collapsed controls");
+  assert.match(html, /aria-label="Stop agent"/);
+  assert.doesNotMatch(html, /composer-stop-button/);
 });
 
 test("tool preset control dims instead of vanishing while streaming", () => {

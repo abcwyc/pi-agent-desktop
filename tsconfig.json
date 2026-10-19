@@ -40,6 +40,7 @@
   ],
   "exclude": [
     "node_modules",
-    "demo"
+    "demo",
+    "test-results"
   ]
 }

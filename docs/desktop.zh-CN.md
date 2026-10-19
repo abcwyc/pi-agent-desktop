@@ -5,7 +5,7 @@ Pi Agent 使用 Tauri 封装本地 Web UI 与 Agent 服务，支持 Apple Silico
 ## 要求
 
 - macOS 11 或更新版本（Apple Silicon）、Windows 10/11 x64，或安装了 WebKitGTK 4.1 与 GTK 3 的 Linux x64 发行版
-- 构建时需要 Node.js 20.9 或更新版本
+- 构建时使用 Node.js 22.19 或更新的 22.x 版本，与项目 CI 保持一致
 - Rust 1.85 或更新版本
 - macOS 使用 Xcode Command Line Tools；Windows 使用 Microsoft C++ Build Tools；Linux 使用 GTK/WebKitGTK 开发包
 
@@ -32,6 +32,10 @@ npm run desktop:build
 3. 在 macOS 生成 `.app` 和 `.dmg`，在 Windows x64 生成 NSIS `-setup.exe`，在 Linux x64 生成 `.deb`。
 
 Linux 安装包依赖 WebKitGTK 4.1 和 GTK 3 运行库；Node runtime 已包含在安装包中，用户无需另行安装 Node.js。
+
+桌面构建启用独立 Webpack worker 与内存优化，避免自定义 Webpack 配置关闭默认 worker 后将编译内存集中在主进程。网络环境需要代理时，给构建进程设置 `HTTPS_PROXY`、`HTTP_PROXY`，并通过 `NO_PROXY=localhost,127.0.0.1,::1` 保持本地服务直连；Node 不会自动继承 Windows 系统代理。
+
+Windows 上项目与用户目录位于不同盘符时，不能只依赖 `outputFileTracingRoot` 阻止扫描用户目录。文件访问和路径展示代码都应通过 `lib/user-home.ts` 的 `userHome()` 解析主目录；直接对 `homedir()` 的结果做字符串处理也可能触发 Next 文件追踪器递归扫描。可运行 `node --max-old-space-size=256 --test scripts/home-tracing.test.mjs` 在临时目录中验证这一边界，无需构建应用。worker 与内存优化不能替代此修复。
 
 默认产物位于：
 

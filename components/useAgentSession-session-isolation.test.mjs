@@ -14,7 +14,7 @@ function functionSlice(source, startMarker, endMarker) {
 }
 
 test("context loads ignore stale sessions and out-of-order branch responses", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = (await readFile(sourceUrl, "utf8")).replace(/\r\n/g, "\n");
   const body = functionSlice(source, "const loadContext = useCallback", "const loadTools = useCallback");
   assert.match(body, /requestId = \+\+contextLoadIdRef\.current/);
   assert.match(body, /sessionIdRef\.current === sid/);
@@ -23,7 +23,7 @@ test("context loads ignore stale sessions and out-of-order branch responses", as
 });
 
 test("tool preset loads ignore stale sessions and out-of-order responses", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = (await readFile(sourceUrl, "utf8")).replace(/\r\n/g, "\n");
   const body = functionSlice(source, "const loadTools = useCallback", "const promoteNewSession = useCallback");
   assert.match(body, /requestId = \+\+toolsLoadIdRef\.current/);
   assert.match(body, /sessionIdRef\.current === sid/);
@@ -34,7 +34,7 @@ test("tool preset loads ignore stale sessions and out-of-order responses", async
 });
 
 test("agent-end state refreshes cannot overwrite a switched session or newer run", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = (await readFile(sourceUrl, "utf8")).replace(/\r\n/g, "\n");
   const body = functionSlice(source, 'case "agent_end"', 'case "agent_settled"');
   assert.match(body, /const sid = sessionIdRef\.current/);
   assert.match(body, /const sessionGeneration = sessionGenerationRef\.current/);
@@ -45,14 +45,14 @@ test("agent-end state refreshes cannot overwrite a switched session or newer run
 });
 
 test("a stale branch load cannot navigate the newly active session", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = (await readFile(sourceUrl, "utf8")).replace(/\r\n/g, "\n");
   const body = functionSlice(source, "const handleLeafChange = useCallback", "const handleModelChange = useCallback");
   assert.match(body, /const loaded = await loadContext\(sid, leafId\)/);
   assert.match(body, /loaded && leafId && sessionIdRef\.current === sid/);
 });
 
 test("returning to a session restores its last scroll position", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = (await readFile(sourceUrl, "utf8")).replace(/\r\n/g, "\n");
   // The save must happen inside the render-phase reset block: by the time an
   // effect cleanup runs for a session switch, the message list has already
   // been emptied in the same commit and the browser has clamped scrollTop to
@@ -69,7 +69,7 @@ test("returning to a session restores its last scroll position", async () => {
 });
 
 test("the stable ChatWindow reloads whenever its session identity changes", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = (await readFile(sourceUrl, "utf8")).replace(/\r\n/g, "\n");
   const effect = functionSlice(source, "// Load session on mount and whenever", "useEffect(() => {\n    onSystemPromptChange");
   assert.match(effect, /sessionIdRef\.current = session\.id/);
   // Merged form: showLoading is `!cached` so a restored snapshot skips the
@@ -79,7 +79,7 @@ test("the stable ChatWindow reloads whenever its session identity changes", asyn
 });
 
 test("promoting a new session to its real id keeps the transcript on screen", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = (await readFile(sourceUrl, "utf8")).replace(/\r\n/g, "\n");
   // promoteNewSession records the draft-key -> id move it is about to cause
   const promote = functionSlice(source, "const promoteNewSession = useCallback", "const ensureNewSession = useCallback");
   assert.match(promote, /promotedIdentityRef\.current = \{ from: provisionalDraftKey, to: sid \}/);
@@ -94,7 +94,7 @@ test("promoting a new session to its real id keeps the transcript on screen", as
 });
 
 test("session loads reject A-B-A responses from an older generation", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = (await readFile(sourceUrl, "utf8")).replace(/\r\n/g, "\n");
   const body = functionSlice(source, "const loadSession = useCallback", "const loadContext = useCallback");
   assert.match(body, /const sessionGeneration = sessionGenerationRef\.current/);
   assert.match(body, /sessionGenerationRef\.current === sessionGeneration/);
@@ -103,7 +103,7 @@ test("session loads reject A-B-A responses from an older generation", async () =
 });
 
 test("the stable ChatWindow resets viewport state for the selected session", async () => {
-  const source = await readFile(chatWindowUrl, "utf8");
+  const source = (await readFile(chatWindowUrl, "utf8")).replace(/\r\n/g, "\n");
   const block = functionSlice(source, "if (lazyLoadSessionKey !== appliedLazyLoadSessionKey)", "const searchMessage =");
   assert.match(block, /sessionVisibleCounts\.set\(appliedLazyLoadSessionKey, visibleCount\)/);
   assert.match(block, /sessionVisibleCounts\.get\(lazyLoadSessionKey\)/);

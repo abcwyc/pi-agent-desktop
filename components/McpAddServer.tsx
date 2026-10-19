@@ -1,5 +1,7 @@
 "use client";
 
+import { AppSelect } from "./AppSelect";
+
 import { useId, useMemo } from "react";
 import type { McpServerConfig } from "@earendil-works/pi-coding-agent";
 import type { McpResponse, McpScope } from "@/lib/api-types";
@@ -255,16 +257,13 @@ export function McpAddServer({
 
       {parsed.ok && parsed.servers.length > 1 && (
         <ConfigField label={t("mcp.add.serverLabel")}>
-          <select
+          <AppSelect
             className="mcp-add-input"
             aria-label={t("mcp.add.serverLabel")}
             value={String(parsed.servers.indexOf(server ?? parsed.servers[0]))}
-            onChange={(event) => change({ server: Number(event.target.value), name: undefined, values: {}, references: {}, secretReferences: {} })}
-          >
-            {parsed.servers.map((item, index) => (
-              <option key={`${index}\0${item.name}`} value={index}>{revealHiddenCharacters(item.name)}</option>
-            ))}
-          </select>
+            onValueChange={(value) => change({ server: Number(value), name: undefined, values: {}, references: {}, secretReferences: {} })}
+            options={parsed.servers.map((item, index) => ({ value: String(index), label: revealHiddenCharacters(item.name) }))}
+          />
           <span className="mcp-config-line is-dim">{t("mcp.add.serverCount", { count: parsed.servers.length })}</span>
         </ConfigField>
       )}
@@ -518,10 +517,8 @@ function McpAddFieldInput({
             onChange={(event) => setReference(event.target.value)}
           />
         ) : field.kind === "select" ? (
-          <select className="mcp-add-input" aria-label={label} value={value} {...invalid} onChange={(event) => setValue(event.target.value)}>
-            {!field.options?.includes(value) && <option value="">{t("mcp.add.field.choose")}</option>}
-            {(field.options ?? []).map((option) => <option key={option} value={option}>{revealHiddenCharacters(option)}</option>)}
-          </select>
+          <AppSelect className="mcp-add-input" aria-label={label} value={value} {...invalid} onValueChange={setValue}
+            options={[...(!field.options?.includes(value) ? [{ value: "", label: t("mcp.add.field.choose") }] : []), ...(field.options ?? []).map((option) => ({ value: option, label: revealHiddenCharacters(option) }))]} />
         ) : (
           <input
             className="mcp-add-input"

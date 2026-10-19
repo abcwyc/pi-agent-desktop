@@ -53,7 +53,7 @@
     "test:release-tools": "node --test scripts/*.test.mjs",
     "check:deps": "node scripts/check-installed-deps.mjs",
     "pretest": "npm run check:deps",
-    "test": "node --experimental-strip-types --test 'app/**/*.test.mjs' 'lib/**/*.test.mjs' 'scripts/**/*.test.mjs' 'components/**/*.test.mjs' 'hooks/**/*.test.mjs' 'public/**/*.test.mjs'",
+    "test": "node --experimental-strip-types --test --test-concurrency=4 \"app/**/*.test.mjs\" \"lib/**/*.test.mjs\" \"scripts/**/*.test.mjs\" \"components/**/*.test.mjs\" \"hooks/**/*.test.mjs\" \"public/**/*.test.mjs\"",
     "lint": "eslint . && npm run check:branding",
     "check:branding": "node --test lib/branding.test.mjs",
     "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public",
@@ -85,7 +85,8 @@
     "react-dom": "^19.2.4",
     "semver": "7.8.5",
     "undici": "8.11.0",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "@radix-ui/react-select": "^2.3.8"
   },
   "devDependencies": {
     "@tailwindcss/browser": "4.2.2",

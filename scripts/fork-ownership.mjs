@@ -14,7 +14,7 @@
 
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const manifestPath = join(rootDir, "scripts", "fork-ownership.json");
@@ -131,6 +131,6 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   await main();
 }
