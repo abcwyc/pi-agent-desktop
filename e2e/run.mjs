@@ -309,17 +309,42 @@ try {
       const navigator = page.getByRole("slider", { name: "Conversation navigation", exact: true });
       await navigator.waitFor();
       await navigator.focus();
-      const before = Number(await navigator.getAttribute("aria-valuenow"));
-      const maximum = Number(await navigator.getAttribute("aria-valuemax"));
+      const { before, maximum } = await navigator.evaluate((element) => ({
+        before: Number(element.getAttribute("aria-valuenow")),
+        maximum: Number(element.getAttribute("aria-valuemax")),
+      }));
       const direction = before > 1 ? "ArrowUp" : "ArrowDown";
+      const distanceFromEnd = maximum - before + (direction === "ArrowUp" ? 1 : -1);
       await page.keyboard.press(direction);
       // The preview card is a button since #130 (click jumps to the turn).
       const preview = page.locator(".conversation-navigator-preview");
       await preview.waitFor();
-      const after = Number(await navigator.getAttribute("aria-valuenow"));
-      assert.equal(after, before + (direction === "ArrowUp" ? -1 : 1));
-      assert.ok(after >= 1 && after <= maximum);
-      assert.match(await preview.innerText(), /^E2E message \d{4}\nE2E message \d{4}$/);
+      // A pending history page can prepend turns while the smooth jump runs.
+      // Absolute indexes then change, and scroll events report intermediate
+      // turns. Check the destination relative to the unchanged history tail.
+      const questionIndex = 5000 - (distanceFromEnd + 1) * 2;
+      assert.equal(await preview.innerText(), `${text(questionIndex)}\n${text(questionIndex + 1)}`);
+      await navigator.evaluate(async (track, distance) => {
+        const scrollport = document.querySelector(".chat-scroll-container");
+        let previousTop = scrollport.scrollTop;
+        let stableSince = performance.now();
+        const deadline = performance.now() + 10_000;
+        while (performance.now() < deadline) {
+          await new Promise(requestAnimationFrame);
+          const atDestination = Number(track.getAttribute("aria-valuemax"))
+            - Number(track.getAttribute("aria-valuenow")) === distance;
+          if (!atDestination || scrollport.scrollTop !== previousTop) stableSince = performance.now();
+          previousTop = scrollport.scrollTop;
+          if (performance.now() - stableSince >= 100) return;
+        }
+        throw new Error("Conversation navigation did not settle on the requested turn");
+      }, distanceFromEnd);
+      const after = await navigator.evaluate((element) => ({
+        value: Number(element.getAttribute("aria-valuenow")),
+        maximum: Number(element.getAttribute("aria-valuemax")),
+      }));
+      assert.equal(after.maximum - after.value, distanceFromEnd);
+      assert.ok(after.value >= 1 && after.value <= after.maximum);
       await page.locator("textarea").last().focus();
       await preview.waitFor({ state: "hidden" });
     }
