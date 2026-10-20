@@ -8568,15 +8568,7 @@ html.native-desktop :is(
 }
 
 
-/* Chats: date group labels, the pin mark and archived rows. */
-.sidebar-chats-group-label {
-  padding: 6px 10px 2px 31px;
-  color: var(--text-dim);
-  font-size: var(--fs-small);
-  font-weight: 500;
-  line-height: 1.3;
-}
-
+/* Chats: the pin mark and archived rows. */
 .session-item-pin {
   flex: 0 0 auto;
   color: var(--text-dim);

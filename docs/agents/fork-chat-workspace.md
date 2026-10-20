@@ -42,13 +42,12 @@ derivation. It uses `workspaceKind`, the `/api/chat-workspace` answer, or the
   `chatSessionPages`). Folding drops the extra pages, so unfolding shows five again;
   every "Show more" adds five. A search ignores the fold.
 
-- Chats can be pinned, grouped and archived from the row menu (`lib/chat-groups.ts`).
-  Pinned chats come first under "Pinned", the rest by recency under Today (the local
-  calendar day), This week (the six days before) and Earlier; a label appears where the
-  group changes, and the +5 paging runs over that whole order. Archived chats leave the
-  list (a search still finds them) and sit behind "Show archived (N)" with an Unarchive
-  entry. Pin and archive are browser preferences like archived projects
-  (`pinnedChats`, `archivedChats`), keyed by the chat's root session id.
+- Chats can be pinned and archived from the row menu (`lib/chat-groups.ts`). Pinned chats
+  come first (a pin mark on the row), the rest by recency; there are no Today / This week
+  headings because every row already shows its relative time. The +5 paging runs over that
+  whole order. Archived chats leave the list (a search still finds them) and sit behind
+  "Show archived (N)" with an Unarchive entry. Pin and archive are browser preferences like
+  archived projects (`pinnedChats`, `archivedChats`), keyed by the chat's root session id.
 
 ## Settings › General › Chats
 
@@ -143,7 +142,7 @@ that is still running is refused.
 - `lib/chat-workspace.test.mjs` covers path ownership and private directory
   creation.
 - `lib/chat-groups.test.mjs`, `lib/chat-settings.test.mjs` and `lib/session-policy.test.mjs`
-  cover grouping, the settings block and the policy derivation.
+  cover pin ordering, the settings block and the policy derivation.
 - `lib/chat-workspace-policy.test.mjs` pins the server-side policy and exercises the
   skill-confined `read`, the tool allow-list, the date section and the delegation
   filter. `lib/chat-attachments.test.mjs` covers the text-attachment round trip.

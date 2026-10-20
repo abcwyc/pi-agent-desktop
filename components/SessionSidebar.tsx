@@ -41,7 +41,7 @@ import { useWindowDrag } from "./desktop";
 import { SessionSearch } from "./SessionSearch";
 import { ProjectViewMenu, type ProjectViewMode } from "./ProjectViewMenu";
 import { ChatsSectionMenu } from "./ChatsSectionMenu";
-import { groupChatFamilies, toggleId, type ChatGroupId } from "@/lib/chat-groups";
+import { orderChatFamilies, toggleId } from "@/lib/chat-groups";
 import { ScheduledSidebarRow } from "./scheduled/ScheduledSidebarRow";
 import { isScheduledRunSession } from "@/hooks/useScheduledTasks";
 import { prefetchSessionData } from "@/lib/session-data-cache";
@@ -139,12 +139,6 @@ interface SessionTreeNode {
 
 const MAX_VISIBLE_PROJECT_SESSIONS = 5;
 const MAX_VISIBLE_CHAT_SESSIONS = 5;
-const CHAT_GROUP_LABEL_KEYS: Record<ChatGroupId, string> = {
-  pinned: "sidebar.chatsPinned",
-  today: "sidebar.chatsToday",
-  week: "sidebar.chatsThisWeek",
-  earlier: "sidebar.chatsEarlier",
-};
 
 const SESSION_LIST_ITEM_HEIGHT = 54;
 
@@ -1281,7 +1275,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   );
   const allChatFamilies = listSessionFamilies(chatSessions);
   // Pinned first, then by recency. Archived chats leave the list unless a search is looking for them.
-  const { ordered: orderedChatFamilies, groupOf: chatGroupOf } = groupChatFamilies(allChatFamilies, pinnedChats);
+  const orderedChatFamilies = orderChatFamilies(allChatFamilies, pinnedChats);
   const chatFamilies = trimmedSessionQuery
     ? orderedChatFamilies
     : orderedChatFamilies.filter((family) => !archivedChats.has(family.root.id));
@@ -1900,20 +1894,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         </div>
         {!chatsFolded && (
         <div className="sidebar-project-tree-children sidebar-chats-list">
-          {visibleChatFamilies.map((family, index) => {
-            const group = chatGroupOf.get(family.root.id) ?? "earlier";
-            const previousGroup = index > 0 ? chatGroupOf.get(visibleChatFamilies[index - 1].root.id) : undefined;
-            return (
-              <Fragment key={family.root.id}>
-                {group !== previousGroup && (
-                  <div className="sidebar-chats-group-label" role="presentation">
-                    {t(CHAT_GROUP_LABEL_KEYS[group])}
-                  </div>
-                )}
-                {renderChatFamily(family)}
-              </Fragment>
-            );
-          })}
+          {visibleChatFamilies.map((family) => (
+            <Fragment key={family.root.id}>{renderChatFamily(family)}</Fragment>
+          ))}
           {!loading && !error && chatFamilies.length === 0 && (
             <div className="sidebar-chats-empty">
               {trimmedSessionQuery ? t("sidebar.noMatchingSessions") : t("sidebar.noChats")}
