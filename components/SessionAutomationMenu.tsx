@@ -59,7 +59,7 @@ export function SessionAutomationMenu({
           padding: "6px 0", minWidth: 230,
         }}>
           {onCompact && (
-            <div style={{ padding: "0 5px" }}>
+            <div>
               <button
                 type="button"
                 className="composer-menu-row"

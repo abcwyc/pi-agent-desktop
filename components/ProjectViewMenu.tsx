@@ -51,7 +51,6 @@ export function ProjectViewMenu({
         autoFocus={selected}
         onClick={() => onModeChange(value)}
       >
-        <span className="project-view-menu-check" aria-hidden="true">{selected ? "✓" : ""}</span>
         <span>{t(value === "grouped" ? "sidebar.projectViewGrouped" : "sidebar.projectViewTimeline")}</span>
       </button>
     );

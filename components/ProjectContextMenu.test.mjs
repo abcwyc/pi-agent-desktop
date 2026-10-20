@@ -124,8 +124,8 @@ test("the worktree page switches, removes non-main checkouts and creates new one
   // One remove button, for the feature worktree only; main is never removable.
   assert.equal(html.match(/worktree-remove-button/g)?.length, 1);
   assert.ok(html.includes(`sidebar.removeWorktreeTitle(${FEATURE.path})`));
-  // The selected worktree carries the check mark, main carries its tag.
-  assert.match(html, /✓<\/span><span class="sidebar-project-context-menu-label">feature<\/span>/);
+  // Current-checkout semantics drive the shared selection pill; main keeps its tag.
+  assert.match(html, /aria-current="true"><span class="sidebar-project-context-menu-label">feature<\/span>/);
   assert.match(html, /<span class="sidebar-project-context-menu-label">main<\/span><span class="sidebar-project-context-menu-branch-tag">sidebar.main<\/span>/);
   assert.ok(html.includes("sidebar.newWorktree"));
 });

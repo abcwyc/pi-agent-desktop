@@ -22,15 +22,32 @@ async function assertRowGaps(rows,label){
  assert.ok(gaps.every(gap=>Math.abs(gap-4)<0.5),JSON.stringify({label,gaps}));
  return gaps;
 }
+async function assertSelectionPill(row){
+ const pill=await row.evaluate(el=>{const s=getComputedStyle(el,'::before');return {content:s.content,width:s.width,height:s.height,color:s.backgroundColor};});
+ assert.equal(pill.content,'""');assert.equal(pill.width,'3px');assert.equal(pill.height,'16px');
+ assert.notEqual(pill.color,'rgba(0, 0, 0, 0)');
+}
+async function assertChoiceGeometry(surface,rows,label){
+ const box=await surface.evaluate(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return {left:r.left+parseFloat(s.borderLeftWidth),right:r.right-parseFloat(s.borderRightWidth)};});
+ const geometry=await rows.evaluateAll(items=>items.map(el=>{const r=el.getBoundingClientRect();return {left:r.left,right:r.right,radius:parseFloat(getComputedStyle(el).borderTopLeftRadius)};}));
+ assert.ok(geometry.length,label+' has rows');
+ for(const row of geometry){
+  assert.ok(Math.abs(row.left-box.left-8)<0.5,JSON.stringify({label,edge:'left',row,box}));
+  assert.ok(Math.abs(box.right-row.right-8)<0.5,JSON.stringify({label,edge:'right',row,box}));
+  assert.equal(row.radius,5,label+' row radius');
+ }
+ return {inset:8,gap:4,radius:5};
+}
 try{
  for(const theme of ['dark','light'])for(const width of [1280,390,320]){
   const page=await browser.newPage({viewport:{width,height:720},hasTouch:width===320,isMobile:width===320,deviceScaleFactor:2,reducedMotion:'reduce'});const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.addInitScript(()=>localStorage.setItem('pi-locale','zh-CN'));
+  await page.addInitScript(theme=>{localStorage.setItem('pi-locale','zh-CN');localStorage.setItem('pi-theme',theme);},theme);
   await page.route('**/*',route=>route.request().url().startsWith(base)?route.continue():route.abort());await page.goto(base);
   await page.evaluate(theme=>document.documentElement.classList.toggle('dark',theme==='dark'),theme);
   const trigger=page.getByRole('combobox',{name:'Thinking fixture',exact:true});await trigger.click();
   const list=page.getByRole('listbox');await list.waitFor();assert.equal(await list.getByRole('option').count(),5);
   await assertRowGaps(list.locator('.app-select-option'),'form select');
+  await assertChoiceGeometry(list,list.locator('.app-select-option'),'form select');
   await page.waitForFunction(()=>document.activeElement?.textContent==='medium');
   await page.keyboard.press('ArrowUp');await page.waitForFunction(()=>{
     const el=document.activeElement;return el?.textContent==='low'&&el.matches(':focus-visible')&&getComputedStyle(el).outlineStyle!=='none';
@@ -73,6 +90,8 @@ try{
   if(!await tool.isVisible())await page.getByRole('button',{name:'更多控件',exact:true}).click();
   await tool.click();const tools=page.locator('.composer-tool-menu');await tools.waitFor();
   const toolRows=tools.locator('.app-option-row');const toolGaps=await assertRowGaps(toolRows,'actual Config');
+  await assertChoiceGeometry(tools,toolRows,'actual Config');
+  await assertSelectionPill(tools.locator('.app-option-row[data-selected]'));
   await toolRows.nth(1).hover();
   await page.waitForFunction(()=>getComputedStyle(document.querySelectorAll('.composer-tool-menu .app-option-row')[1]).backgroundColor!=='rgba(0, 0, 0, 0)');
   const states=await toolRows.evaluateAll(rows=>rows.slice(0,2).map(row=>({selected:row.hasAttribute('data-selected'),color:getComputedStyle(row).backgroundColor,hovered:row.matches(':hover')})));
@@ -83,11 +102,21 @@ try{
   await page.keyboard.press('Escape');await tools.waitFor({state:'hidden'});
   const reasoning=page.getByRole('button',{name:'更改推理级别',exact:true});await reasoning.click();
   const reasoningRows=page.getByRole('listbox').locator('.app-option-row');await assertRowGaps(reasoningRows,'actual reasoning');
+  await assertChoiceGeometry(page.getByRole('listbox'),reasoningRows,'actual reasoning');
+  await assertSelectionPill(page.getByRole('listbox').locator('.app-option-row[data-selected]'));
   const saveDefault=page.getByRole('listbox').locator('.app-option-row > button:not([role])').first();
   if(await saveDefault.count())assert.equal(await saveDefault.evaluate(el=>parseFloat(getComputedStyle(el).marginTop)),0,'default star must not get row spacing');
+  const low=reasoningRows.filter({has:page.getByRole('option',{name:/^low\b/})});
+  const star=low.locator('button.app-default-star');await star.hover();
+  const starStyle=await star.evaluate(el=>{const s=getComputedStyle(el);return {border:s.borderTopWidth,bg:s.backgroundColor,shadow:s.boxShadow};});
+  assert.equal(starStyle.border,'0px');assert.equal(starStyle.bg,'rgba(0, 0, 0, 0)');assert.equal(starStyle.shadow,'none');
+  await star.click();await low.locator('.app-default-star.is-default').waitFor();
+  assert.equal(await low.locator('[role="option"]').getAttribute('aria-selected'),'true','saved reasoning is applied through the existing callback');
+  await page.getByRole('listbox').screenshot({path:`test-results/ui-send/selection-reasoning-${theme}-${width}.png`});
   await page.keyboard.press('Escape');
   await page.locator('textarea').click();
-  await page.getByRole('button',{name:'Change model',exact:true}).click();await assertRowGaps(page.getByRole('listbox').locator('.app-option-row'),'actual model choices');await page.keyboard.press('Escape');
+  await page.getByRole('button',{name:'Change model',exact:true}).click();await assertRowGaps(page.getByRole('listbox').locator('.app-option-row'),'actual model choices');
+  await assertChoiceGeometry(page.getByRole('listbox'),page.getByRole('listbox').locator('.app-option-row'),'actual models');await page.keyboard.press('Escape');
   const input=page.locator('textarea');await input.fill('');await input.press('ArrowUp');
   const history=page.locator('.app-suggestion-menu');await history.waitFor();await assertRowGaps(history.locator('button'),'actual input history');await input.press('Escape');
   await input.fill('/');const commands=page.locator('.app-suggestion-menu .app-menu-items');await commands.waitFor();
@@ -114,9 +143,21 @@ try{
   await assertRowGaps(page.locator('.app-combobox-menu [role="option"]'),'extracted worktree suggestions');
   await branch.fill('fea');await branch.press('ArrowDown');await branch.press('Enter');assert.equal(await branch.inputValue(),'feature');
   await branch.press('Enter');assert.equal(await page.evaluate(()=>window.__createdBranch),'feature');
-  await page.getByRole('button',{name:'Project settings',exact:true}).click();await page.getByRole('button',{name:'Open settings menu',exact:true}).click();
-  const settings=page.locator('.settings-entry-menu');await settings.waitFor();await assertRowGaps(settings.getByRole('menuitem'),'extracted settings');
-  await page.keyboard.press('Escape');await settings.waitFor({state:'hidden'});
+  await page.getByRole('button',{name:'Settings geometry',exact:true}).click();
+  const surface=page.locator('.settings-dialog-surface');await surface.waitFor();
+  assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('dark')),theme==='dark','Settings must use the tested palette');
+  if(width===1280){
+   const tabs=page.locator('.settings-section-tabs'),rows=tabs.locator('.settings-section-tab');
+   await assertRowGaps(rows,'actual Settings navigation');
+   await assertChoiceGeometry(tabs,rows,'actual Settings navigation');
+   await rows.nth(1).hover();
+   await tabs.screenshot({path:`test-results/ui-send/settings-choice-geometry-${theme}-${width}.png`});
+  }else{
+   await page.locator('.settings-mobile-section-picker').click();
+   await assertChoiceGeometry(page.getByRole('listbox'),page.getByRole('listbox').locator('.app-select-option'),'mobile Settings categories');
+   await page.keyboard.press('Escape');
+  }
+  await surface.locator('.settings-dialog-close').click();await surface.waitFor({state:'hidden'});
   assert.deepEqual(errors,[]);results.push({theme,width,options:5,mcpOptions:labels.length,geometry,colors,ratios,toolGaps,states});await page.close();
  }
  await writeFile('test-results/ui-send/consistency-controls.json',JSON.stringify(results,null,2));

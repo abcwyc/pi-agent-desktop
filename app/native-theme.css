@@ -3309,11 +3309,15 @@ html:not(.dark) .session-item.is-selected .session-item-time {
 
 /* One menu surface for settings, topbar actions and composer selectors. */
 :root {
-  --menu-radius: 14px;
-  --menu-inset: 6px;
-  --menu-row-radius: 8px;
+  /* Choice geometry: Settings' inset/radius, Config's separation. */
+  --choice-inset: 8px;
+  --choice-row-gap: 4px;
+  --choice-row-radius: 5px;
+  --menu-radius: calc(var(--choice-row-radius) + var(--choice-inset) + 1px);
+  --menu-inset: var(--choice-inset);
+  --menu-row-radius: var(--choice-row-radius);
   --menu-row-height: 34px;
-  --menu-row-gap: 4px;
+  --menu-row-gap: var(--choice-row-gap);
   --menu-focus-ring: var(--text);
 }
 
@@ -3326,6 +3330,13 @@ html:not(.dark) .session-item.is-selected .session-item-time {
   color: var(--text);
   box-shadow: var(--shadow-popover) !important;
   backdrop-filter: none;
+}
+
+/* A single padded surface owns the inset; scroll wrappers add none. */
+.app-menu-list {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0;
 }
 
 .app-menu :is(button[role="menuitem"], button[role="menuitemcheckbox"], button[role="menuitemradio"], button[role="option"]) {
@@ -3352,6 +3363,69 @@ html:not(.dark) .session-item.is-selected .session-item-time {
 
 .app-menu .app-option-row[data-selected] {
   background: var(--bg-selected) !important;
+}
+
+.app-menu .app-option-row:not([data-selected]):hover {
+  background: var(--bg-hover) !important;
+}
+
+/* Match the Settings navigation pill; focus/hover never imply selection. */
+:root { --menu-selection-color: #0078d4; }
+@supports (color: AccentColor) {
+  :root { --menu-selection-color: AccentColor; }
+}
+.app-menu :is(
+  .app-option-row[data-selected],
+  .app-select-option[data-state="checked"],
+  [role="menuitemradio"][aria-checked="true"],
+  [role="menuitemcheckbox"][aria-checked="true"],
+  .app-menu-option[aria-selected="true"],
+  .composer-menu-row[data-active="true"],
+  button[aria-current="true"]
+) {
+  position: relative;
+  background: var(--bg-selected) !important;
+}
+.app-menu :is(
+  .app-option-row[data-selected],
+  .app-select-option[data-state="checked"],
+  [role="menuitemradio"][aria-checked="true"],
+  [role="menuitemcheckbox"][aria-checked="true"],
+  .app-menu-option[aria-selected="true"],
+  .composer-menu-row[data-active="true"],
+  button[aria-current="true"]
+)::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--menu-selection-color);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.app-menu .app-default-star {
+  width: 32px !important;
+  height: 32px !important;
+  right: 2px !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--text-muted);
+}
+.app-menu .app-default-star:hover,
+.app-menu .app-default-star.is-default { color: var(--menu-selection-color); }
+.app-menu .app-default-star:focus:not(:focus-visible) { outline: none; }
+.app-menu .app-default-star:focus-visible {
+  outline: 2px solid var(--menu-focus-ring);
+  outline-offset: -2px;
+}
+@media (pointer: coarse) {
+  .app-menu .app-default-star { width: 44px !important; height: 44px !important; }
+  .app-menu .app-option-row:has(.app-default-star) > [role="option"] { padding-right: 50px !important; }
 }
 
 .app-menu .app-option-row > button[role="option"] {
@@ -3456,7 +3530,6 @@ html:not(.dark) .session-item.is-selected .session-item-time {
 .app-select-option[data-highlighted] { background: var(--bg-hover); }
 .app-select-option:focus-visible { outline: 2px solid var(--menu-focus-ring); }
 .app-select-option[data-disabled] { opacity: 0.45; pointer-events: none; }
-.app-select-check { display: inline-flex; flex: 0 0 14px; }
 .app-combobox-menu { position: fixed; z-index: 2400; overflow-y: auto; overscroll-behavior: contain; }
 .app-menu-option {
   display: flex;
@@ -4304,10 +4377,10 @@ html:not(.dark) .session-item.is-selected .session-item-time {
   :root[data-platform="linux"] .settings-section-tabs {
     grid-area: 2 / 1;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--choice-row-gap);
     height: auto;
     margin: 0;
-    padding: 4px 8px 12px;
+    padding: var(--choice-inset);
     overflow-x: hidden;
     overflow-y: auto;
   }
@@ -4319,7 +4392,7 @@ html:not(.dark) .session-item.is-selected .session-item-time {
     gap: 12px;
     width: auto;
     padding: 0 12px;
-    border-radius: 5px;
+    border-radius: var(--choice-row-radius);
     font-size: 13px;
     transition:
       color 120ms ease,

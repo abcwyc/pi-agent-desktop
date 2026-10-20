@@ -1020,7 +1020,7 @@ test("only the chat composer offers saving a default model or reasoning level", 
   assert.doesNotMatch(agentsConfigSource, /onSetDefault/);
 });
 
-test("selector rows keep the default star and the floating save button in one gutter", async () => {
+test("selector rows expose a plain default star separate from the selected option", async () => {
   const { SelectorRow } = await jiti.import("./SelectorRow.tsx");
   const star = (isDefault) => ({ isDefault, saveLabel: "Save as default", defaultLabel: "Default", onSave: () => {} });
   const row = (props) => renderToStaticMarkup(React.createElement(SelectorRow, {
@@ -1032,9 +1032,9 @@ test("selector rows keep the default star and the floating save button in one gu
   const savable = row({ star: star(false) });
   assert.match(savable, /role="option"/);
   assert.match(savable, /aria-label="Save as default"/);
-  // Hidden until hover or focus, but kept out of the row's text by the gutter.
-  assert.match(savable, /opacity:0/);
-  assert.match(savable, /tabindex="-1"/);
+  // The unfilled star stays available to pointer, keyboard and touch input.
+  assert.match(savable, /class="app-default-star"/);
+  assert.doesNotMatch(savable, /opacity:0|tabindex="-1"|box-shadow/);
   assert.match(savable, /padding:7px 36px 7px 12px/);
   assert.doesNotMatch(savable, /aria-label="Default"/);
 
@@ -1052,5 +1052,7 @@ test("selector rows keep the default star and the floating save button in one gu
 
   const active = row({ active: true });
   assert.match(active, /aria-selected="true"/);
+  assert.match(active, /data-selected="true"/);
+  assert.doesNotMatch(active, /polyline/);
   assert.doesNotMatch(active, /border-left/);
 });

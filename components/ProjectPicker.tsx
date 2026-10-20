@@ -338,12 +338,6 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
               }}
               title={project}
             >
-              {project === selectedProject && (
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                  <polyline points="1.5 5 4 7.5 8.5 2.5" />
-                </svg>
-              )}
-              {project !== selectedProject && <span style={{ width: 10, flexShrink: 0 }} />}
               <PathLabel text={displayCwd(project, homeDir)} style={{ flex: 1 }} />
             </button>
           ))}

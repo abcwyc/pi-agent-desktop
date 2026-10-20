@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { useIsMobile } from "@/hooks/useIsMobile";
+import type { ReactNode } from "react";
 
 function StarIcon({ filled, size }: { filled: boolean; size: number }) {
   return (
@@ -24,9 +23,8 @@ export interface SelectorRowStar {
 /**
  * A selector menu row styled like a session-list row: the whole row selects
  * and highlights on hover. With `star`, the right gutter holds the default
- * marker: a small static star on the default row, and on every other row a
- * "save as default" button that floats in on hover or keyboard focus. Touch
- * screens have no hover, so there the button stays visible.
+ * marker: a filled star on the default row, and a plain outline star on
+ * every other row that saves it as the default through its own action.
  */
 export function SelectorRow({
   active,
@@ -42,25 +40,15 @@ export function SelectorRow({
   gutter?: boolean;
   children: ReactNode;
 }) {
-  const isMobile = useIsMobile();
-  const [hovered, setHovered] = useState(false);
-  const [focused, setFocused] = useState(false);
   const canSave = Boolean(star && !star.isDefault);
-  const showSave = canSave && (hovered || focused || isMobile);
 
   return (
     <div
       className="app-option-row"
       data-selected={active || undefined}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onFocus={() => setFocused(true)}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false);
-      }}
       style={{
         position: "relative",
-        background: active ? "var(--bg-selected)" : hovered ? "var(--bg-hover)" : "transparent",
+        background: active ? "var(--bg-selected)" : "transparent",
         transition: "background 0.1s",
       }}
     >
@@ -78,13 +66,11 @@ export function SelectorRow({
           textAlign: "left", whiteSpace: "nowrap",
         }}
       >
-        {active
-          ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true"><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
-          : <span style={{ width: 10, flexShrink: 0 }} />}
         {children}
       </button>
       {star?.isDefault && (
         <span
+          className="app-default-star is-default"
           role="img"
           aria-label={star.defaultLabel}
           title={star.defaultLabel}
@@ -92,45 +78,33 @@ export function SelectorRow({
             position: "absolute", top: "50%", right: 6, transform: "translateY(-50%)",
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 24, height: 24,
-            color: "var(--text-dim)",
           }}
         >
-          <StarIcon filled size={10} />
+          <StarIcon filled size={14} />
         </span>
       )}
       {star && canSave && (
         <button
+          className="app-default-star"
           type="button"
           title={star.saveLabel}
           aria-label={star.saveLabel}
-          tabIndex={showSave ? 0 : -1}
           onClick={(event) => {
             event.stopPropagation();
+            // Saving replaces this button with a filled marker; keep focus
+            // inside the menu so Escape and arrow navigation still work.
+            event.currentTarget.parentElement?.querySelector<HTMLButtonElement>('[role="option"]')?.focus({ preventScroll: true });
             star.onSave();
           }}
           style={{
             position: "absolute", top: "50%", right: 6, transform: "translateY(-50%)",
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 24, height: 24, padding: 0,
-            background: "var(--bg-hover)", border: "var(--hairline) solid var(--border)",
-            borderRadius: 6, color: "var(--text-muted)",
+            background: "transparent", border: 0,
             cursor: "pointer",
-            opacity: showSave ? 1 : 0,
-            pointerEvents: showSave ? "auto" : "none",
-            transition: "opacity 0.1s, background 0.12s, color 0.12s, border-color 0.12s",
-          }}
-          onMouseEnter={(event) => {
-            event.currentTarget.style.background = "var(--bg-selected)";
-            event.currentTarget.style.color = "var(--accent)";
-            event.currentTarget.style.borderColor = "rgba(37,99,235,0.35)";
-          }}
-          onMouseLeave={(event) => {
-            event.currentTarget.style.background = "var(--bg-hover)";
-            event.currentTarget.style.color = "var(--text-muted)";
-            event.currentTarget.style.borderColor = "var(--border)";
           }}
         >
-          <StarIcon filled={false} size={12} />
+          <StarIcon filled={false} size={14} />
         </button>
       )}
     </div>

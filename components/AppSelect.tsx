@@ -52,9 +52,6 @@ export function AppSelect({ value, onValueChange, options, name, placeholder, cl
           <Select.Viewport className="app-select-viewport">
             {options.map((option) => (
               <Select.Item key={option.value} value={encode(option.value)} disabled={option.disabled} textValue={option.label} className="app-select-option">
-                <span className="app-select-check" aria-hidden="true">
-                  <Select.ItemIndicator><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m5 12 4 4L19 6" strokeLinecap="round" strokeLinejoin="round" /></svg></Select.ItemIndicator>
-                </span>
                 <Select.ItemText>{option.label}</Select.ItemText>
               </Select.Item>
             ))}

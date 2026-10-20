@@ -2870,7 +2870,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     overflow: "hidden", minWidth: 240,
                     maxHeight: maxH, display: "flex", flexDirection: "column",
                   }}>
-                    <div style={{ minHeight: 0, overflowY: "auto", padding: 5 }}>
+                    <div className="app-menu-list">
                     {onThinkingLevelChange && (
                       <>
                       <div className="composer-menu-heading">{t("chat.reasoningHeading")}</div>
@@ -2905,7 +2905,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                   saveLabel: t("chat.saveDefaultThinking"),
                                   defaultLabel: t("chat.defaultThinking"),
                                   onSave: () => {
-                                    setThinkingDropdownOpen(false);
                                     onSetDefaultThinkingLevel(lvl);
                                   },
                                 }
@@ -2934,9 +2933,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           data-active="true"
                           title={t("chat.chatOnlyDescription")}
                         >
-                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
-                            <polyline points="1.5 5 4 7.5 8.5 2.5" />
-                          </svg>
                           <span style={{ flex: 1 }}>{t("chat.chatOnly")}</span>
                           <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8, whiteSpace: "normal" }}>
                             {t("chat.chatOnlyDescription")}
@@ -3025,7 +3021,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     overflow: "hidden", minWidth: 120,
                     maxHeight: maxH, display: "flex", flexDirection: "column",
                   }}>
-                    <div style={{ minHeight: 0, overflowY: "auto" }}>
+                    <div className="app-menu-list">
                     {TOOL_PRESETS.map((lvl) => {
                       const preset = TOOL_PRESET_MAP[lvl];
                       const isActive = (toolPreset ?? "configured") === preset;

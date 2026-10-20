@@ -6,13 +6,11 @@ import {McpConfigView} from '../components/McpConfig';
 import {ChatInput} from '../components/ChatInput';
 import {ProjectContextMenuPanel} from '../components/ProjectContextMenu';
 import {ProjectViewMenu} from '../components/ProjectViewMenu';
-import {SettingsEntryMenu,useSettingsEntryMenu} from '../components/SettingsEntryMenu';
+import {SettingsPanel} from '../components/SettingsPanel';
 import {I18nProvider,useI18n} from '../hooks/useI18n';
 function ProjectMenuFixture({kind}){
  const ref=useRef(null),{t}=useI18n(),[branch,setBranch]=useState(''),[mode,setMode]=useState('grouped'),[open,setOpen]=useState(true);
- const settings=useSettingsEntryMenu(section=>{window.__section=section;});
  const noop=()=>{};if(!open)return <p>Menu closed</p>;
- if(kind==='settings')return <><button ref={settings.settingsMenuButtonRef} onClick={event=>settings.toggleSettingsMenu(event,true)}>Open settings menu</button><SettingsEntryMenu menu={settings} hasProject onSelectSection={section=>{window.__section=section;}}/></>;
  if(kind==='view')return <ProjectViewMenu menuRef={ref} pos={{top:120,left:8}} mode={mode} canCollapseAll canExpandAll controlsDisabled={false} onModeChange={setMode} onCollapseAll={noop} onExpandAll={noop} onClose={()=>setOpen(false)}/>;
  return <ProjectContextMenuPanel menuRef={ref} projectRoot="D:/fixture" pos={{top:120,left:8}} view={kind}
   branchMenu={{root:'D:/fixture',isGit:true,branches:['main','feature','dev'],remoteBranches:[],worktrees:[{path:'D:/fixture',branch:'main',isMain:true},{path:'D:/feature',branch:'feature',isMain:false}],loaded:true}}
@@ -22,21 +20,22 @@ function ProjectMenuFixture({kind}){
   onCreateWorktree={()=>{window.__createdBranch=branch;}} onClose={()=>setOpen(false)}/>;
 }
 function Gallery(){
- const [value,setValue]=useState('medium'),[path,setPath]=useState('D:/project-a'),[panel,setPanel]=useState('form'),[exposure,setExposure]=useState('codemode');
+ const [value,setValue]=useState('medium'),[path,setPath]=useState('D:/project-a'),[panel,setPanel]=useState('form'),[exposure,setExposure]=useState('codemode'),[defaultThinking,setDefaultThinking]=useState('high'),[thinking,setThinking]=useState('high');
  window.__values=()=>({value,path,exposure});
  const server={name:'github',scope:'global',sourcePath:'D:/test/.pi/agent/mcp.json',configKey:'key',enabled:true,validated:true,envNames:[],headerNames:[],usesOAuth:false,commandFields:[],variableReferences:[],masked:false,transport:'http',exposure,url:'https://example.com/mcp'};
  const overview={mcp:{available:true},codemode:{sandbox:{state:'available'},builtinDisabled:false,preference:'automatic'},files:[{scope:'global',path:server.sourcePath,exists:true,problems:[]}],servers:[server]};
  return <I18nProvider><div style={{padding:20,maxWidth:1000,margin:'auto'}}>
- <nav style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:20}}><button onClick={()=>setPanel('form')}>Form controls</button><button onClick={()=>setPanel('mcp')}>MCP controls</button><button onClick={()=>setPanel('menus')}>Menus</button>{['view','worktrees','new-worktree','settings'].map(kind=><button key={kind} onClick={()=>setPanel('project-'+kind)}>{'Project '+kind}</button>)}</nav>
+ <nav style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:20}}><button onClick={()=>setPanel('form')}>Form controls</button><button onClick={()=>setPanel('mcp')}>MCP controls</button><button onClick={()=>setPanel('menus')}>Menus</button><button onClick={()=>setPanel('settings')}>Settings geometry</button>{['view','worktrees','new-worktree'].map(kind=><button key={kind} onClick={()=>setPanel('project-'+kind)}>{'Project '+kind}</button>)}</nav>
+ {panel==='settings'&&<SettingsPanel cwd={null} sessionId={null} initialSection="general" onClose={()=>setPanel('form')} onSessionReloaded={()=>{}} quoteSelectionEnabled onQuoteSelectionChange={()=>{}} soundEnabled={false} onSoundToggle={()=>{}}/>}
  {panel.startsWith('project-')?<ProjectMenuFixture key={panel} kind={panel.slice(8)}/>:panel==='menus'?<>
   <div style={{height:380}} />
   <ChatInput isStreaming={false} onSend={()=>{}} onAbort={()=>{}} onToolPresetChange={()=>{}}
-   thinkingLevel="high" onThinkingLevelChange={()=>{}} savedDefaultThinkingLevel="high" onSetDefaultThinkingLevel={()=>{}}
+   thinkingLevel={thinking} onThinkingLevelChange={setThinking} savedDefaultThinkingLevel={defaultThinking} onSetDefaultThinkingLevel={level=>{setDefaultThinking(level);setThinking(level);}}
    model={{provider:'fixture',modelId:'first'}} modelList={[{id:'first',name:'First model',provider:'fixture'},{id:'second',name:'Second model',provider:'fixture'}]}
    onModelChange={()=>{}} onSetDefaultModel={()=>{}} inputHistory={['First prompt','Second prompt']}
    slashCommands={[{name:'help',source:'builtin',description:'First command'},{name:'status',source:'builtin',description:'Second command'},{name:'clear',source:'builtin',description:'Third command'}]}/>
   <div id="action-samples" style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:16,marginTop:20}}>
-   {['settings-entry-menu','app-topbar-more-menu','dom-context-menu'].map(kind=><div key={kind} data-menu-sample={kind} className={'native-popover app-menu '+kind+(kind==='settings-entry-menu'?' sidebar-project-context-menu':'')} role="menu" style={{position:'static',width:'auto'}}>
+   {['app-topbar-more-menu','dom-context-menu'].map(kind=><div key={kind} data-menu-sample={kind} className={'native-popover app-menu '+kind} role="menu" style={{position:'static',width:'auto'}}>
     {['First action','Second action'].map(label=><button key={label} type="button" role="menuitem" className={kind==='app-topbar-more-menu'?'app-topbar-more-item':undefined}>{kind==='app-topbar-more-menu'?<><span aria-hidden="true">·</span><span className="app-topbar-more-copy"><span>{label}</span></span></>:label}</button>)}
    </div>)}
    <div data-menu-sample="project" className="native-popover app-menu"><div>{['Current project','Other project'].map((label,index)=><button key={label} type="button" className="project-picker-option" aria-current={index===0?'true':undefined} style={{display:'flex',width:'100%',border:0,background:'none',padding:'8px 10px',textAlign:'left'}}>{label}</button>)}</div></div>

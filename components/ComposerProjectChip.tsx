@@ -94,6 +94,7 @@ export function ComposerProjectChip({
                 key={projectRoot}
                 type="button"
                 role="menuitem"
+                aria-current={isCurrent ? "true" : undefined}
                 onClick={() => {
                   onOpenChange(false);
                   if (!isCurrent) onProjectChange(projectRoot);
@@ -125,7 +126,6 @@ export function ComposerProjectChip({
                   <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
                 </svg>
                 <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{optionLabel}</span>
-                {isCurrent && <span style={{ marginLeft: "auto", color: "var(--accent)" }}>✓</span>}
               </button>
             );
           })}

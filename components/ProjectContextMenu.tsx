@@ -340,6 +340,7 @@ export function ProjectContextMenuPanel({
                     key={`${remote ? "remote:" : "local:"}${name}`}
                     type="button"
                     role="menuitem"
+                    aria-current={isCurrent ? "true" : undefined}
                     disabled={switchingBranch !== null}
                     onClick={() => onSwitchBranch(name)}
                     title={holder
@@ -348,9 +349,6 @@ export function ProjectContextMenuPanel({
                         ? t("sidebar.branchRemoteTitle")
                         : t("sidebar.switchBranchTitle", { branch: name })}
                   >
-                    <span className="sidebar-project-context-menu-branch-mark" aria-hidden="true">
-                      {isCurrent ? "✓" : ""}
-                    </span>
                     <span>{name}</span>
                     {holder && <span className="sidebar-project-context-menu-branch-tag">worktree</span>}
                     {remote && !holder && <span className="sidebar-project-context-menu-branch-tag">{t("sidebar.remoteBranchTag")}</span>}
@@ -404,11 +402,9 @@ export function ProjectContextMenuPanel({
                     type="button"
                     role="menuitem"
                     title={worktree.path}
+                    aria-current={checkout?.path === worktree.path ? "true" : undefined}
                     onClick={() => onSelectWorktree(worktree.path)}
                   >
-                    <span className="sidebar-project-context-menu-branch-mark" aria-hidden="true">
-                      {checkout?.path === worktree.path ? "✓" : ""}
-                    </span>
                     <span className="sidebar-project-context-menu-label">{worktreeLabel(worktree)}</span>
                     {worktree.isMain && <span className="sidebar-project-context-menu-branch-tag">{t("sidebar.main")}</span>}
                   </button>

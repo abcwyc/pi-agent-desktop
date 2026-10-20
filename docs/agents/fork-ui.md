@@ -43,6 +43,10 @@ Upstream segment D (0e36743) restructured `AppShell.tsx`'s main region in ways t
 The topbar renders exactly ONE toolbar group (`app-topbar-actions`: history/branches/more), pushed to the right edge by `margin-left: auto` — right-aligned since 2026-09-24 (a user request; an earlier experiment had it left of the title via `order: -1`, removed). The inline session-stats button (`renderSessionStatsButton`, ↑in ↓out ↻cache $cost) was removed the same day — session info opens from the More menu entry instead; `sessionStats`/`contextUsage` state stays (auto-name guards + More-menu labels). Segment D also left a second desktop group (`renderChatToolbarActions(false)` — history/generate-title/system/tools) next to it; the duplicate is removed, its unique entries (Sub-agents, Tools) live in the More menu via `handleSystemInfoToggle` (keeping the lazy dormant-session start), and its generate-title guards (persisted-stats counting + `selectedSession.transient` check) were merged into the group-A button — pinned by `AppShell.auto-name.test.mjs`. JSX indentation in AppShell.tsx is unreliable; verify structure with the TS AST or the DOM, not by counting whitespace. `fileContentBlock()` in `AppShell.file-viewer-state.test.mjs` slices source by the panel's closing-div sequence — keep in sync.
 # 本地定制与桌面上游同步
 
+单选菜单（Config、推理级别、模型、表单选择与项目/分支/worktree）与设置导航共用左侧蓝色短条和选中底色，不使用对号。默认值星标保持独立：空心星直接可点，保存成功后显示点亮的实心星，无底色、边框或阴影；保存时菜单保持打开。保留键盘焦点提示与 4px 行间距。
+
+选项几何统一由 `app/native-theme.css` 的 `--choice-*` 定义：设置导航基准的 8px 内边距和 5px 行圆角，Config 基准的 4px 行间距。弹层内层滚动容器 `.app-menu-list` 不额外增加 padding；不得为 Config、推理或模型各自叠加一层边距。`e2e/option-controls.mjs` 测量真实设置页与各类弹层的选项边界，而非仅检查 CSS 声明。
+
 同步桌面上游时遵循 [同步流程](../fork-sync.zh-CN.md)。统一选项菜单、4px 行间距、
 独立 Config 入口、发送按钮与输入框底部圆角同心、顶部操作靠右，以及运行时 home
 解析必须保留；拆出的上游组件要接入这些规则，不能用旧组件替换上游功能。
