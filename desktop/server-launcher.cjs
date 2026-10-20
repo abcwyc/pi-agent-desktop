@@ -125,6 +125,41 @@ try {
   console.error("[Pi Agent] stale-dependency cleanup failed:", cleanupError);
 }
 
+// #149 self-heal: the packaged build ships no `route-cache`, but at runtime
+// Next promotes the build's prerendered page (`server/app/index.html`) into
+// `server/route-cache/` and from then on reads that copy first. The path holds
+// a route hash only — no build id — so after an overwrite install (which adds
+// files and never deletes any) the previous version's page keeps being served
+// while the version number and the new `app/index.html` are already current.
+// Tie the cache to the build: when BUILD_ID differs from the one recorded next
+// to it (or nothing was recorded yet, as on installs that predate this check),
+// drop the cache and record the new id. The marker is written only after the
+// delete succeeded, so a failure is retried on the next start.
+try {
+  const nextDir = path.join(__dirname, ".next-desktop");
+  const buildIdPath = path.join(nextDir, "BUILD_ID");
+  if (fs.existsSync(buildIdPath)) {
+    const buildId = fs.readFileSync(buildIdPath, "utf8").trim();
+    const markerPath = path.join(nextDir, ".route-cache-build-id");
+    let recorded = null;
+    try {
+      recorded = fs.readFileSync(markerPath, "utf8").trim();
+    } catch {
+      // No marker yet.
+    }
+    if (buildId && recorded !== buildId) {
+      fs.rmSync(path.join(nextDir, "server", "route-cache"), { recursive: true, force: true });
+      fs.writeFileSync(markerPath, buildId);
+      console.error(
+        `[Pi Agent] cleared route cache for build ${buildId} (previous: ${recorded ?? "none"}; see issue #149)`,
+      );
+    }
+  }
+} catch (cacheError) {
+  // Cleanup must never keep the server from starting.
+  console.error("[Pi Agent] route-cache cleanup failed:", cacheError);
+}
+
 // The standalone Next.js entrypoint is CommonJS.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 require("./server.js");
