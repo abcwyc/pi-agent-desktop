@@ -21,6 +21,8 @@ export interface ChatSettings {
   thinkingLevel: ChatThinkingLevel | null;
   instructions: string;
   allowedTools: string[];
+  /** Ask before a chat saves a file to Downloads. */
+  confirmSave: boolean;
 }
 
-export const EMPTY_CHAT_SETTINGS: ChatSettings = { model: null, thinkingLevel: null, instructions: "", allowedTools: [] };
+export const EMPTY_CHAT_SETTINGS: ChatSettings = { model: null, thinkingLevel: null, instructions: "", allowedTools: [], confirmSave: false };

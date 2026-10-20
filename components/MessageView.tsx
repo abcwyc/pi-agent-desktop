@@ -20,6 +20,7 @@ import type { WrittenFile } from "@/lib/turn-written-files";
 import { skillExpansionToCommand } from "@/lib/slash-display";
 import { splitAttachedFiles } from "@/lib/chat-attachments";
 import { AttachedFileList } from "./AttachedFileList";
+import { SavedFileCard, isSavedFileInfo } from "./SavedFileCard";
 import type { SubagentToolDetails } from "@/lib/subagent-extension";
 import { CODEMODE_TOOL_NAME, codemodeCalls, codemodeScript, codemodeScriptPreview, stripCodemodeHeader } from "@/lib/codemode-view";
 import { CodemodeCallList } from "./CodemodeToolView";
@@ -1147,6 +1148,9 @@ function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOp
   const isError = (result?.isError ?? false)
     || (isApplyPatchToolName(block.toolName) && applyPatchResultHasFailures(result?.details));
   const subagent = isSubagentToolDetails(result?.details) ? result.details : null;
+  const savedFile = block.toolName === "save_to_downloads" && !isError && isSavedFileInfo(result?.details)
+    ? result.details
+    : null;
   const codemodeCallCount = codemode ? codemode.calls.length + codemode.omitted : 0;
 
   return (
@@ -1259,6 +1263,9 @@ function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOp
 
       {/* ── Result images — always visible, independent of the collapsed details ── */}
       {resultImages.length > 0 && <ResultImages images={resultImages} isError={isError} />}
+
+      {/* ── A file the chat saved to Downloads — always visible ── */}
+      {savedFile && <SavedFileCard file={savedFile} />}
 
       {/* ── Expanded: applied-patch split diff ── */}
       {expanded && patchFiles && (

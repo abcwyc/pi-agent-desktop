@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { AppSelect } from "./AppSelect";
+import { ConfigSwitch } from "./SettingsUi";
 import { CHAT_THINKING_LEVELS, parseToolNameList, type ChatSettings } from "@/lib/chat-settings-shared";
 
 type Loaded = ChatSettings & { instructionsMaxChars: number };
@@ -52,7 +53,7 @@ export function ChatsSettingsSection() {
     return () => { cancelled = true; };
   }, []);
 
-  const save = useCallback((patch: Partial<Pick<ChatSettings, "model" | "thinkingLevel" | "instructions" | "allowedTools">>) => {
+  const save = useCallback((patch: Partial<Pick<ChatSettings, "model" | "thinkingLevel" | "instructions" | "allowedTools" | "confirmSave">>) => {
     setSaving(true);
     setFailed(false);
     return fetch("/api/chat-settings", {
@@ -157,6 +158,15 @@ export function ChatsSettingsSection() {
             onBlur={() => { if (toolsDirty) void save({ allowedTools: parseToolNameList(toolsDraftRef.current) }); }}
           />
           <span id={`${hintId}-tools`} className="settings-chats-hint">{t("settings.chatsToolsHint")}</span>
+        </div>
+        <div className="settings-chat-option settings-chat-switch-option">
+          <span>{t("settings.chatsConfirmSave")}</span>
+          <ConfigSwitch
+            checked={settings?.confirmSave ?? false}
+            label={t("settings.chatsConfirmSave")}
+            disabled={settings === null || saving}
+            onChange={(enabled) => void save({ confirmSave: enabled })}
+          />
         </div>
       </div>
     </section>

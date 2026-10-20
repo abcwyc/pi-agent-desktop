@@ -47,7 +47,7 @@ export function parseChatSettings(raw: unknown): ChatSettings {
       typeof name === "string" && CHAT_TOOL_NAME_PATTERN.test(name)
     )))].slice(0, CHAT_ALLOWED_TOOLS_MAX)
     : [];
-  return { model, thinkingLevel, instructions, allowedTools };
+  return { model, thinkingLevel, instructions, allowedTools, confirmSave: raw.confirmSave === true };
 }
 
 /** The chat preferences; an unreadable file reads as "not set" rather than failing a session start. */
@@ -64,6 +64,7 @@ export type ChatSettingsPatch = {
   thinkingLevel?: ChatSettings["thinkingLevel"];
   instructions?: string;
   allowedTools?: string[];
+  confirmSave?: boolean;
 };
 
 /** Validate a client patch; throws a message for the first invalid field. */
@@ -102,6 +103,10 @@ export function validateChatSettingsPatch(body: unknown): ChatSettingsPatch {
     if (names.length > CHAT_ALLOWED_TOOLS_MAX) throw new Error(`at most ${CHAT_ALLOWED_TOOLS_MAX} tools can be allowed`);
     patch.allowedTools = names;
   }
+  if ("confirmSave" in body) {
+    if (typeof body.confirmSave !== "boolean") throw new Error("confirmSave must be true or false");
+    patch.confirmSave = body.confirmSave;
+  }
   return patch;
 }
 
@@ -113,6 +118,7 @@ export function writeChatSettings(patch: ChatSettingsPatch, settingsPath = getPi
       ...(next.thinkingLevel ? { thinkingLevel: next.thinkingLevel } : {}),
       ...(next.instructions.trim() ? { instructions: next.instructions } : {}),
       ...(next.allowedTools.length > 0 ? { allowedTools: next.allowedTools } : {}),
+      ...(next.confirmSave ? { confirmSave: true } : {}),
     },
   }, settingsPath);
   return readChatSettings(settingsPath);

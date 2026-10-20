@@ -8797,3 +8797,62 @@ html.native-desktop :is(
 
 
 .app-menu [role="menuitemradio"][aria-checked="true"] { background: var(--bg-selected) !important; }
+
+
+/* A file a chat saved to Downloads (save_to_downloads). */
+.saved-file-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 10px 8px;
+  padding: 8px 10px;
+  border: var(--hairline) solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+}
+
+.saved-file-card-text {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.saved-file-card-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-file-card-path {
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: var(--fs-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-file-card-error {
+  color: var(--danger);
+  font-size: var(--fs-small);
+}
+
+.saved-file-card-reveal {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: var(--hairline) solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+
+.saved-file-card-reveal:hover {
+  background: var(--bg-hover);
+}

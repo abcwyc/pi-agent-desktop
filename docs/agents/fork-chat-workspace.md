@@ -82,20 +82,23 @@ Client checks are affordances only; the server enforces the policy
 (`lib/chat-workspace-policy.ts`).
 
 A chat loads extensions, skills, prompt templates and the codemode / tool-search /
-MCP built-ins like a project session, but never the user's files or shell:
+MCP built-ins like a project session, but the user's files and shell are reachable only
+in two narrow, user-bound ways (below):
 
-- Allowed tools: `read`, `codemode`, `tool_search`, every MCP tool and the names the user
-  lists in Settings › Chats › "Extra tools allowed in chats" (`isChatToolAllowed`; the list
-  is stored as `chats.allowedTools`, validated by name, read on every run and call, and
-  never lifts a blocked coding tool). Every other tool an installed extension registers
-  (file readers, computer or browser control, sub-agents, web tools) stays off: the
-  `before_agent_start` handler narrows `selectedTools` on every run, startup,
-  reload and tree navigation filter the active set, and a `tool_call` guard blocks
-  the rest, nested codemode calls included. `bash`, `powershell`, `edit`, `write`,
-  `grep`, `find` and `ls` are always blocked.
-- `read` is confined to skill files: only paths inside a loaded skill's folder (or a
-  single-file skill) after `realpath`, so `..` and symlinks cannot leave it. This is
-  how a skill's `SKILL.md` loads; scripts that need a shell do not run.
+- Default tools (`CHAT_DEFAULT_TOOL_NAMES`): `read` (confined), `codemode`, `tool_search`,
+  `save_to_downloads`, the read-only web tools (`web_search`, `fetch_content`,
+  `source_check`, `get_search_content`) and every MCP tool, plus the names the user lists
+  in Settings › Chats › "Extra tools allowed in chats" (`isChatToolAllowed`; stored as
+  `chats.allowedTools`, validated by name, read on every run and call, and never lifting a
+  blocked coding tool). Every other tool an installed extension registers (file readers,
+  computer or browser control, sub-agents) stays off until the user adds it: the
+  `before_agent_start` handler narrows `selectedTools` on every run, startup, reload and
+  tree navigation filter the active set, and a `tool_call` guard blocks the rest, nested
+  codemode calls included. `bash`, `powershell`, `edit`, `write`, `grep`, `find` and `ls`
+  are always blocked.
+- `read` opens skill files (a loaded skill's folder, or a single-file skill, after
+  `realpath`, so `..` and symlinks cannot leave it), a file the chat saved, and a file the
+  **user named by full path in their own message** (below).
 - Extensions that register a delegation tool (`Agent`, ...) are not loaded, because a
   sub-agent would carry the file access a chat is denied.
 - `POST /api/agent/new` ignores any requested tool preset for the hidden cwd, and
@@ -114,6 +117,30 @@ MCP built-ins like a project session, but never the user's files or shell:
 `chatOnly` and `chatWorkspace` are different flags. `chatOnly` means a project
 session with an empty tool allow-list (exact context-file prompt, nothing loaded);
 `chatWorkspace` means the hidden non-project workspace above.
+
+## Files on this computer: reading what the user names, saving to Downloads
+
+`lib/chat-file-access.ts`, `lib/chat-downloads-tool.ts`. Both act on the machine that runs
+Pi, so they are off (and the prompt says so) when `PI_WEB_HOSTNAME` is a non-loopback
+address (`isNetworkExposedServer`).
+
+- **Reading.** `ChatFileGrants` collects the paths in the user's own messages
+  (`extractUserNamedPaths`: absolute, `~/`, `file://`, Windows drive paths; bare, or quoted
+  when they contain spaces) from `before_agent_start` events of type `user` and, once per
+  reopened chat, from the transcript's user messages. Tool results, web pages and the
+  model's own text never grant anything. A grant is a candidate: at read time it must
+  resolve (through `realpath`) to the requested existing regular file. Credentials and keys
+  are never readable even when named (`isSensitivePath`: `~/.ssh`, `~/.aws`, `~/.gnupg`,
+  `.netrc`/`.npmrc`, Pi's own `*.json` settings and keys).
+- **Writing.** `save_to_downloads(filename, content, encoding?)` is the only write a chat
+  has. A bare file name (no folder, no `..`, no hidden files, no program or installer
+  extensions), written into the Downloads folder (`XDG_DOWNLOAD_DIR`, else
+  `~/Downloads`) without ever replacing a file (`name (1).ext`), up to 8 MB, mode 0644. The
+  result's details (`path`, `name`, `size`) render as a `SavedFileCard` with "Show in
+  folder" (`revealItemInDirNative` on the desktop, `POST /api/chat-downloads/reveal`
+  elsewhere, loopback only and Downloads only). "Ask before a chat saves a file" in
+  Settings › Chats (`chats.confirmSave`) makes each save go through the extension UI's
+  confirm dialog.
 
 ## Text attachments
 

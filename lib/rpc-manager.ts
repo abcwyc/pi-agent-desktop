@@ -67,10 +67,12 @@ import {
 import { isChatWorkspacePath } from "./chat-workspace";
 import { deriveSessionPolicy, type SessionPolicy } from "./session-policy";
 import { chatInstructionsSection, readChatSettings, resolveChatStartDefaults } from "./chat-settings";
+import { ChatFileGrants, isNetworkExposedServer } from "./chat-file-access";
+import { createChatDownloadsExtension } from "./chat-downloads-tool";
 import {
   CHAT_BLOCKED_TOOL_NAMES,
   CHAT_READ_TOOL_NAME,
-  CHAT_WORKSPACE_PROMPT,
+  chatWorkspacePrompt,
   createChatWorkspaceExtension,
   isChatToolAllowed,
   withoutAgentDelegation,
@@ -2617,6 +2619,10 @@ export async function startRpcSession(
         : projectTrustReloadOptions(sessionCwd, agentDir);
     // The chat policy reads the session's own skills and cwd, which exist only once the
     // session does, so the extension reaches them through this ref.
+    // Reading a file the user names and saving to Downloads act on this computer, so they
+    // are off when the server accepts connections from other machines.
+    const chatFilesEnabled = chatWorkspace && !isNetworkExposedServer();
+    const chatGrants = chatFilesEnabled ? new ChatFileGrants() : undefined;
     const chatSessionRef: {
       current?: { resourceLoader: { getSkills(): { skills: { filePath: string; baseDir: string }[] } } };
     } = {};
@@ -2658,15 +2664,22 @@ export async function startRpcSession(
               // Extensions, skills, prompt templates and MCP load as in a project, but no
               // global, ancestor or project instructions may leak into a chat's prompt.
               noContextFiles: true,
-              systemPrompt: CHAT_WORKSPACE_PROMPT,
+              systemPrompt: chatWorkspacePrompt(chatFilesEnabled),
               extensionFactories: [
                 ...(builtins?.extensions ?? []),
                 createArtifactGuideExtension(),
+                ...(chatGrants
+                  ? [createChatDownloadsExtension({
+                      grants: chatGrants,
+                      confirmBeforeSaving: () => readChatSettings().confirmSave,
+                    })]
+                  : []),
                 createChatWorkspaceExtension({
                   getSkills: () => chatSessionRef.current?.resourceLoader.getSkills().skills ?? [],
                   getCwd: () => sessionCwd,
                   getInstructions: () => chatInstructionsSection(readChatSettings()),
                   getExtraTools: () => readChatSettings().allowedTools,
+                  ...(chatGrants ? { grants: chatGrants } : {}),
                 }),
               ],
               extensionsOverride: (base) => withoutAgentDelegation(base, CHAT_DELEGATION_TOOL_NAMES),

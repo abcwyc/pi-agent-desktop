@@ -209,7 +209,7 @@ Each one undid a real regression; the linked note has the reasoning.
 - After an SDK bump run `npm run desktop:prepare && npm run desktop:verify`; never hard-code a nested staging destination; keep all three Windows `node_modules` guards. ([fork-desktop](docs/agents/fork-desktop.md))
 - Layout: the center column contains topbar and chat; the right-panel block is a full-height sibling inside the outer row; no `paddingLeft: sidebarResizer.width` on the topbar. Pinned by `AppShell.right-panel-row.test.mjs`. ([fork-ui](docs/agents/fork-ui.md))
 - `SettingsPanel` keeps the `onBusyChange` guard so a desktop update cannot be dismissed mid-install. ([fork-ui](docs/agents/fork-ui.md))
-- Chats use a server-owned hidden cwd and `workspaceKind`; never derive that path in the browser, group it with projects, or expose it to project trust / worktrees / files / terminals. Server policy must keep chats off the user's files and shell, off every tool but `read` (skill files only), `codemode`, `tool_search` and MCP, and context-file-free, even for persisted sessions. ([fork-chat-workspace](docs/agents/fork-chat-workspace.md))
+- Chats use a server-owned hidden cwd and `workspaceKind`; never derive that path in the browser, group it with projects, or expose it to project trust / worktrees / files / terminals. Server policy must keep chats off the shell and editing, off every extension tool the user has not allowed, `read` limited to skills, saved files and files the user named in their own message, writes limited to `save_to_downloads`, and context-file-free, even for persisted sessions. ([fork-chat-workspace](docs/agents/fork-chat-workspace.md))
 
 ---
 

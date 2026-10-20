@@ -1968,9 +1968,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     return thinkingLevelMap[lvl] ?? lvl;
   })();
   const rawToolPresetLabel = Object.entries(TOOL_PRESET_MAP).find(([, v]) => v === (toolPreset ?? "configured"))?.[0] ?? "configured";
-  const toolPresetLabel = chatOnly || rawToolPresetLabel === "chat-only"
-    ? t("chat.chatOnly")
-    : rawToolPresetLabel;
+  // A chat (no folder) and the "Chat only" tool preset of a project are different things.
+  const toolPresetLabel = chatOnly
+    ? t("chat.chatWorkspace")
+    : rawToolPresetLabel === "chat-only"
+      ? t("chat.chatOnly")
+      : rawToolPresetLabel;
   // One chip for reasoning + tools: the level always, the preset only when it
   // departs from settings.json ("configured" is the unremarkable default).
   // The session menu (gear) holds the automation switches once a wrapper
@@ -1979,7 +1982,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const canCompactNow = Boolean(onCompact && !isStreaming && !isCompacting);
   const runSettingsLabel = [
     onThinkingLevelChange ? thinkingDisplayLabel : null,
-    chatOnly ? t("chat.chatOnly") : null,
+    chatOnly ? t("chat.chatWorkspace") : null,
     !onThinkingLevelChange && chatOnly ? toolPresetLabel : null,
   ].filter(Boolean).join(" · ");
   const runSettingsTitle = [
@@ -1988,7 +1991,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         ? t("chat.currentReasoning", { level: thinkingDisplayLabel })
         : t("chat.changeReasoning", { level: thinkingDisplayLabel }))
       : null,
-    chatOnly ? `${t("chat.chatOnly")}: ${t("chat.chatOnlyDescription")}` : null,
+    chatOnly ? `${t("chat.chatWorkspace")}: ${t("chat.chatOnlyDescription")}` : null,
     onToolPresetChange ? t("chat.changeToolPreset") + `: ${toolPresetLabel}` : null,
   ].filter(Boolean).join(" · ");
 
@@ -2994,7 +2997,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           data-active="true"
                           title={t("chat.chatOnlyDescription")}
                         >
-                          <span style={{ flex: 1 }}>{t("chat.chatOnly")}</span>
+                          <span style={{ flex: 1 }}>{t("chat.chatWorkspace")}</span>
                           <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8, whiteSpace: "normal" }}>
                             {t("chat.chatOnlyDescription")}
                           </span>
