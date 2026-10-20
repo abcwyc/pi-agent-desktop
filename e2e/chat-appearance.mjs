@@ -1,14 +1,9 @@
 import assert from "node:assert/strict";
 import { checkComposerGeometry } from "./composer-geometry.mjs";
+import { openSettingsSection } from "./settings-navigation.mjs";
 
-// The fork's sidebar gear opens a section menu (General / Models / Skills /
-// Sub-agents / Plugins / Desktop) instead of landing on the appearance
-// controls, so every "open settings" step goes through it.
 async function openGeneralSettings(page) {
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  const general = page.locator(".settings-entry-menu button", { hasText: "General" });
-  await general.waitFor();
-  await general.click();
+  await openSettingsSection(page, "General");
   await page.locator(".settings-general").waitFor();
 }
 

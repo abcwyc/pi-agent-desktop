@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { openSettingsSection } from "./settings-navigation.mjs";
 
 const base = process.env.E2E_BASE_URL || "http://127.0.0.1:30141";
 const artifacts = fileURLToPath(new URL("../test-results/themes/", import.meta.url));
@@ -64,17 +65,14 @@ try {
       if (width <= 640) await sidebar.waitFor();
       if (await sidebar.isVisible()) {
         await sidebar.click();
-        // The mobile sidebar slides in; the Settings menu anchors to the button's
-        // position at click time, so wait until the drawer has stopped moving.
+        // Wait until the mobile sidebar has finished sliding in.
         await page.waitForFunction(() => {
           const left = document.querySelector(".session-sidebar")?.getBoundingClientRect().left;
           return left !== undefined && left >= 0;
         });
         await page.waitForTimeout(300);
       }
-      await page.getByRole("button", { name: "Settings", exact: true }).click();
-      // The fork's Settings button opens a section menu; the themes live in General.
-      await page.getByRole("menuitem", { name: "General", exact: true }).click();
+      await openSettingsSection(page, "General");
     };
     const expectTheme = async (theme) => {
       await page.waitForFunction((value) => document.documentElement.dataset.theme === value, theme);

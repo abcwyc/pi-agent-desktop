@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { openSettingsSection } from "./settings-navigation.mjs";
 
 export async function checkMcpManager(page, { agentDir, cwd }) {
   // Write through the URL-facing cwd because `?cwd=` avoids restoring an
@@ -17,16 +18,10 @@ export async function checkMcpManager(page, { agentDir, cwd }) {
   }, null, 2));
 
   // Settings › MCP lists the files' servers without a session (ADR 0006 P2).
-  // The fork opens Settings from the sidebar header's gear, which pops the
-  // section menu; a previous check may have left the sidebar collapsed.
+  // A previous check may have left the sidebar collapsed.
   const showSidebar = page.getByRole("button", { name: "Show sidebar", exact: true });
   if (await showSidebar.isVisible()) await showSidebar.click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  const mcpEntry = page.locator(".settings-entry-menu button", { hasText: "MCP" });
-  await mcpEntry.waitFor();
-  await mcpEntry.click();
-  const dialog = page.getByRole("dialog", { name: "Settings" });
-  await dialog.waitFor();
+  const dialog = await openSettingsSection(page, "MCP");
 
   const alpha = dialog.getByRole("button", { name: /alpha/ });
   await alpha.waitFor();
