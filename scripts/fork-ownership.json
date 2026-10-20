@@ -215,7 +215,6 @@
     "components/ComposerProjectChip.tsx",
     "hooks/useDesktopWorkspaceTabs.ts",
     "hooks/useWorkspaceAvailability.ts",
-    "components/SettingsEntryMenu.tsx",
     "components/ProjectContextMenu.tsx",
     "hooks/useProjectWorktreeActions.ts",
     "lib/session-replacement.ts",

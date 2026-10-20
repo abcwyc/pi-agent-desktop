@@ -332,18 +332,6 @@
 .sidebar-project-context-menu button:hover {
   background: var(--bg-hover);
 }
-.settings-entry-menu {
-  width: 184px;
-}
-.settings-entry-menu button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.settings-entry-menu button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
 .sidebar-project-context-menu-back {
   color: var(--text-muted) !important;
 }

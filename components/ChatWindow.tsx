@@ -1023,6 +1023,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
         targetTop,
         contentEnd,
         container.clientHeight,
+        composerOverlaySpacerRef.current?.getBoundingClientRect().height ?? 0,
       );
 
       const isInitialMeasurement = !promptAnchorAdjustmentDoneRef.current;

@@ -50,6 +50,7 @@ test("all declared popup surfaces opt into the shared app-menu design", async ()
     }
     visit(source);
   }
-  assert.ok(checked >= 20, "The popup inventory must cover the application, not one example");
+  // Settings opens its dialog directly; its former category popup is gone.
+  assert.ok(checked >= 19, "The popup inventory must cover the application, not one example");
   assert.deepEqual(violations, []);
 });
