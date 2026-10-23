@@ -29,6 +29,7 @@ export interface AppNotice extends AppNoticeInput {
 const MAX_NOTICES = 4;
 const NOTICE_VISIBLE_MS = 7000;
 const NOTICE_EXIT_ANIMATION_MS = 180;
+const EMPTY_SERVER_NOTICES: readonly AppNotice[] = [];
 const listeners = new Set<() => void>();
 let notices: readonly AppNotice[] = [];
 let expiryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -155,7 +156,7 @@ export const appNotify = {
 };
 
 export function useAppNotices(): readonly AppNotice[] {
-  return useSyncExternalStore(subscribe, getSnapshot, () => []);
+  return useSyncExternalStore(subscribe, getSnapshot, () => EMPTY_SERVER_NOTICES);
 }
 
 /** Test hook; also useful if a future route needs to clear transient toasts. */
