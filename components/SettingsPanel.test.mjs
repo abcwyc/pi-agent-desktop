@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const panelSource = (await readFile(new URL("./SettingsPanel.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+const appearanceSource = (await readFile(new URL("./AppearanceSettings.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const cssSource = (await readFile(new URL("../app/settings.css", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const globalCssSource = (await readFile(new URL("../app/globals.css", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const shellSource = (await readFile(new URL("./AppShell.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
@@ -29,7 +30,7 @@ test("opens one settings panel from a single sidebar settings entry", () => {
 });
 
 test("keeps every requested configuration surface inside the settings panel", () => {
-  for (const section of ["general", "models", "skills", "agents", "plugins", "mcp"]) {
+  for (const section of ["general", "appearance", "models", "skills", "agents", "plugins", "mcp"]) {
     assert.match(panelSource, new RegExp(`id: "${section}"`));
   }
   for (const component of ["ModelsConfig", "SkillsConfig", "AgentsConfig", "PluginsConfig", "McpConfig"]) {
@@ -156,9 +157,11 @@ test("offers light, dark and system theme selection with native radios", () => {
   for (const removed of ["mist", "rose", "pine"]) {
     assert.doesNotMatch(themeOptionsSource, new RegExp(`id: "${removed}"`));
   }
-  assert.match(panelSource, /THEME_OPTIONS\.map/);
-  assert.match(panelSource, /type="radio"/);
-  assert.match(panelSource, /setThemePreference\(option\.id\)/);
+  assert.match(panelSource, /sectionHost\("appearance", <AppearanceSettings \/>\)/);
+  assert.doesNotMatch(panelSource, /THEME_OPTIONS\.map/);
+  assert.match(appearanceSource, /THEME_OPTIONS\.map/);
+  assert.match(appearanceSource, /type="radio"/);
+  assert.match(appearanceSource, /setThemePreference\(option\.id\)/);
   assert.match(themeSource, /const setThemePreference = useCallback/);
 });
 
@@ -169,16 +172,12 @@ test("keeps language selection in General settings", () => {
 });
 
 test("groups chat display controls together without row backgrounds", () => {
-  const appearanceSection = panelSource.slice(
-    panelSource.indexOf('{t("settings.appearance")}'),
-    panelSource.indexOf('{t("settings.chat")}'),
-  );
   const chatSection = panelSource.slice(
     panelSource.indexOf('{t("settings.chat")}'),
     panelSource.indexOf("{shellSettings?.isWindows"),
   );
 
-  assert.doesNotMatch(appearanceSection, /settings-chat-content/);
+  assert.doesNotMatch(appearanceSource, /settings-chat-content/);
   assert.match(chatSection, /className="settings-chat-options"/);
   // The fork's diffViewMode choice rides in the same group after the merged
   // send-mode radio (thinking, width, font, quote, completion sound, send

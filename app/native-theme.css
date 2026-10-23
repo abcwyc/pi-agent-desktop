@@ -877,9 +877,7 @@
    whose rows are split by hairlines (theme, chat, language, desktop), instead
    of a mix of loose rows, per-row cards and 420px-capped blocks. */
 .settings-option-list,
-.settings-chat-options,
-.settings-language-options,
-.settings-theme-options {
+.settings-chat-options {
   width: 100%;
   max-width: none;
   background: var(--bg-panel);
@@ -931,13 +929,10 @@
 .settings-language-options {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 3px;
-  padding: 3px;
 }
 
 .settings-language-option {
   justify-content: center;
-  height: 40px;
 }
 
 .settings-language-radio,
@@ -948,11 +943,6 @@
 .settings-language-label {
   flex: 0 1 auto;
   text-align: center;
-}
-
-.settings-language-option[aria-checked="true"] {
-  color: var(--accent);
-  font-weight: 600;
 }
 
 .settings-shell-option {
@@ -983,16 +973,24 @@
 
 .settings-option-action {
   flex-shrink: 0;
+  align-self: center;
 }
 
-.settings-option-list + .settings-option-action {
+.settings-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-option-list + .settings-option-action,
+.settings-option-list + .settings-action-group {
   margin-top: 10px;
 }
 
 .settings-choice-group {
   display: flex;
   flex-shrink: 0;
-  gap: 6px;
 }
 
 .settings-chat-choice-option {
@@ -1008,58 +1006,56 @@
 :root {
   color-scheme: light;
 
-  /* Native-inspired semantic colors. Keep the canvas warm and reserve pure
-     white for controls and elevated content. */
-  --bg: #f6f6f7;
-  --bg-panel: rgba(242, 242, 244, 0.92);
-  --bg-hover: rgba(29, 29, 31, 0.055);
-  --bg-selected: rgba(29, 29, 31, 0.08);
-  --border: rgba(60, 60, 67, 0.16);
-  --separator: rgba(60, 60, 67, 0.12);
+  /* Light/dark palette and default background, mapped to Pi's existing roles.
+     Palette attribution and license: public/THIRD_PARTY_NOTICES.txt.
+     Small labels use a darker shade of the same gray so
+     they stay readable on selected rows and the tinted sidebar. */
+  --bg: #eceef4;
+  --bg-panel: #eceef4;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-selected: rgba(0, 0, 0, 0.07);
+  --sidebar-selected: #ffffff;
+  --border: rgba(0, 0, 0, 0.07);
+  --separator: rgba(0, 0, 0, 0.06);
   --surface: #ffffff;
-  /* The reading surface shared by the topbar, chat and right panel. Light: the
-     white content canvas next to the recessed sidebar. Dark: the deepest tone,
-     with the sidebar and floating surfaces a step lighter (Apple's order). */
+  /* Card colors form Pi's continuous reading surface. */
   --workbench-bg: #ffffff;
   --surface-muted: rgba(255, 255, 255, 0.64);
   --surface-elevated: #ffffff;
   --text: #1d1d1f;
-  /* #66666b rather than #68686d: the old value measured 4.42:1 on the
-     --bg-selected overlay, just under the 4.5:1 AA floor for body text. */
-  --text-muted: #66666b;
-  /* #7a7a7a rather than the visually lighter #94949a: text-dim carries real
-     labels (timestamps, code-block language tags), and #94949a only cleared
-     ~2.8:1 contrast against --bg — under the 3:1 floor for UI text. This
-     hits ~4:1 while staying visibly de-emphasized next to --text-muted. */
-  --text-dim: #7a7a7a;
-  /* #707075 rather than #85858b: 10px footnotes at 3.45:1 were under the 4.5:1 floor. */
-  --text-meta: #707075;
+  --text-muted: #60606b;
+  --text-dim: #73737e;
+  --text-meta: #60606b;
   --accent: #1d1d1f;
   --accent-hover: #3a3a3c;
   --accent-contrast: #ffffff;
   --accent-soft: rgba(29, 29, 31, 0.08);
   --accent-border: rgba(29, 29, 31, 0.22);
-  --focus-ring: rgba(29, 29, 31, 0.25);
-  --danger: #d92d20;
-  --success: #248a3d;
-  --warning: #b87503;
-  /* Follow-up (queued after the run): Apple systemIndigo. */
-  --info: #5856d6;
-  --user-bg: rgba(29, 29, 31, 0.06);
+  --menu-selection-color: #3b6cf6;
+  --focus-ring: rgba(59, 108, 246, 0.55);
+  --selection: rgba(59, 108, 246, 0.22);
+  --danger: #d93a35;
+  --success: #22863a;
+  --warning: #a5680d;
+  --info: #315bd2;
+  --user-bg: rgba(0, 0, 0, 0.045);
   --assistant-bg: transparent;
-  --tool-bg: rgba(118, 118, 128, 0.08);
-  --bg-subtle: rgba(60, 60, 67, 0.055);
-  --scroll-thumb: rgba(60, 60, 67, 0.25);
+  --tool-bg: rgba(0, 0, 0, 0.04);
+  --bg-subtle: rgba(0, 0, 0, 0.04);
+  --scroll-thumb: rgba(110, 110, 120, 0.3);
 
   /* Typography. "Noto Sans SC" backstops CJK on Linux builds (deb target in
      release.yml), which this stack otherwise has no CJK fallback for once it
      falls past the macOS/Windows-only names above it. */
-  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+  --font-ui-default: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
     "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", system-ui,
     "Noto Sans SC", sans-serif;
-  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display",
+  --font-ui: var(--font-ui-default);
+  --font-display-default: -apple-system, BlinkMacSystemFont, "SF Pro Display",
     "PingFang SC", "Segoe UI Variable Display", "Segoe UI", "Noto Sans SC",
     sans-serif;
+
+  --font-display: var(--font-display-default);
 
   /* Shape, spacing and elevation */
   --radius-sm: 6px;
@@ -1081,37 +1077,38 @@
 
 html.dark {
   color-scheme: dark;
-  --bg: #1c1c1e;
-  --bg-panel: rgba(36, 36, 38, 0.94);
-  --bg-hover: rgba(255, 255, 255, 0.075);
-  --bg-selected: rgba(255, 255, 255, 0.12);
-  --border: rgba(235, 235, 245, 0.15);
-  --separator: rgba(235, 235, 245, 0.1);
-  --surface: #252527;
-  --workbench-bg: #1c1c1e;
-  --surface-muted: rgba(44, 44, 46, 0.72);
-  --surface-elevated: #2c2c2e;
-  --text: #f5f5f7;
-  --text-muted: rgba(235, 235, 245, 0.64);
-  /* 0.46 rather than 0.38: matches the light-theme text-dim bump above so
-     both themes land at roughly the same ~4:1 contrast against --bg. */
-  --text-dim: rgba(235, 235, 245, 0.46);
-  --text-meta: rgba(235, 235, 245, 0.44);
-  --accent: #f5f5f7;
+  --bg: #141418;
+  --bg-panel: #141418;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-selected: rgba(255, 255, 255, 0.10);
+  --sidebar-selected: rgba(255, 255, 255, 0.10);
+  --border: rgba(255, 255, 255, 0.08);
+  --separator: rgba(255, 255, 255, 0.07);
+  --surface: #232328;
+  --workbench-bg: #232328;
+  --surface-muted: rgba(35, 35, 40, 0.72);
+  --surface-elevated: #232327;
+  --text: #ececf0;
+  --text-muted: #a9a9b4;
+  --text-dim: #83838f;
+  --text-meta: #a9a9b4;
+  --accent: #ececf0;
   --accent-hover: #ffffff;
-  --accent-contrast: #1d1d1f;
+  --accent-contrast: #161618;
   --accent-soft: rgba(245, 245, 247, 0.14);
   --accent-border: rgba(245, 245, 247, 0.3);
-  --focus-ring: rgba(245, 245, 247, 0.32);
+  --menu-selection-color: #6b93ff;
+  --focus-ring: rgba(107, 147, 255, 0.65);
+  --selection: rgba(107, 147, 255, 0.3);
   --danger: #ff6961;
-  --success: #30d158;
-  --warning: #ffd60a;
-  --info: #7d7aff;
-  --user-bg: rgba(255, 255, 255, 0.09);
+  --success: #4fd17a;
+  --warning: #f0a33a;
+  --info: #6b93ff;
+  --user-bg: rgba(255, 255, 255, 0.07);
   --assistant-bg: transparent;
-  --tool-bg: rgba(255, 255, 255, 0.055);
-  --bg-subtle: rgba(255, 255, 255, 0.055);
-  --scroll-thumb: rgba(235, 235, 245, 0.25);
+  --tool-bg: rgba(255, 255, 255, 0.06);
+  --bg-subtle: rgba(255, 255, 255, 0.06);
+  --scroll-thumb: rgba(169, 169, 180, 0.3);
   --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.24);
   --shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.28),
     0 14px 36px rgba(0, 0, 0, 0.3);
@@ -1121,20 +1118,8 @@ html.dark {
     0 4px 18px rgba(0, 0, 0, 0.36);
 }
 
-/* Text selection and keyboard focus follow the system accent color, as AppKit
-   does; the monochrome --accent stays the brand color for buttons and fills.
-   AccentColor resolves to the user's System Settings accent in WKWebView, and
-   browsers without it keep the neutral values above. The query names
-   color-mix as well: a custom property holding an unsupported color-mix() is
-   invalid only when it is used, which would drop the focus outline entirely
-   instead of falling back. */
-@supports (color: color-mix(in srgb, AccentColor 50%, transparent)) {
-  :root,
-  html.dark {
-    --focus-ring: color-mix(in srgb, AccentColor 55%, transparent);
-    --selection: color-mix(in srgb, AccentColor 35%, transparent);
-  }
-}
+/* Selection and focus use the same blue in every platform/theme.
+   The primary action retains a neutral foreground/background pair. */
 
 /* Keep the conversation navigator visually compact: its markers cluster at
    the viewport midpoint while retaining a forgiving invisible scrub target. */
@@ -1806,9 +1791,10 @@ a:focus-visible {
      before Cascadia/Consolas made it win on Windows. The CJK names keep
      Chinese in code on a proportional-CJK face instead of the browser default
      (SimSun on Windows). */
-  --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Code",
-    "JetBrains Mono", "Fira Code", Consolas, var(--font-noto-mono),
+  --font-mono-default: ui-monospace, "SFMono-Regular", "Cascadia Code",
+    "JetBrains Mono", "Fira Code", Consolas, var(--font-noto-mono, ui-monospace),
     "PingFang SC", "Microsoft YaHei", "Noto Sans SC", monospace;
+  --font-mono: var(--font-mono-default);
 }
 
 pre, code {
@@ -1820,13 +1806,13 @@ pre, code {
 /* -------------------------------------------------------------------------- */
 
 .app-shell {
-  background:
-    radial-gradient(circle at 55% -30%, color-mix(in srgb, var(--accent) 4%, transparent), transparent 46%),
-    var(--bg);
+  background: var(--bg);
+  background: var(--canvas-background);
 }
 
 .app-sidebar {
   background: var(--bg-panel) !important;
+  background: var(--canvas-background) !important;
   border-right: var(--hairline) solid var(--separator) !important;
   -webkit-backdrop-filter: saturate(130%) blur(24px);
   backdrop-filter: saturate(130%) blur(24px);
@@ -2626,7 +2612,11 @@ html.dark .sidebar-view-switcher-thumb {
 /* Secondary sidebar text (timestamps, counts, section label) sat at ~3.9:1 on
    the panel; scoped here so the global --text-dim keeps its role elsewhere. */
 html:not(.dark) .app-sidebar {
-  --text-dim: #6c6c71;
+  --text-dim: var(--text-muted);
+}
+
+.app-sidebar .session-item.is-selected {
+  background: var(--sidebar-selected) !important;
 }
 
 /* On the selection fill the timestamp measured 3.8:1; the inline color on the
@@ -3324,12 +3314,135 @@ html:not(.dark) .session-item.is-selected .session-item-time {
   --choice-inset: 8px;
   --choice-row-gap: 4px;
   --choice-row-radius: 5px;
+  --segment-inset: var(--choice-row-gap);
+  --segment-gap: var(--choice-row-gap);
+  --segment-radius: calc(var(--choice-row-radius) + var(--segment-inset));
+  --segment-selected: var(--surface-elevated);
   --menu-radius: calc(var(--choice-row-radius) + var(--choice-inset) + 1px);
   --menu-inset: var(--choice-inset);
   --menu-row-radius: var(--choice-row-radius);
   --menu-row-height: 34px;
   --menu-row-gap: var(--choice-row-gap);
   --menu-focus-ring: var(--text);
+}
+
+html.dark {
+  --segment-selected: color-mix(in srgb, var(--surface-elevated) 90%, white);
+}
+
+/* Config lists share menu geometry, including selected + adjacent hover.
+   The same blocks serve Agents, Models, Skills, Plugins and MCP. */
+.config-sidebar-list,
+.config-sidebar-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--choice-row-gap);
+}
+
+.config-sidebar-list { padding: var(--choice-inset); }
+.config-sidebar-group { margin: 0; }
+.config-sidebar-group + .config-sidebar-group { margin-top: var(--choice-inset); }
+.config-sidebar-group-label { padding-inline: 10px; }
+.config-sidebar-item,
+.config-list-action-button {
+  position: relative;
+  flex-shrink: 0;
+  height: auto;
+  min-height: 34px;
+  padding-block: 6px;
+  border-radius: var(--choice-row-radius);
+}
+.config-sidebar-item:not(.models-sidebar-indented-item) { padding-inline: 10px; }
+.config-list-action { padding: var(--choice-inset); }
+.config-list-action-button { padding-inline: 10px; }
+.config-sidebar-item[aria-current="page"],
+.config-list-action-button[aria-current="page"],
+.config-sidebar-item[aria-current="page"]:not(:disabled):hover,
+.config-list-action-button[aria-current="page"]:not(:disabled):hover {
+  background: var(--bg-selected);
+  color: var(--text);
+  font-weight: 600;
+}
+.config-sidebar-item[aria-current="page"]::before,
+.config-list-action-button[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: calc(50% - 8px);
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--menu-selection-color);
+}
+.config-sidebar-item:focus-visible,
+.config-list-action-button:focus-visible {
+  outline: 2px solid var(--menu-focus-ring);
+  outline-offset: -2px;
+}
+
+/* One compact segmented control: tight, even inset; concentric corners;
+   a soft raised selection rather than another dark block inside a gray one. */
+:is(.settings-theme-options, .settings-language-options, .settings-send-mode-options,
+    .settings-choice-group, .config-scope-switch, .file-viewer-mode-switch) {
+  height: auto;
+  padding: var(--segment-inset);
+  gap: var(--segment-gap);
+  border: 0;
+  border-radius: var(--segment-radius);
+  background: var(--bg-hover);
+  overflow: visible;
+}
+:is(.settings-theme-options, .settings-language-options, .settings-send-mode-options,
+    .settings-choice-group, .config-scope-switch, .file-viewer-mode-switch) > :is(label, button) {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: auto;
+  min-height: var(--control-height);
+  padding: 4px 10px;
+  border: 0;
+  border-radius: var(--choice-row-radius);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+  font-weight: 400;
+  line-height: 20px;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+:is(.settings-theme-options, .settings-language-options, .settings-send-mode-options,
+    .settings-choice-group, .config-scope-switch, .file-viewer-mode-switch) > :is(label, button):not(:disabled, [aria-checked="true"], [aria-pressed="true"], :has(input:checked)):hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+:is(.settings-theme-options, .settings-language-options, .settings-send-mode-options,
+    .settings-choice-group, .config-scope-switch, .file-viewer-mode-switch) > :is([aria-checked="true"], [aria-pressed="true"], :has(input:checked)) {
+  background: var(--segment-selected);
+  box-shadow: var(--shadow-control);
+  color: var(--text);
+  font-weight: 600;
+}
+:is(.settings-theme-options, .settings-language-options, .settings-send-mode-options,
+    .settings-choice-group, .config-scope-switch, .file-viewer-mode-switch) > :is(:focus-visible, :has(input:focus-visible)) {
+  outline: 2px solid var(--menu-focus-ring);
+  outline-offset: -2px;
+}
+.config-scope-switch.is-small { border-radius: var(--segment-radius); }
+.config-scope-switch .config-scope-switch-option { border: 0; }
+.config-scope-switch.is-small .config-scope-switch-option {
+  min-height: 24px;
+  padding: 2px 10px;
+  color: var(--text-muted);
+}
+.config-scope-switch.is-small .config-scope-switch-option[aria-pressed="true"] { color: var(--text); }
+@media (pointer: coarse) {
+  .config-sidebar-item,
+  .config-list-action-button,
+  .config-scope-switch.is-small .config-scope-switch-option,
+  :is(.settings-theme-options, .settings-language-options, .settings-send-mode-options,
+      .settings-choice-group, .config-scope-switch, .file-viewer-mode-switch) > :is(label, button) { min-height: 44px; }
 }
 
 .app-menu {
@@ -3381,10 +3494,6 @@ html:not(.dark) .session-item.is-selected .session-item-time {
 }
 
 /* Match the Settings navigation pill; focus/hover never imply selection. */
-:root { --menu-selection-color: #0078d4; }
-@supports (color: AccentColor) {
-  :root { --menu-selection-color: AccentColor; }
-}
 .app-menu :is(
   .app-option-row[data-selected],
   .app-select-option[data-state="checked"],
@@ -4147,19 +4256,11 @@ html:not(.dark) .session-item.is-selected .session-item-time {
 }
 
 .settings-dialog-surface {
-  --settings-control-on: var(--accent);
-  --settings-control-on-hover: var(--accent-hover);
-  --settings-control-knob-on: var(--accent-contrast);
+  --settings-control-on: var(--menu-selection-color);
+  --settings-control-on-hover: color-mix(in srgb, var(--menu-selection-color) 88%, var(--text));
+  --settings-control-knob-on: #ffffff;
   box-shadow: var(--shadow-dialog);
   animation: native-modal-in 200ms var(--ease-sheet) both;
-}
-
-@supports (color: color-mix(in srgb, AccentColor 50%, transparent)) {
-  .settings-dialog-surface {
-    --settings-control-on: AccentColor;
-    --settings-control-on-hover: color-mix(in srgb, AccentColor 88%, #000);
-    --settings-control-knob-on: #ffffff;
-  }
 }
 
 .settings-dialog-surface .config-switch[aria-checked="true"] {
@@ -4498,6 +4599,9 @@ html:not(.dark) .session-item.is-selected .session-item-time {
 
 .chat-composer {
   --composer-send-size: 36px;
+  --composer-font-size: var(--chat-content-font-size, 14px);
+  --composer-line-height: calc(var(--composer-font-size) * 1.55);
+  --composer-first-line-height: max(var(--composer-send-size), var(--composer-line-height));
   --composer-inset: 10px;
   --composer-border-width: 1px;
   overflow: visible;
@@ -4519,6 +4623,18 @@ html:not(.dark) .session-item.is-selected .session-item-time {
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
+}
+
+/* The attach SVG and the first text line share a center, including empty
+   placeholders and multi-line drafts. Send stays anchored at the bottom. */
+.chat-composer-editor:has(> .composer-attach-button) {
+  align-items: flex-start !important;
+}
+.chat-composer-editor:has(> .composer-attach-button) > .chat-input-textarea {
+  box-sizing: border-box;
+  min-height: var(--composer-first-line-height) !important;
+  padding-block: max(0px, calc((var(--composer-send-size) - var(--composer-line-height)) / 2));
+  padding-inline: 0;
 }
 
 /* Focus only lifts the hairline a step; the caret already says where typing
@@ -4546,22 +4662,18 @@ html:not(.dark) .session-item.is-selected .session-item-time {
 }
 
 .chat-composer textarea {
-  font-size: var(--chat-content-font-size, 14px) !important;
-  line-height: 1.55 !important;
+  font-size: var(--composer-font-size) !important;
+  line-height: var(--composer-line-height) !important;
+}
+.chat-composer .chat-input-textarea::placeholder {
+  line-height: var(--composer-line-height);
+  white-space: nowrap;
 }
 
 @media (max-width: 640px) {
-  .chat-composer textarea {
-    font-size: max(16px, var(--chat-content-font-size, 14px)) !important;
-    /* 16px x 1.55 = 24.8px overflowed the 24px one-row box by a pixel, which
-       drew a stray scrollbar beside Send; 1.5 lands exactly on 24px. */
-    line-height: 1.5 !important;
-  }
-
-  /* The explicit placeholder line box (#64) must shrink with it, or the
-     placeholder alone (16px x 1.6) still overflows the row. */
-  .chat-composer .chat-input-textarea::placeholder {
-    line-height: 1.5;
+  .chat-composer {
+    --composer-font-size: max(16px, var(--chat-content-font-size, 14px));
+    --composer-line-height: calc(var(--composer-font-size) * 1.5);
   }
 }
 
@@ -4718,16 +4830,16 @@ html:not(.dark) .session-item.is-selected .session-item-time {
   cursor: not-allowed;
 }
 
-/* Attach sits at the card's leading edge, the mirror of Send: same 32px
-   circle, quiet until hovered; tinted while images are attached. */
+/* Attach mirrors Send's circle, but stays beside the first line of text. */
 .composer-attach-button {
   flex: 0 0 auto;
-  align-self: flex-end;
+  align-self: flex-start;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: var(--composer-send-size);
+  height: var(--composer-send-size);
+  margin-block-start: calc((var(--composer-first-line-height) - var(--composer-send-size)) / 2);
   margin-left: -4px;
   padding: 0;
   border-radius: 999px;
@@ -4738,13 +4850,6 @@ html:not(.dark) .session-item.is-selected .session-item-time {
 .composer-attach-button[data-active] {
   color: var(--text);
   background: var(--bg-hover);
-}
-
-@media (max-width: 640px) {
-  .composer-attach-button {
-    width: 36px;
-    height: 36px;
-  }
 }
 
 .composer-trigger-hint {
@@ -7083,15 +7188,55 @@ span.linenumber {
 
 .file-viewer-mode-switch {
   display: flex;
-  padding: 2px;
-  overflow: hidden;
-  gap: 1px;
-  border: var(--hairline) solid var(--separator);
-  background: var(--bg-subtle);
-  height: 32px;
-  border-radius: 9px;
 }
 
+.file-viewer-mode-switch > .file-viewer-mode-button {
+  min-height: 24px;
+  padding: 2px 8px;
+  filter: none;
+}
+@media (pointer: coarse) {
+  .file-viewer-mode-switch > .file-viewer-mode-button { min-height: 44px; }
+}
+
+/* Tool definitions use the same separated rows as the settings sidebars.
+   Qualify the scope to override the upstream component's styled-jsx rules. */
+.tool-definitions-panel .tool-definitions-sidebar .tool-definitions-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--choice-row-gap);
+  padding: var(--choice-inset);
+}
+.tool-definitions-panel .tool-definitions-sidebar .tool-definitions-list > .tool-definitions-item {
+  position: relative;
+  flex-shrink: 0;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--choice-row-radius);
+}
+.tool-definitions-panel .tool-definitions-sidebar .tool-definitions-item.selected {
+  background: var(--bg-selected);
+  box-shadow: none;
+  color: var(--text);
+}
+.tool-definitions-panel .tool-definitions-sidebar .tool-definitions-item.selected::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: calc(50% - 8px);
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--menu-selection-color);
+}
+.tool-definitions-panel .tool-definitions-sidebar .tool-definitions-item:focus-visible {
+  outline: 2px solid var(--menu-focus-ring);
+  outline-offset: -2px;
+}
+@media (pointer: coarse) {
+  .tool-definitions-panel .tool-definitions-sidebar .tool-definitions-list > .tool-definitions-item { min-height: 44px; }
+}
 
 .file-viewer-mode-button {
   border: 0;
@@ -8862,6 +9007,225 @@ html.native-desktop :is(
 
 .saved-file-card-reveal:hover {
   background: var(--bg-hover);
+}
+
+/* Background washes. The preview cards and the actual canvas share the
+   same stops; mode only chooses the corresponding light or dark variant. */
+:root,
+[data-background-preview="rex"] {
+  --wash-light-stops: #ebe0f3, #f3e7f1, #f7eee4, #f6efcf;
+  --wash-light-glow: rgba(247, 220, 241, 0.75);
+  --wash-dark-stops: #17141f, #191620, #1b1916;
+  --wash-dark-glow: rgba(120, 70, 120, 0.22);
+}
+:root[data-background="mist"],
+[data-background-preview="mist"] {
+  --wash-light-stops: #e3e9f4, #ebeff6, #f1f2f3, #f2f1ec;
+  --wash-light-glow: rgba(210, 225, 248, 0.75);
+  --wash-dark-stops: #12151b, #14171d, #17181b;
+  --wash-dark-glow: rgba(70, 100, 150, 0.22);
+}
+:root[data-background="meadow"],
+[data-background-preview="meadow"] {
+  --wash-light-stops: #e2eee5, #ebf2e7, #f3f2e2, #f5f0d6;
+  --wash-light-glow: rgba(214, 240, 222, 0.75);
+  --wash-dark-stops: #111814, #141a16, #181a14;
+  --wash-dark-glow: rgba(70, 130, 95, 0.2);
+}
+:root[data-background="dusk"],
+[data-background-preview="dusk"] {
+  --wash-light-stops: #e4dbf3, #efdeee, #f6e3dc, #f7e6cf;
+  --wash-light-glow: rgba(246, 206, 222, 0.8);
+  --wash-dark-stops: #191321, #1e161e, #221a17;
+  --wash-dark-glow: rgba(150, 80, 110, 0.25);
+}
+:root[data-background="plain"],
+[data-background-preview="plain"] {
+  --wash-light-stops: #eceef4, #eceef4;
+  --wash-light-glow: transparent;
+  --wash-dark-stops: #141418, #141418;
+  --wash-dark-glow: transparent;
+}
+:root {
+  --canvas-background: linear-gradient(225deg in oklab, var(--wash-light-glow), transparent 50%),
+    linear-gradient(180deg in oklab, var(--wash-light-stops));
+}
+html.dark {
+  --canvas-background: linear-gradient(225deg in oklab, var(--wash-dark-glow), transparent 50%),
+    linear-gradient(180deg in oklab, var(--wash-dark-stops));
+}
+
+.settings-dialog-surface { background: var(--canvas-background); }
+.settings-dialog-main { background: var(--surface-elevated); }
+/* Embedded editors share the General/Appearance content surface. Keep the
+   surrounding theme wash and the shared hover/selection tokens unchanged. */
+.settings-dialog-main .config-panel-root.is-embedded > .config-panel-surface,
+.settings-dialog-main .config-panel-root.is-embedded .config-sidebar {
+  background: var(--surface-elevated);
+}
+
+.settings-appearance-controls {
+  padding: 16px 20px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+}
+.settings-appearance-mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.settings-appearance-mode-row .settings-general-heading { margin: 0; }
+.settings-appearance .settings-theme-options {
+  display: flex;
+  width: auto;
+  max-width: 100%;
+}
+.settings-appearance .settings-theme-option {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.settings-appearance .settings-theme-option-label { white-space: nowrap; }
+.settings-background-grid {
+  display: grid;
+  /* Use the available content width; empty columns must not force a wrap. */
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 18px 16px;
+}
+.settings-background-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  cursor: pointer;
+}
+.settings-background-swatch {
+  position: relative;
+  display: block;
+  aspect-ratio: 1.5;
+  overflow: hidden;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(225deg in oklab, var(--wash-light-glow), transparent 50%),
+    linear-gradient(180deg in oklab, var(--wash-light-stops));
+  box-shadow: var(--shadow-control);
+}
+html.dark .settings-background-swatch {
+  background: linear-gradient(225deg in oklab, var(--wash-dark-glow), transparent 50%),
+    linear-gradient(180deg in oklab, var(--wash-dark-stops));
+}
+.settings-background-mini-card {
+  position: absolute;
+  inset: 16% 8% -8% 25%;
+  border-radius: 8px;
+  background: var(--workbench-bg);
+}
+.settings-background-mini-sidebar {
+  position: absolute;
+  top: 31%;
+  left: 8%;
+  width: 12%;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--text-dim);
+  opacity: 0.35;
+}
+.settings-background-name {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--fs-body);
+}
+.settings-background-option:has(input:checked) .settings-background-name {
+  color: var(--text);
+  font-weight: 600;
+}
+.settings-background-option:has(input:checked) .settings-background-swatch {
+  box-shadow: inset 0 0 0 2px var(--menu-selection-color);
+}
+.settings-background-indicator {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--menu-selection-color);
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.settings-background-indicator::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--workbench-bg);
+}
+.settings-background-option:has(input:checked) .settings-background-indicator { display: flex; }
+.settings-background-option:hover .settings-background-swatch {
+  border-color: var(--menu-selection-color);
+}
+.settings-background-option:has(input:focus-visible) .settings-background-swatch {
+  outline: 2px solid var(--menu-focus-ring);
+  outline-offset: 3px;
+}
+
+.settings-font-heading-row {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.settings-font-heading-row .settings-general-heading { margin: 0; }
+.settings-font-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 280px);
+  align-items: center;
+  gap: 12px 24px;
+  padding-block: 14px;
+}
+.settings-font-control { display: grid; min-width: 0; gap: 8px; }
+.settings-font-control .app-select-trigger { width: 100%; min-width: 0; }
+.settings-font-custom { display: flex; align-items: center; gap: 8px; }
+.settings-font-custom input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 10px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  background: var(--bg);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+}
+.settings-font-custom input[aria-invalid="true"] { border-color: var(--danger); }
+.settings-font-custom .config-button { flex-shrink: 0; }
+.settings-font-preview {
+  display: grid;
+  gap: 6px;
+  padding: 16px 14px;
+  border-top: var(--hairline) solid var(--border);
+  font-size: var(--fs-body);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.settings-font-preview p { margin: 0; }
+.settings-font-preview code { color: var(--text-muted); white-space: pre-wrap; }
+.settings-font-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+@media (max-width: 640px) {
+  .settings-font-option { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .settings-font-custom input { font-size: 16px; }
+  .settings-background-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
+  .settings-appearance .settings-theme-options { width: 100%; }
+  .settings-appearance .settings-theme-option { flex: 1 1 0; padding-inline: 5px; gap: 0; }
+  .settings-appearance .settings-theme-option svg { display: none; }
+}
+@media (pointer: coarse) {
+  .settings-appearance .settings-theme-option { min-height: 44px; }
 }
 
 /* Chat folder and computer access: the switch in the composer's run menu, and the checkbox in

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { useI18n } from "@/hooks/useI18n";
+import { FONT_CHANGE_EVENT } from "@/lib/font-preferences";
 import { createTerminalWriter, terminalRequest } from "@/lib/terminal-client";
 import type { TerminalEvent } from "@/lib/terminal-manager";
 import type { TerminalTab } from "./terminal-tab-state";
@@ -88,6 +89,17 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
       if (!container.offsetWidth || !container.offsetHeight) return;
       fit.fit();
     };
+    // Changing a family must update xterm's measured cells without replacing
+    // the terminal, reconnecting its session or losing its scrollback.
+    let fontFrame = 0;
+    const updateFont = () => {
+      if (disposed) return;
+      terminal.options.fontFamily = getComputedStyle(container).getPropertyValue("--font-mono").trim() || "monospace";
+      cancelAnimationFrame(fontFrame);
+      fontFrame = requestAnimationFrame(fitAndResize);
+    };
+    window.addEventListener(FONT_CHANGE_EVENT, updateFont);
+    document.fonts.addEventListener("loadingdone", updateFont);
     const onResize = terminal.onResize(({ cols, rows }) => {
       if (connected && !exited && !inputFailed) writer.resize(cols, rows);
     });
@@ -166,6 +178,9 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
       events?.close();
       void writer.stop();
       resizeObserver.disconnect();
+      cancelAnimationFrame(fontFrame);
+      window.removeEventListener(FONT_CHANGE_EVENT, updateFont);
+      document.fonts.removeEventListener("loadingdone", updateFont);
       onData.dispose();
       onResize.dispose();
       window.removeEventListener("pagehide", pageHide);

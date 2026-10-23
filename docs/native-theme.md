@@ -62,18 +62,45 @@ layer when other theme rules need to beat it.
 The reasons behind the visual choices. When a merge makes something look wrong, restore it to
 the intent described here.
 
-**Palette.** The canvas is warm off-white (`--bg: #f7f7f5`), and pure white is reserved for
-controls and elevated surfaces (`--surface`). The accent is near-black (`#1d1d1f`, near-white
-in dark mode) rather than a brand colour. Emphasis comes from contrast, not hue. `--text-dim`
-stays at a value that clears 3:1 contrast because it carries real labels; inside the sidebar
-(light mode) it is darkened to clear 4.5:1, and `--text-meta` (10px message footnotes) does too.
-The two exceptions to the near-black accent are text selection and keyboard focus rings: they
-use the system `AccentColor` (`--selection`, `--focus-ring`, behind an `@supports` query that
-also requires `color-mix`) so they read as native. Browsers without it keep the neutral values.
+**Palette.** The palette uses Pi's existing semantic tokens; attribution and its
+MIT license are retained in [third-party notices](../public/THIRD_PARTY_NOTICES.txt).
+Settings › Appearance separates light/dark/system
+mode from five background choices: Petal (`rex`, default), Mist, Meadow, Dusk and Plain.
+The sidebar/canvas and Settings chrome share `--canvas-background`; reading surfaces stay white in light
+mode and graphite `#232328` in dark mode. Popovers are opaque white / `#232327`.
+The blue `#3b6cf6` / `#6b93ff` is shared by selection pills, default stars,
+settings switches/sliders, text selection and focus. Primary action fills retain the
+neutral foreground/background pair. The semantic gray text is slightly darkened in light mode
+where needed: ordinary labels and metadata target 4.5:1, dim labels 3:1, and sidebar
+labels 4.5:1 on the wash. Do not use faint decorative gray on small labels.
+Colors stay in `native-theme.css`; the 8px choice inset, 4px row gap, fonts and composer
+geometry are preserved. Thumbnail cards use the same `--wash-*` stops as the canvas.
+The background is cached in `pi-background` before paint and persisted through
+`/api/appearance` to Pi Web's own settings file. This survives changing desktop server
+ports. Writes are serialized and stale startup reads cannot undo a newer selection.
+`node e2e/appearance.mjs` covers all washes, themes, widths, keyboard use and persistence.
 
 **Shape and motion.** Radii come from `--radius-sm/md/lg/xl` (6/8/12/16px). Controls are
 `--control-height-sm` 28px or `--control-height` 32px. Elevation uses the four
 `--shadow-*` levels. Easing is `--ease-native`.
+
+**Settings choices.** Config sidebars (Agents, Models, Skills, Plugins and MCP) reuse
+the 8px choice inset, 4px row gap and 5px row radius. Selected and hovered neighbors
+must remain separate; hovering the selected row must preserve its selected fill.
+Segmented controls (mode, language, send shortcut, Diff, scope and file/artifact view mode) share `--segment-*`:
+4px inset and gap (both reference the settings row gap), 5px inner / 9px outer corners,
+and a quiet raised selected surface.
+Their normal height is 32px (24px for small scope controls); coarse pointers retain
+44px targets. Keep geometry in this shared rule, not section-specific overrides.
+The tool definitions list also uses the shared 4px row gap.
+`node e2e/settings-controls.mjs` measures the seven Settings sections, file view switch
+and tool definitions with isolated data in both themes at 1280/390/320px, including hover and focus.
+
+**Composer alignment.** The attach icon is an SVG. Its center follows the first text
+line, including the placeholder, at every supported font size. Text padding and icon
+position derive from `--composer-line-height` and `--composer-send-size`; do not nudge
+the icon by a fixed pixel offset. Send stays bottom-aligned with the card's arc.
+`e2e/composer-geometry.mjs` checks empty, single-line and multi-line drafts at 12–24px.
 
 **One chip language.** Every toolbar-ish control is a quiet 28×28 chip with a 7px radius.
 It shows `--bg-hover` when hovered and `--bg-selected` when pinned on. The pinned state is
@@ -127,8 +154,8 @@ inactive. General splits into two columns at ≥880px. The dialog follows the ho
 gets a centered preferences toolbar (icon over label, gray tile for the selection, no title),
 Windows and Linux get a left navigation pane with the content as a card under a title bar
 (≥900px; narrower windows keep the top tabs), with a Fluent switch and red corner close on
-Windows and a GNOME round close on Linux. Switches and sliders use the system `AccentColor`
-when on; buttons keep the near-black accent. Phones and the ≤640px picker are untouched.
+Windows and a GNOME round close on Linux. Switches and sliders use the shared blue
+when on; buttons keep the neutral accent. Phone and ≤640px picker layouts are untouched.
 ⌘, / Ctrl+, opens it at the last section.
 
 **Chat.** The composer aligns with the message column. Markdown tables wrap within the panel

@@ -85,6 +85,7 @@ interface Props {
   onOpenSession?: (sessionId: string) => void;
   onAskInNewChat?: (prompt: string, sourceSessionId: string, sourceEntryId: string) => Promise<void>;
   quoteSelectionEnabled?: boolean;
+  conversationNavigatorEnabled?: boolean;
   initialPrompt?: string;
   onInitialPromptConsumed?: () => void;
   /** Completion sound state + controls, owned by AppShell so tasks finishing in
@@ -262,7 +263,7 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = fa
   );
 }
 
-export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTargetHandled, initialScrollPosition, onScrollPositionChange, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked, modelsRefreshKey, workspaceUnavailable, onRecheckWorkspace, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemToolsChange, onSystemInfoLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onOpenSettings, onOpenModelsConfig, onContextUsageChange, onOpenFile, onOpenSession, onAskInNewChat, onSelectProject, projectOptions, onProjectChange, onProjectFilesImported, quoteSelectionEnabled = true, initialPrompt, onInitialPromptConsumed, soundEnabled = true, playDoneSound = () => {}, unlockAudio }: Props) {
+export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTargetHandled, initialScrollPosition, onScrollPositionChange, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked, modelsRefreshKey, workspaceUnavailable, onRecheckWorkspace, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemToolsChange, onSystemInfoLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onOpenSettings, onOpenModelsConfig, onContextUsageChange, onOpenFile, onOpenSession, onAskInNewChat, onSelectProject, projectOptions, onProjectChange, onProjectFilesImported, quoteSelectionEnabled = true, conversationNavigatorEnabled = true, initialPrompt, onInitialPromptConsumed, soundEnabled = true, playDoneSound = () => {}, unlockAudio }: Props) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const chatOnly = workspaceKind === "chat" || session?.workspaceKind === "chat";
@@ -1587,6 +1588,8 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
           <ConversationNavigator
             turns={conversationTurns}
             scrollContainerRef={scrollContainerRef}
+            contentRef={messageContentRef}
+            enabled={conversationNavigatorEnabled}
             onSelect={selectConversationTurn}
           />
         </>

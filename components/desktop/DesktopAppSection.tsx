@@ -143,12 +143,14 @@ export function DesktopAppSection() {
           </ConfigButton>
         </div>
       </div>
-      <ConfigButton className="settings-option-action" onClick={() => void openLogDirNative()}>
-        {t("appSettings.openLogs")}
-      </ConfigButton>
-      <ConfigButton className="settings-option-action" onClick={() => void quitAppNative()}>
-        {t("appSettings.quitApp")}
-      </ConfigButton>
+      <div className="settings-action-group">
+        <ConfigButton onClick={() => void openLogDirNative()}>
+          {t("appSettings.openLogs")}
+        </ConfigButton>
+        <ConfigButton onClick={() => void quitAppNative()}>
+          {t("appSettings.quitApp")}
+        </ConfigButton>
+      </div>
     </section>
   );
 }

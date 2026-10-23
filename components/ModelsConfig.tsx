@@ -2263,7 +2263,7 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null, onOpenMcp 
                 const models = pData.models ?? [];
                 const overriddenIds = new Set(listModelOverrides(pData.modelOverrides).map((entry) => entry.modelId));
                 return (
-                  <div key={pName} style={{ marginBottom: 2 }}>
+                  <div key={pName} className="config-sidebar-group">
                     {/* Provider row */}
                     <ConfigSidebarItem
                       onClick={() => setSelection({ type: "provider", name: pName })}

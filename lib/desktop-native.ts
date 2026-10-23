@@ -1,4 +1,5 @@
 import { isTauriDesktop } from "@/lib/desktop-updater";
+import { normalizeInstalledFonts, type InstalledFont } from "@/lib/installed-fonts";
 import {
   DESKTOP_API_TOKEN_HEADER,
   MAX_DESKTOP_SAVE_BYTES,
@@ -54,6 +55,16 @@ async function desktopApiHeaders(initial?: HeadersInit): Promise<Headers> {
   const headers = new Headers(initial);
   headers.set(DESKTOP_API_TOKEN_HEADER, await getDesktopApiToken());
   return headers;
+}
+
+export async function listInstalledFontsNative(): Promise<InstalledFont[]> {
+  if (!isTauriDesktop()) throw new Error("Installed fonts are only available in the desktop app.");
+  const response = await fetch("/api/desktop/fonts", { headers: await desktopApiHeaders(), cache: "no-store" });
+  if (!response.ok) throw new Error("Could not read installed fonts");
+  const data = await response.json();
+  const fonts = normalizeInstalledFonts(data.fonts);
+  if (!fonts.length) throw new Error("No installed fonts found");
+  return fonts;
 }
 
 async function readResponseBytesWithinLimit(

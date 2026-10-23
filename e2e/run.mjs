@@ -307,6 +307,17 @@ try {
       Array.from({ length: 5000 - oldest }, (_, i) => text(oldest + i)), "Missing, reordered, or duplicate chat messages");
     if (viewport.width > 600) {
       const navigator = page.getByRole("slider", { name: "Conversation navigation", exact: true });
+      // With the default sidebar, the 1280px viewport leaves less than the
+      // navigator's 1024px minimum chat width. Exercise its wide layout before
+      // testing keyboard jumps, then restore the original pagination viewport.
+      await navigator.waitFor({ state: "detached" });
+      await page.setViewportSize({ width: 2240, height: viewport.height });
+      await navigator.waitFor();
+      await page.locator('.app-topbar button[aria-label="Show workspace"]').click();
+      await navigator.waitFor({ state: "detached" });
+      assert.ok(await page.locator(".chat-scroll-container").evaluate((element) => element.clientWidth) > 1024,
+        "An open workspace must hide navigation even when the chat column is still wide");
+      await page.locator('.app-topbar button[aria-label="Hide workspace"]').click();
       await navigator.waitFor();
       await navigator.focus();
       const { before, maximum } = await navigator.evaluate((element) => ({
@@ -347,6 +358,11 @@ try {
       assert.ok(after.value >= 1 && after.value <= after.maximum);
       await page.locator("textarea").last().focus();
       await preview.waitFor({ state: "hidden" });
+      await page.setViewportSize(viewport);
+      await navigator.waitFor({ state: "detached" });
+    } else {
+      assert.equal(await page.getByRole("slider", { name: "Conversation navigation", exact: true }).count(), 0,
+        "Mobile layouts must leave the transcript free of conversation navigation");
     }
     await page.screenshot({ path: join(artifacts, `history-${viewport.width}.png`) });
 

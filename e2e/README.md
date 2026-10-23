@@ -28,6 +28,9 @@ Coverage:
   has the expected IDs, no gaps or duplicates, and the messages appear once in
   the chat. A small session checks pagination through the root.
 - Branch context follows the selected leaf and excludes the other branch.
+- Conversation navigation hides in narrow chat columns and with the workspace
+  open, restores on wide layouts, and still supports keyboard jumps. The full
+  application test returns to its original viewport after these checks.
 - Markdown, code blocks, and real tool-call/tool-result blocks render.
 - Chat width and font size persist, existing drafts resize, and short settings
   panels keep every language option reachable on desktop and mobile.

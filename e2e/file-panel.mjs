@@ -33,7 +33,8 @@ export async function checkFilePanel(page, filePath) {
   // The panel opens as a preview surface; the file list starts hidden.
   const showFileList = panel.locator('.file-tree-toggle[aria-label="Show file list"]');
   if (await showFileList.isVisible()) await showFileList.click();
-  await panel.locator(`[role="button"][title="${filePath}"]`).click();
+  // The file tree normalizes Windows separators to forward slashes.
+  await panel.getByRole("button").and(panel.getByTitle(filePath.replaceAll("\\", "/"), { exact: true })).click();
   const iframe = panel.locator("iframe");
   await iframe.waitFor();
   const frame = await (await iframe.elementHandle()).contentFrame();

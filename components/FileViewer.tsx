@@ -1532,10 +1532,6 @@ function TextFileViewer({
                     title={mode === "diff" ? t("i18n.compareHead") : undefined}
                     aria-pressed={active}
                     className="file-viewer-mode-button"
-                    style={{
-                      background: active ? "var(--bg-selected)" : "transparent",
-                      color: active ? "var(--text)" : "var(--text-muted)",
-                    }}
                   >
                     {DISPLAY_MODE_LABELS[mode]}
                   </button>

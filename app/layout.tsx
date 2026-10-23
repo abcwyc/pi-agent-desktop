@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Noto_Sans_Mono } from "next/font/google";
 import { PwaRegistration } from "@/components/PwaRegistration";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
+import { FONT_INIT_SCRIPT } from "@/lib/font-preferences";
 import "katex/dist/katex.min.css";
 import "./globals.css";
 import "./settings.css";
@@ -79,6 +80,7 @@ export default function RootLayout({
         {/* eslint-disable-next-line @next/next/no-css-tags */}
         <link rel="stylesheet" href="/api/custom-css" media="print" data-custom-css="" suppressHydrationWarning />
         <script dangerouslySetInnerHTML={{ __html: CUSTOM_CSS_ACTIVATE_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: FONT_INIT_SCRIPT }} />
         <script
           dangerouslySetInnerHTML={{
             __html: THEME_INIT_SCRIPT,

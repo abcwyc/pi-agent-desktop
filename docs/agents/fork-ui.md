@@ -23,7 +23,14 @@ and screenshots go to the ignored `test-results/streaming-markdown/` directory.
 
 Fork-owned notes moved out of `AGENTS.md` to keep it short. The upstream doc on the same topic (`docs/agents/*.md` without the `fork-` prefix) may describe the same area in other words; where they disagree, these notes describe this fork. Hard rules that must survive a merge are also listed in `AGENTS.md` under **Hard rules**.
 
+## Conversation navigation
+ConversationNavigator 仅在右侧工作面板关闭、对话滚动区宽度至少 1024px，且正文左边距至少 64px 时显示。
+沿用 ResizeObserver 同时观察滚动区和实际正文列，因此侧栏缩放、窗口变化和正文宽度设置都会重新判断；
+不可仅用窗口媒体查询推测可用空间。隐藏时移除导航及其键盘入口，并清理悬停预览，恢复显示时不主动滚动正文。
+`node e2e/conversation-navigator.mjs` 覆盖真实导航组件的几何、面板开关、正文宽度及键盘交互。
+
 ## Touch affordances
+
 Session rows render the "…" action menu when `(hovered || touchMode)` — `touchMode` is a post-mount `matchMedia("(hover: none)")` check, so hover styling is untouched on desktop and rename/delete stay reachable on touch. The composer's single circular action shows Stop while a run is active and the draft is empty; typing switches it to queued Send, including on narrow screens. Escape remains available to stop while drafting. Rename/delete failures use the global shell notice shelf (`appNotify.error` with `sidebar.renameFailed` / `sidebar.deleteFailed`) instead of being swallowed.
 Message-row copy/edit/fork actions use CSS hover/focus-within reveal instead of JS hover state, and are always visible under `(hover: none)`. They must remain pointer-enabled when focused so keyboard tabbing does not land on invisible controls.
 While a session runs, in-session "Edit from here" stays visible but disabled with the Esc hint; fork stays available because it copies to an independent file.
@@ -50,7 +57,7 @@ The Projects header's hover-only `…` menu switches between `grouped` (project 
 
 ## Settings dialog: one tab per concern
 - The sidebar gear opens Settings directly through `openSettingsAtLastSection`, the same entry used by the keyboard shortcut. First use opens General; subsequent visits restore the last available section. Category navigation lives inside Settings; do not restore an intermediate section menu.
-- The settings dialog's tabs are exactly `general`, `models`, `skills`, `agents`, `plugins` (`SETTINGS_SECTION_VALUES`). The former `desktop` tab duplicated General's language and theme pickers, so it was removed: the product blurb and Version & Updates sit at the top of General, the custom-stylesheet and diff-display controls joined General's appearance/chat sections, and the desktop window/tray switches live in `components/desktop/DesktopAppSection.tsx`, which renders nothing in a browser (same self-hiding contract as `WindowControls`). `components/AppUpdatesSection.tsx` owns the update check and its chips.
+- The settings sections are `general`, `appearance`, `models`, `skills`, `agents`, `plugins`, `mcp` (`SETTINGS_SECTION_VALUES`). Appearance is available without a project and owns mode, background and the custom stylesheet through `AppearanceSettings.tsx`. General keeps language, chat controls, product/version information and the self-hiding desktop window/tray switches (`components/desktop/DesktopAppSection.tsx`). Do not duplicate appearance controls in General or reintroduce the former Desktop tab. `components/AppUpdatesSection.tsx` owns the update check and its chips.
 - A signed desktop update installs and relaunches the app, so `AppUpdatesSection` reports `busy` up to `SettingsPanel`, which keeps backdrop clicks and Escape from dismissing the dialog mid-upgrade. That is the reason for the `onBusyChange` prop; don't drop it when refactoring the panel.
 - `UpdateReminder` opens the panel at `general`, where the update status now lives. `components/fork-extractions.test.mjs` pins that the update/desktop code stays in those fork-owned files instead of being regrouped into `SettingsPanel.tsx`.
 
@@ -78,3 +85,43 @@ The topbar renders exactly ONE toolbar group (`app-topbar-actions`: history/bran
 - `ComposerOutbox` 把待发送消息贴在输入框上沿；每条消息支持立即发送、取回编辑、删除。窄窗口操作使用图标和完整无障碍标签，触屏点击范围至少 44px；不使用彩色描边区分队列模式。
 - 立即发送通过 SDK prompt admission 的 `steer` 在下一个可接收指令的时机引导当前任务，不承诺强制中断正在进行的工具调用。编辑通过 `restoreSubmission` 合并到原会话草稿，保留已有输入与图片。
 - 验证：`node e2e/composer-outbox.mjs`，覆盖深浅色、1280/390/320 宽度、换行同心圆角、排队/编辑/删除/引导、页面刷新及停止后的队列状态。
+
+
+## 外观与背景
+
+外观页的 `FontSettings` 分别选择界面与代码字体；常用字体通过共享 `AppSelect` 选择，
+自定义名称显式应用，恢复默认时移除界面设置的覆盖，让原有 `custom.css` 重新接管。
+`useFonts` 在 AppShell 生命周期中恢复配置、即时应用并串行保存到
+`pi-web/settings.json` 的 `fonts`，旧读取不能覆盖新选择；失败保留本地预览并提供重试。
+`FONT_INIT_SCRIPT` 只从本地缓存恢复首屏，服务器选择负责跨端口恢复。
+界面字体同时覆盖标题，代码字体更新已有 xterm 的字体与尺寸，不重建终端会话。
+默认字体栈保留上游的原生等宽字体优先级和中文回退；通过 `--font-*-default`
+接入字体选择器，恢复默认时同时恢复上游的字体顺序。
+字体名称为单个本机 family，不下载字体，不改写用户样式表。
+桌面外观页通过 `listInstalledFontsNative()` 和受桌面进程 token 保护的 `/api/desktop/fonts`
+读取本机字体；Windows 使用系统字体集合及其本地化名称，macOS 使用 system_profiler，Linux 使用 fontconfig。
+两种字体选择器沿用 AppSelect 的菜单、键盘导航和间距，读取失败保留手动输入并提供重试。
+字体为默认值时隐藏恢复按钮，改动后显示可用的恢复操作；标题行保留高度。
+背景和字体保存状态仅供读屏播报，不插入可见行挤动布局；错误仍显示并可重试。
+嵌入设置的配置面板与侧栏共用 `--surface-elevated`，与常规/外观内容底色一致，控件和选中态仍使用各自 token。
+设置行的 `.settings-option-action` 使用 `align-self: center`，与多行说明整体居中。
+回归：`node e2e/fonts.mjs` 覆盖真实设置页、即时预览、保存/恢复、错误、菜单及按钮几何。
+
+外观页提供花瓣、薄雾、草地、黄昏、纯色五种背景卡片，明暗模式独立选择。
+卡片网格使用内容区可用宽度，默认桌面窗口五项排成一行；空间不足再换行，不能用固定宽度上限提前挤出第二行。
+卡片预览和实际背景共用 `native-theme.css` 的 `--wash-*`，选中用蓝色边缘及圆点。
+`useBackground` 负责即时显示、串行保存与过期读取保护，`/api/appearance` 将选择保存到
+Pi Web 自身的 `pi-web/settings.json`，保留其他字段；端口改变后从该文件恢复。
+`THEME_INIT_SCRIPT` 先使用浏览器缓存避免刷新闪烁。相关回归：`node e2e/appearance.mjs`。
+
+## 设置选项细节
+
+`ConfigSidebarList` 与 `.config-sidebar-group` 都按共享 `--choice-*` 留距；模型供应商的
+子项容器同样使用 `.config-sidebar-group`，不能重新引入零间距或行内 margin。
+分段控件共用 `--segment-*`，内衬和按钮间隔都引用设置行间距的 4px（5px 内圆角、9px 外圆角），涵盖明暗、语言、
+发送快捷键、Diff 和作用域。选中状态在鼠标悬停自身或相邻项时必须保持；键盘焦点与禁用语义保留。
+文件与 Artifact 的预览／源码切换也使用这套分段控件参数，工具定义列表同样保持 4px 行间距。
+`node e2e/settings-controls.mjs` 测量真实设置组件，不只断言 CSS 字符串。
+
+输入框加号沿第一行文字居中；SVG、占位文字和实际文字用同一行高计算。加号不是字符，
+不能用字形基线偏移来补偿；多行仍保留右下发送按钮的同心几何。几何回归覆盖全部字号范围。
