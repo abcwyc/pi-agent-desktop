@@ -9,6 +9,7 @@ import type { Dispatch, RefObject, SetStateAction } from "react";
 import { canUseNativeMenu, menuPointBelow, showNativeMenu } from "@/lib/desktop-menu";
 import { getProjectDisplayName } from "@/lib/project-display";
 import { useI18n } from "@/hooks/useI18n";
+import { useProjectNames } from "@/hooks/useProjectNames";
 
 export function getProjectLabel(
   projectPath: string | null | undefined,
@@ -36,6 +37,8 @@ export function ComposerProjectChip({
   menuRef, open, onOpenChange, label, projectPath, maxWidth, projectOptions, onProjectChange, onSelectProject,
 }: ComposerProjectChipProps) {
   const { t } = useI18n();
+  const { names } = useProjectNames();
+  const displayLabel = projectPath ? getProjectDisplayName(projectPath, projectOptions, names) : label;
   return (
     <div ref={menuRef} style={{ position: "relative", flexShrink: 0 }}>
       <button
@@ -52,7 +55,7 @@ export function ComposerProjectChip({
             if (canUseNativeMenu()) {
               void showNativeMenu(
                 projectOptions.map((projectRoot) => ({
-                  label: getProjectLabel(projectRoot, projectOptions) ?? projectRoot,
+                  label: getProjectDisplayName(projectRoot, projectOptions, names),
                   checked: projectRoot === projectPath,
                   onSelect: () => {
                     if (projectRoot !== projectPath) onProjectChange(projectRoot);
@@ -70,7 +73,7 @@ export function ComposerProjectChip({
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
         </svg>
-        <span>{label}</span>
+        <span>{displayLabel}</span>
       </button>
       {open && projectOptions.length > 0 && onProjectChange && (
         <div
@@ -87,7 +90,7 @@ export function ComposerProjectChip({
           }}
         >
           {projectOptions.map((projectRoot) => {
-            const optionLabel = getProjectLabel(projectRoot, projectOptions) ?? projectRoot;
+            const optionLabel = getProjectDisplayName(projectRoot, projectOptions, names);
             const isCurrent = projectRoot === projectPath;
             return (
               <button

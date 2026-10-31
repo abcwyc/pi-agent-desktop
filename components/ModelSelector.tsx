@@ -5,6 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { isImeComposing } from "@/lib/ime";
 import { SelectorRow } from "./SelectorRow";
+import { ModelIcon } from "./ProviderIcon";
 
 export interface ModelSelectorOption {
   provider: string;
@@ -212,6 +213,8 @@ export function ModelSelector({
           <svg width={chipIconSize} height={chipIconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" style={{ animation: "spin 0.8s linear infinite", flexShrink: 0 }} aria-hidden="true">
             <path d="M21 12a9 9 0 1 1-2.64-6.36" />
           </svg>
+        ) : value ? (
+          <ModelIcon provider={value.provider} modelId={value.modelId} name={currentName} size={chipIconSize} />
         ) : (
           <svg width={chipIconSize} height={chipIconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={variant === "field" ? 2 : 1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
             <rect x="4" y="4" width="16" height="16" rx="2" />
@@ -328,6 +331,7 @@ export function ModelSelector({
                           onSave: () => saveDefault(option),
                         } : undefined}
                       >
+                        <ModelIcon provider={option.provider} modelId={option.modelId} name={option.name} />
                         <OptionLabel label={option.name} />
                       </SelectorRow>
                     );

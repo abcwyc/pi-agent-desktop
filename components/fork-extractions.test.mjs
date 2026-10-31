@@ -256,7 +256,7 @@ const FORK_FEATURES = [
     // dropped the update chip that replaced it, so merging upstream's
     // ChatWindow.tsx would silently put the header back — the absence checks
     // are the point of this entry.
-    markers: ["isEmptyNew"],
+    markers: ["isEmptyNew", "<HomeUsageDashboard />", "<ComposerCompanion"],
     forbiddenMarkers: ["apple-touch-icon", "PRODUCT_NAME", "NewSessionUpdateLink"],
   },
   {

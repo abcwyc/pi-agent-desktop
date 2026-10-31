@@ -1,6 +1,17 @@
 Third-party notices for Pi Agent
 ===============================
 
+Claude-style home and companion
+-------------------------------
+Palette, dashboard design, home-ripple renderer/noise/wave modules, message entrance
+motion and sprite metadata adapted from Nwflower/dsh-claude-style.
+Copyright (c) 2026 Nwflower.
+Source: https://github.com/Nwflower/dsh-claude-style
+Full upstream MIT license and separate artwork notice: claude-companion/NOTICE.txt.
+The Clawd pixel crab character and artwork remain subject to the rights of Anthropic;
+the artwork is not MIT-licensed. This is an unofficial adaptation, not affiliated with
+or endorsed by Anthropic. Proprietary font files and the Sodium engine are not included.
+
 Color palette and background wash definitions
 --------------------------------------------
 Adapted from theme.go in Kero by EGOIST.

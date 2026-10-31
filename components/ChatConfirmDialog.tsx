@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { openStackedDialog } from "@/lib/stacked-dialog";
 
 /**
@@ -11,6 +11,8 @@ export function ChatConfirmDialog({
   title,
   subject,
   body,
+  children,
+  initialFocusRef,
   checkboxLabel,
   checkboxDefault = false,
   confirmLabel,
@@ -25,6 +27,8 @@ export function ChatConfirmDialog({
   /** Full conversation name, separate from the action and its consequences. */
   subject?: string;
   body: string;
+  children?: ReactNode;
+  initialFocusRef?: RefObject<HTMLInputElement | null>;
   /** An optional switch under the text; its value is handed to `onConfirm`. */
   checkboxLabel?: string;
   checkboxDefault?: boolean;
@@ -45,9 +49,14 @@ export function ChatConfirmDialog({
     busyRef.current = busy;
     onCancelRef.current = onCancel;
   }, [busy, onCancel]);
-  useEffect(() => openStackedDialog(document, dialogRef.current, () => {
-    if (!busyRef.current) onCancelRef.current();
-  }), []);
+  useEffect(() => {
+    const close = openStackedDialog(document, dialogRef.current, () => {
+      if (!busyRef.current) onCancelRef.current();
+    });
+    initialFocusRef?.current?.focus();
+    initialFocusRef?.current?.select();
+    return close;
+  }, [initialFocusRef]);
   useEffect(() => {
     // Disabling the focused submit button can otherwise drop focus behind the modal.
     if (busy) dialogRef.current?.focus({ preventScroll: true });
@@ -89,6 +98,7 @@ export function ChatConfirmDialog({
             <div id={`${id}-title`} className="project-trust-title">{title}</div>
             {subject && <div id={`${id}-subject`} className="chat-confirm-subject">{subject}</div>}
             <div id={`${id}-body`} className="project-trust-text">{body}</div>
+            {children}
             {checkboxLabel && (
               <label className="chat-confirm-check">
                 <input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} disabled={busy} />

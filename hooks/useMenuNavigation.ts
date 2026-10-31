@@ -15,7 +15,7 @@ export function useMenuNavigation(
   useEffect(() => {
     if (!open) return;
     const container = containerRef.current;
-    const panel = container?.querySelector<HTMLElement>('[role="menu"], [role="listbox"]') ?? container;
+    const panel = container?.querySelector<HTMLElement>('[role="menu"], [role="listbox"], [role="dialog"]') ?? container;
     if (!panel) return;
     const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const items = () => Array.from(panel.querySelectorAll<HTMLButtonElement>(
@@ -23,9 +23,12 @@ export function useMenuNavigation(
     ));
     const buttons = items();
     const selected = buttons.find((button) => button.getAttribute("aria-selected") === "true" || button.getAttribute("aria-checked") === "true");
-    (selected ?? buttons[0])?.focus({ preventScroll: true });
+    (panel.querySelector<HTMLInputElement>('input[type="range"]:not(:disabled)') ?? selected ?? buttons[0])?.focus({ preventScroll: true });
     const onKeyDown = (event: KeyboardEvent) => {
       if (isImeComposing(event)) return;
+      // Embedded sliders own their arrow/Home/End keys; Escape still closes the panel.
+      if (event.target instanceof HTMLInputElement && event.target.type === "range"
+        && !["Escape", "Tab"].includes(event.key)) return;
       const keys = ["ArrowDown", "ArrowUp", "Home", "End"];
       if (keys.includes(event.key)) {
         event.preventDefault();
@@ -57,7 +60,10 @@ export function useMenuNavigation(
         closeRef.current();
       } else if (event.key === "Tab") {
         // Let the browser move focus before removing the menu.
-        window.setTimeout(() => closeRef.current(), 0);
+        window.setTimeout(() => {
+          if (panel.getAttribute("role") === "dialog" && panel.contains(document.activeElement)) return;
+          closeRef.current();
+        }, 0);
       }
     };
     panel.addEventListener("keydown", onKeyDown);

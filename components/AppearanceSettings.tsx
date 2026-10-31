@@ -8,6 +8,7 @@ import { isTauriDesktop, openPathNative } from "@/lib/desktop-native";
 import { ConfigButton } from "./SettingsUi";
 import { ThemeIcon } from "./ThemeIcon";
 import { FontSettings } from "./FontSettings";
+import { HomeExperienceSettings } from "./HomeExperienceSettings";
 
 export function AppearanceSettings() {
   const { t } = useI18n();
@@ -51,6 +52,7 @@ export function AppearanceSettings() {
       </section>
 
       <FontSettings />
+      <HomeExperienceSettings />
 
       <section className="settings-general-section">
         <div className="settings-option-list"><div className="settings-option">

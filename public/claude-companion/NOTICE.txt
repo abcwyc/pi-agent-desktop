@@ -1,0 +1,56 @@
+MIT License
+
+Copyright (c) 2026 Nwflower
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+Sodium engine notice: the files under `packages/client/src/features/sodium/` and
+`packages/engine/src/sheet-rewrite.ts` are the Sodium rendering engine. They are
+licensed under the PolyForm Shield License 1.0.0, **not** under the MIT license
+above; the terms are in `packages/client/src/features/sodium/LICENSE`. Read,
+change and redistribute them, but not to provide a product competing with this
+plugin. Releases up to and including 0.17.0 were published under the MIT license;
+this license applies to the releases published after it.
+
+Font files notice:
+
+- `packages/assets/src/fonts/anthropic/AnthropicSansWebText.ttf`,
+  `packages/assets/src/fonts/anthropic/AnthropicSerifWebText.ttf` and
+  `packages/assets/src/fonts/anthropic/AnthropicMonoWeb.ttf` are
+  proprietary typefaces of Anthropic, extracted from Anthropic's web products.
+  They are included in this repository for personal use only and are **not**
+  covered by the MIT license above; all rights remain with Anthropic. The npm
+  package does not ship these files.
+
+- `packages/assets/src/fonts/JetBrainsMonoVariable.ttf` and
+  `packages/assets/src/fonts/JetBrainsMonoItalicVariable.ttf` are JetBrains Mono,
+  distributed under the SIL Open Font License
+  (`packages/assets/src/fonts/OFL.txt`; the package carries them under
+  `lib/fonts/`). They may be redistributed with this plugin.
+
+Crab artwork notice: the pixel crab (Clawd) is a character of Anthropic, and
+all rights in it remain with Anthropic. `packages/assets/src/mascot/crab/crab-laptop-body.png`
+and `packages/assets/src/mascot/crab/crab-laptop-ink.png` are frames of Claude Code's own
+animation; the remaining sheets in that directory are drawn by this project
+after that character (by `scripts/draw-crab.py`, which carries the drawings).
+These files, and their copies inlined into `lib/client.js`, are **not** covered
+by the MIT license above. This plugin is an unofficial fan work, not affiliated
+with or endorsed by Anthropic.

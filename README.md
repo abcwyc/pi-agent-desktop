@@ -1,10 +1,30 @@
-# Pi Agent
+# Pi Agent · Claude-style edition
 
 **English** | [简体中文](./README.zh-CN.md)
 
-`pi-agent-desktop` is a local AI agent desktop app for macOS and Windows. It packages the agent capabilities of [pi](https://github.com/earendil-works/pi) into a standalone, installable application.
+This is a personal fork of [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop), adding a Claude-style interface, a pixel crab companion, a home usage dashboard, and custom project display names to the existing Pi Agent desktop app. The agent runtime remains powered by [pi](https://github.com/earendil-works/pi).
 
-## Features
+[This repository](https://github.com/2856754968/pi-agent-desktop) · [Cloud builds](https://github.com/2856754968/pi-agent-desktop/actions/workflows/desktop-test-build.yml) · [Original repository](https://github.com/abcwyc/pi-agent-desktop)
+
+## What's changed in this edition
+
+| Change | Experience |
+| --- | --- |
+| Claude-style interface | Warm light and dark palettes, terracotta controls, updated sidebar, composer and message bubbles, and revised prose typography. |
+| Pixel crab companion | Animations follow agent thinking, output, tool execution, compaction and errors. Click to interact or drag horizontally above the composer. |
+| Home usage dashboard | Local session statistics, a 26-week token heatmap, 30-day per-model usage trends, model rankings, and book equivalents for token totals. |
+| Character ripple background | Click empty areas of the home screen to create waves. Rendering pauses while hidden and respects reduced motion. |
+| Reasoning slider | A slider inside the existing reasoning menu exposes levels supported by the selected model while retaining the original option rows. |
+| Message motion and home layout | Locally submitted user messages animate into view; the dashboard sits above the composer. Loading history does not replay entrance animations. |
+| Project renaming | Use a sidebar project's **… → Rename project** action to set a display name shared by the sidebar, timeline and project selectors. Project filtering also searches the new name. |
+
+The home dashboard and companion are on by default and can be disabled in Settings; previously saved opt-out preferences remain respected. Statistics are derived from local session history without uploading session content for analytics.
+
+Renaming changes the display name only. Folder, Git repository, session and worktree paths stay the same. Names and removed-project markers are saved in `~/.pi/agent/pi-web/projects.json`, so desktop restarts and local server port changes preserve them. Save an empty name to restore the default. Existing browser preferences migrate on first use when available; these settings do not automatically sync across devices.
+
+The visuals and animations draw on [Nwflower/dsh-claude-style](https://github.com/Nwflower/dsh-claude-style), adapted to Pi Agent's existing components and usage data. See [third-party notices](./public/THIRD_PARTY_NOTICES.txt).
+
+## Retained upstream features
 
 - Browse and resume past Pi sessions by project, without digging through terminal history or `.jsonl` files.
 - Talk to the agent in real time inside a desktop window, with thinking, tool calls, context usage, cost, and compaction state all visible.
@@ -17,19 +37,30 @@
 - A weekly check of the latest stable `pi-agent-desktop` GitHub Release, with an in-app notice only when the installed app is older.
 - One upgrade button installs a complete, signed new build of Pi Agent and restarts automatically.
 
+The following upstream screenshots illustrate the original layout, rather than the current appearance of this edition.
+
 ![Pi Agent light mode](./docs/screenshots/pi-agent-light.webp)
 
 ![Pi Agent dark mode](./docs/screenshots/pi-agent-dark.webp)
 
-**[⬇️ Download Pi Agent (macOS / Windows)](https://github.com/abcwyc/pi-agent-desktop/releases)**
+**[Build this edition with GitHub Actions](https://github.com/2856754968/pi-agent-desktop/actions/workflows/desktop-test-build.yml)**
 
-Repository: [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop)
+[Official upstream releases](https://github.com/abcwyc/pi-agent-desktop/releases) are published by the original project and do not include this fork's additions.
 
 ## Installation And Usage
 
-### Install The Desktop App
+### Build this edition with GitHub Actions
 
-Builds are available from [GitHub Releases](https://github.com/abcwyc/pi-agent-desktop/releases):
+1. Commit and push the feature code, theme and assets to this repository's `develop` branch.
+2. Open [Actions → Desktop test build](https://github.com/2856754968/pi-agent-desktop/actions/workflows/desktop-test-build.yml) and choose **Run workflow → develop**.
+3. Enter a version suffix such as `claude-style.1` and start the build.
+4. Download and extract the matching platform artifact from the completed run's **Artifacts** section. Windows uses `x64-setup.exe`; the other platform packages are an Apple Silicon DMG and a Linux x64 DEB.
+
+The workflow builds the remote commit, so local files that have not been committed and pushed are not included. It uploads test installers without creating a release, tag or updater manifest. To update this edition, merge upstream changes, rebuild and install the new package.
+
+### Install the upstream desktop app
+
+The following methods install the original upstream app without this edition's additions. Builds are available from [GitHub Releases](https://github.com/abcwyc/pi-agent-desktop/releases):
 
 - Apple Silicon Mac: download the `aarch64.dmg`, open it, and drag the app into `Applications`. Official releases do not build for Intel Macs.
 - Apple Silicon Mac with [Homebrew](https://brew.sh): install from this repository's tap. The tap is added from the repo URL, so the first command is needed once:
@@ -75,6 +106,8 @@ If you have used Pi on this machine before, the app picks up your existing sessi
 Model keys and session data stay on your machine. The file-browsing API only allows access to the current session, the selected project, and explicitly authorized working directories.
 
 ## Update Checks And Upgrades
+
+This section describes the inherited upstream release mechanism. This fork's Actions test builds are outside that update channel: rebuild and install to update the customized edition. New upstream releases are not automatically merged into this repository.
 
 Pi Agent checks the latest stable release of `abcwyc/pi-agent-desktop` at most once every seven days:
 
@@ -192,6 +225,22 @@ Local builds do not register the production updater and cannot accept official u
 
 ## Upstream Sync And Releases
 
+### Maintaining this edition
+
+The direct upstream of this fork is `abcwyc/pi-agent-desktop`. Commit current work first, then merge upstream updates into `develop`:
+
+```bash
+git switch develop
+git fetch upstream
+git merge upstream/main
+```
+
+The `upstream` remote should point to `https://github.com/abcwyc/pi-agent-desktop.git`. Review the chat window, composer and sidebar to confirm that the theme, home components and project renaming still work. Run the relevant checks, push only to `origin/develop`, then start a test build. Resolve conflicts individually and inspect the rendered UI even after a conflict-free merge.
+
+### Inherited component sync and official releases
+
+The workflows below sync `pi`/`pi-web` components and publish official releases; they do not replace the manual merge from `abcwyc/pi-agent-desktop` above. Their operation in a fork depends on Actions being enabled, permissions and signing configuration.
+
 The repository contains two chained automation workflows:
 
 - [`component-updates.yml`](./.github/workflows/component-updates.yml): checks the stable releases of `pi` and `pi-web` daily. When a new version appears, it **first** intersects the incoming upstream changeset with the "upstream files this fork has modified" recorded in [`scripts/fork-ownership.json`](./scripts/fork-ownership.json), then merges the tag, updates dependencies and the component manifest, and runs the full gate (`npm test`, `tsc`, `lint`, a real standalone build).
@@ -234,6 +283,8 @@ instrumentation.ts     Next.js server-side HTTP proxy initialization
 - [Pi session and project architecture](./AGENTS.md)
 
 ## Credits And License
+
+This edition is based on [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop). Its Claude-style home, animation and related assets draw on [Nwflower/dsh-claude-style](https://github.com/Nwflower/dsh-claude-style). The Clawd character and artwork remain the property of Anthropic and are not covered by the code's MIT license. This is an unofficial adaptation, not endorsed by Anthropic; proprietary fonts and the Sodium engine are not bundled. Retain the [asset license and notices](./public/claude-companion/NOTICE.txt).
 
 The desktop integration of Pi Agent is provided by `pi-agent-desktop`; the core capabilities and the web interface come from [earendil-works/pi](https://github.com/earendil-works/pi) and [agegr/pi-web](https://github.com/agegr/pi-web) respectively. Thanks to those projects and their contributors.
 

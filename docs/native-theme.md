@@ -62,8 +62,14 @@ layer when other theme rules need to beat it.
 The reasons behind the visual choices. When a merge makes something look wrong, restore it to
 the intent described here.
 
-**Palette.** The palette uses Pi's existing semantic tokens; attribution and its
-MIT license are retained in [third-party notices](../public/THIRD_PARTY_NOTICES.txt).
+**Palette.** The final Claude-style pass uses Nwflower/dsh-claude-style's white/graphite
+canvas, off-white/dark sidebar, terracotta action colour, blue data charts and serif Latin
+prose with sans CJK fallbacks. It overrides the earlier native palette described below;
+menu geometry, font preferences and platform controls still use Pi's shared components.
+Attribution and separate artwork terms are retained in
+[third-party notices](../public/THIRD_PARTY_NOTICES.txt). No proprietary fonts are shipped.
+The earlier palette uses Pi's existing semantic tokens; its attribution and
+MIT license are also retained in the notices.
 Settings › Appearance separates light/dark/system
 mode; there is no background picker. The sidebar/canvas and Settings chrome share one flat, neutral
 `--canvas-background` (`--bg-panel`, `#f0f0f1` / `#19191a`); no gradients or tinted washes; reading surfaces stay white in light

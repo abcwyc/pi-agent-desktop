@@ -5,6 +5,8 @@ const eslintConfig = [
   {
     ignores: [
       ".claude/**",
+      // Reference project; its aliases and lint rules belong to its own workspace.
+      "dsh-claude-style-master/**",
       ".next/**",
       ".next-desktop/**",
       "test-results/**",

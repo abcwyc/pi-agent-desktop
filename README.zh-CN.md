@@ -1,10 +1,30 @@
-# Pi Agent
+# Pi Agent · Claude 风格定制版
 
 [English](./README.md) | **简体中文**
 
-`pi-agent-desktop` 是一个面向 macOS 和 Windows 的本地 AI Agent 桌面应用。它将 [pi](https://github.com/earendil-works/pi) 的 Agent 能力封装成一个可独立安装的 App。
+本仓库是基于 [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) 的个人定制版本，在原有 Pi Agent 桌面功能上加入 Claude 风格界面、像素小螃蟹、首页用量仪表盘和项目重命名等改进。核心 Agent 能力仍来自 [pi](https://github.com/earendil-works/pi)。
 
-## 主要功能
+[本仓库](https://github.com/2856754968/pi-agent-desktop) · [云端打包](https://github.com/2856754968/pi-agent-desktop/actions/workflows/desktop-test-build.yml) · [原版仓库](https://github.com/abcwyc/pi-agent-desktop)
+
+## 这个版本更新了什么
+
+| 改动 | 使用体验 |
+| --- | --- |
+| Claude 风格界面 | 统一浅色／深色暖色调、赤陶色按钮、侧栏、输入框和消息气泡，调整正文排版。 |
+| 像素小螃蟹 | 输入框上方的伙伴会随 Agent 的思考、输出、工具执行、压缩及错误状态切换动画；支持点击互动和横向拖动。 |
+| 首页用量仪表盘 | 新会话首页展示本地会话统计、26 周 Token 热力图、30 天模型用量趋势、模型排行，以及 Token 用量对应的书籍数量。 |
+| 字符水波纹背景 | 首页空白区域点击产生波纹；页面隐藏时暂停，尊重系统的减少动态效果设置。 |
+| 思考等级滑块 | 在现有推理级别菜单中加入滑块，只展示当前模型支持的等级，保留原有选项。 |
+| 消息与首页布局 | 本地发送的用户消息带入场动画；首页仪表盘位于输入框上方，历史消息加载不会重播入场动画。 |
+| 项目重命名 | 侧栏项目的「… → 重命名项目」可设置显示名称，侧栏、时间线和项目选择器同步更新，筛选也支持新名称。 |
+
+首页仪表盘和小螃蟹默认开启，可在设置中关闭；已经保存的关闭偏好会继续保留。仪表盘从本地会话历史汇总数据，不会为统计上传会话内容。
+
+项目重命名只修改显示名称，不移动文件夹，不改变 Git 仓库、会话或 worktree 路径。名称和已移除项目标记保存在 `~/.pi/agent/pi-web/projects.json` 中，桌面重启或本地服务端口变化后仍然保留。首次使用时会迁移当前可读取的旧浏览器偏好；清空名称保存即可恢复默认名称，不会自动跨设备同步。
+
+界面与动画参考 [Nwflower/dsh-claude-style](https://github.com/Nwflower/dsh-claude-style)，并适配 Pi Agent 的现有组件和统计数据。详细归属见 [第三方声明](./public/THIRD_PARTY_NOTICES.txt)。
+
+## 保留的原版功能
 
 - 按项目浏览和继续历史 Pi 会话，无需查找终端历史或 `.jsonl` 文件。
 - 在桌面窗口中与 Agent 实时对话，查看思考、工具调用、上下文用量、成本和压缩状态。
@@ -17,19 +37,30 @@
 - 每周检查三个组成项目的稳定 GitHub Release，并在发现更新时提醒用户。
 - 通过一个升级按钮安装完整、签名的 Pi Agent 新版本并自动重启。
 
+以下为原版界面截图，供了解基础布局；不代表本定制版的最新外观。
+
 ![Pi Agent 浅色模式界面](./docs/screenshots/pi-agent-light.webp)
 
 ![Pi Agent 深色模式界面](./docs/screenshots/pi-agent-dark.webp)
 
-**[⬇️ 下载 Pi Agent（macOS / Windows）](https://github.com/abcwyc/pi-agent-desktop/releases)**
+**[构建本定制版安装包（GitHub Actions）](https://github.com/2856754968/pi-agent-desktop/actions/workflows/desktop-test-build.yml)**
 
-项目仓库：[abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop)
+[原版正式 Release](https://github.com/abcwyc/pi-agent-desktop/releases) 由上游发布，不包含本仓库新增的定制功能。
 
 ## 安装与使用
 
-### 安装桌面 App
+### 使用本定制版：GitHub Actions 云端打包
 
-发布版本可从 [GitHub Releases](https://github.com/abcwyc/pi-agent-desktop/releases) 下载：
+1. 将功能代码、主题和素材提交并推送到本仓库的 `develop` 分支。
+2. 打开 [Actions → Desktop test build](https://github.com/2856754968/pi-agent-desktop/actions/workflows/desktop-test-build.yml)，选择 **Run workflow → develop**。
+3. 填写版本后缀，例如 `claude-style.1`，启动构建。
+4. 构建成功后，从该次运行的 **Artifacts** 下载对应平台的产物并解压。Windows 使用 `x64-setup.exe`；其他平台产物为 Apple Silicon DMG 和 Linux x64 DEB。
+
+该工作流构建远程提交，不会包含电脑上尚未提交／推送的文件；它只上传测试安装包，不创建 Release、Tag 或自动更新清单。后续更新本定制版时，合并上游改动后重新构建并安装。
+
+### 安装上游原版桌面 App
+
+以下安装方式获取的是上游原版，不含上表中的定制功能。发布版本可从 [GitHub Releases](https://github.com/abcwyc/pi-agent-desktop/releases) 下载：
 
 - Apple Silicon Mac：下载 `aarch64.dmg`，打开后将 App 拖入 `Applications`。正式 Release 不构建 Intel Mac 版本。
 - 使用 [Homebrew](https://brew.sh) 的 Apple Silicon Mac：从本仓库的 tap 安装。tap 通过仓库地址添加，第一条命令只需执行一次：
@@ -74,6 +105,8 @@ Pi Agent 默认读取 Pi 的本地数据目录：
 模型密钥和会话数据保留在用户电脑上；文件浏览 API 仅允许访问当前会话、所选项目和显式授权的工作目录。
 
 ## 版本检查与升级
+
+本节说明继承的上游正式发布机制。本仓库的 Actions 测试包不进入这条自动升级链路；更新定制版请重新构建并安装，源仓库的新版本也不会自动合并到本仓库。
 
 Pi Agent 最多每七天检查一次以下仓库的最新稳定 Release：
 
@@ -188,6 +221,22 @@ npm run desktop:build
 
 ## 上游同步与 Release
 
+### 维护本定制版
+
+本仓库的直接上游是 `abcwyc/pi-agent-desktop`。保留定制功能时，应先提交当前工作，再在 `develop` 合并上游更新：
+
+```bash
+git switch develop
+git fetch upstream
+git merge upstream/main
+```
+
+其中 `upstream` 应指向 `https://github.com/abcwyc/pi-agent-desktop.git`。合并时重点检查聊天窗口、输入框和侧栏，确认 Claude 风格、首页组件和项目重命名仍然正常；运行相关检查后只推送到 `origin/develop`，再触发测试打包。合并冲突需要逐项处理，即使 Git 自动合并成功也应检查实际界面。
+
+### 继承的组件同步和正式发布机制
+
+下面的工作流用于同步 `pi`／`pi-web` 组件和正式发布，不会替代上述对 `abcwyc/pi-agent-desktop` 的人工合并流程。Fork 中是否运行取决于 Actions 启用状态、权限和签名配置。
+
 仓库包含两条串联的自动化工作流：
 
 - [`component-updates.yml`](./.github/workflows/component-updates.yml)：每天检查 `pi` 和 `pi-web` 的稳定 Release。发现新版后，**先**把上游改动集与 [`scripts/fork-ownership.json`](./scripts/fork-ownership.json) 记录的「本仓库改过的上游文件」求交集，再合并 Tag、更新依赖和组件清单，并运行完整门禁（`npm test`、`tsc`、`lint`、真实 standalone 构建）。
@@ -230,6 +279,8 @@ instrumentation.ts     Next.js 服务端 HTTP 代理初始化
 - [Pi Session 与项目架构说明](./AGENTS.md)
 
 ## 署名与许可证
+
+本定制版基于 [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop)。Claude 风格首页、动画和相关素材参考 [Nwflower/dsh-claude-style](https://github.com/Nwflower/dsh-claude-style)；Clawd 角色和图像权利归 Anthropic，相关素材不适用代码的 MIT 许可。本项目为非官方适配，未获 Anthropic 背书；未打包其专有字体或 Sodium 引擎。请保留 [素材许可与声明](./public/claude-companion/NOTICE.txt)。
 
 Pi Agent 的桌面集成由 `pi-agent-desktop` 提供，核心能力和 Web 界面分别来自 [earendil-works/pi](https://github.com/earendil-works/pi) 与 [agegr/pi-web](https://github.com/agegr/pi-web)。感谢这些项目及其贡献者。
 

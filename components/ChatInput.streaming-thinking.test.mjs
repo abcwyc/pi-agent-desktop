@@ -25,8 +25,8 @@ test("keeps one thinking control and lets it change the level while the session 
 test("shows the resolved level and treats auto as an uncommitted default", () => {
   assert.match(source, /resolvedThinkingLevel = thinkingLevel && thinkingLevel !== "auto"/);
   assert.match(source, /isAutoThinkingSelection/);
-  assert.match(thinkingControl, /lvl === "auto"\s*\n\s*\? isAutoThinkingSelection/);
-  assert.match(thinkingControl, /if \(!isActive \|\| isAutoThinkingSelection\) onThinkingLevelChange\(lvl\)/);
+  assert.match(thinkingControl, /value=\{isAutoThinkingSelection \? "auto" : resolvedThinkingLevel \?\? "auto"\}/);
+  assert.match(thinkingControl, /onChange=\{level => onThinkingLevelChange\(level as typeof THINKING_LEVELS\[number\]\)\}/);
 });
 
 test("session hook layers thinking like the model selector", () => {

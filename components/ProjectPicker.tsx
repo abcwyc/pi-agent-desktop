@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DirectoryPicker } from "./DirectoryPicker";
-import { AnimatedDropdown, PathLabel, displayCwd } from "./path-ui";
+import { AnimatedDropdown, PathLabel } from "./path-ui";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import { selectDirectoryNative } from "@/lib/desktop-window";
 import { isImeComposing } from "@/lib/ime";
+import { useProjectNames } from "@/hooks/useProjectNames";
+import { getProjectDisplayName, type ProjectNames } from "@/lib/project-display";
 
 interface ProjectPickerProps {
   recentProjects: string[];
@@ -38,10 +40,11 @@ export function selectVisibleProjects(
   recentProjects: string[],
   selectedProject: string | null,
   filter: string,
+  names: ProjectNames = {},
 ): string[] {
   const needle = filter.trim().toLowerCase();
   if (needle) {
-    return recentProjects.filter((p) => p.toLowerCase().includes(needle));
+    return recentProjects.filter((p) => p.toLowerCase().includes(needle) || getProjectDisplayName(p, recentProjects, names).toLowerCase().includes(needle));
   }
   const capped = recentProjects.slice(0, MAX_VISIBLE_PROJECTS);
   // Keep the selected project visible even when it falls outside the cap so
@@ -74,6 +77,8 @@ export async function selectProjectDirectoryNative(selectedCwd: string | null, h
 }
 
 export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, homeDir, onSelectCwd, variant = "block", disabled }: ProjectPickerProps) {
+  const { names } = useProjectNames();
+  const projectLabel = (path: string) => getProjectDisplayName(path, recentProjects, names);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [projectFilter, setProjectFilter] = useState("");
@@ -175,7 +180,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
 
   const trimmedFilter = projectFilter.trim();
   const showProjectFilter = shouldShowProjectFilter(recentProjects);
-  const visibleProjects = selectVisibleProjects(recentProjects, selectedProject, projectFilter);
+  const visibleProjects = selectVisibleProjects(recentProjects, selectedProject, projectFilter, names);
 
   const isInline = variant === "inline";
 
@@ -245,7 +250,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
         {isInline ? (
           selectedCwd ? (
             <PathLabel
-              text={displayCwd(selectedProject ?? selectedCwd, homeDir)}
+              text={projectLabel(selectedProject ?? selectedCwd)}
               style={{ flex: 1, fontFamily: "var(--font-mono)", fontSize: 12 }}
             />
           ) : (
@@ -268,7 +273,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
               }}
             >
               {selectedCwd
-                ? ((selectedProject ?? selectedCwd).split("/").filter(Boolean).pop() ?? displayCwd(selectedProject ?? selectedCwd, homeDir))
+                ? projectLabel(selectedProject ?? selectedCwd)
                 : "Select project…"}
             </span>
             <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -338,7 +343,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
               }}
               title={project}
             >
-              <PathLabel text={displayCwd(project, homeDir)} style={{ flex: 1 }} />
+              <PathLabel text={projectLabel(project)} style={{ flex: 1 }} />
             </button>
           ))}
           {visibleProjects.length === 0 && trimmedFilter && (

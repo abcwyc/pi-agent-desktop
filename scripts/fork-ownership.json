@@ -60,9 +60,9 @@
     },
     "components/ChatWindow.tsx": {
       "risk": "high",
-      "drift": 779,
-      "reason": "Redesigned empty state — the new-session branding header (app icon + PRODUCT_NAME) is removed and only the update chip remains. Part of the fork's interaction design. Kept deliberately.",
-      "structuralDrift": 657,
+      "drift": 864,
+      "reason": "Redesigned empty state and opt-in local usage dashboard / original pixel companion mount points. The upstream branding header stays removed; new feature logic lives in fork-owned components. Incoming chat layout and agent-state changes require review.",
+      "structuralDrift": 742,
       "disposition": "accepted"
     },
     "hooks/useTheme.ts": {
@@ -200,6 +200,18 @@
     }
   },
   "forkOwnedPaths": [
+    "app/api/home-usage/",
+    "components/ComposerCompanion.tsx",
+    "components/HomeUsageDashboard.tsx",
+    "components/HomeExperienceSettings.tsx",
+    "components/AppearanceSettings.tsx",
+    "hooks/useHomeExperience.ts",
+    "lib/app-prefs.ts",
+    "lib/home-usage.ts",
+    "lib/home-usage-reader.ts",
+    "lib/home-usage.test.mjs",
+    "e2e/home-experience.fixture.tsx",
+    "e2e/home-experience.mjs",
     "components/ConversationNavigator.tsx",
     "e2e/conversation-navigator.fixture.tsx",
     "e2e/conversation-navigator.mjs",
@@ -283,6 +295,7 @@
     "reduce": "Drift that can be removed without losing anything — desktop-only code that belongs in components/desktop/, or fork additions sitting in an upstream file that can move to a fork-owned one. Act on these."
   },
   "decisionLog": [
+    "2026-10-30 — Opt-in home usage and original pixel crab companion live in fork-owned components, with only imports and mount points in ChatWindow. Local JSONL aggregation deduplicates copied fork ancestry and returns no message content. Appearance toggles use app preferences; all CSS stays in native-theme.css. ChatWindow drift remeasured against 6fcd7d4 (864 total / 742 structural); risk stays high. Browser coverage: e2e/home-experience.mjs.",
     "2026-10-21 — MarkdownBody now integrates @lobehub/streamdown through fork-owned StreamingMarkdown and useStreamingMarkdown, retaining Pi's remark/rehype pipeline, widgets, final-text flush and document-scoped fallbacks. Stable block caching and paced word fades replace full-document parsing on every streamed snapshot; no Lobe UI theme is imported. Browser replay measures parse volume against the former 120ms strategy.",
     "2026-07-26 — lib/api-types.ts: fork update types moved to lib/app-update-types.ts; file now matches upstream and left the manifest.",
     "2026-07-26 — components/AppShell.tsx: desktop window chrome moved to components/desktop/ (-53 structural). The remaining 376 lines are the top-bar redesign; accepted.",

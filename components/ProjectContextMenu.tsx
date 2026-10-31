@@ -243,6 +243,7 @@ interface ProjectContextMenuProps {
   onOpenTerminal?: () => void;
   onReveal: () => void;
   onArchive: () => void;
+  onRename?: () => void;
   onSwitchBranch: (branch: string) => void;
   onFetch: () => void;
   onSelectWorktree: (path: string) => void;
@@ -259,7 +260,7 @@ export function ProjectContextMenuPanel({
   menuRef, projectRoot, pos, anchor, view, branchMenu, branchLoading, selectedCwd, switchingBranch,
   fetching, worktreeBusy, worktreeError, confirmRemove, newBranch,
   canReveal, revealLabel, projectRevealError, t,
-  onShowBranches, onShowWorktrees, onShowNewWorktree, onBackToActions, onOpenTerminal, onReveal, onArchive,
+  onShowBranches, onShowWorktrees, onShowNewWorktree, onBackToActions, onOpenTerminal, onReveal, onArchive, onRename,
   onSwitchBranch, onFetch, onSelectWorktree, onRequestRemove, onConfirmRemove, onCancelRemove,
   onNewBranchChange, onCreateWorktree,
   onClose = () => {},
@@ -294,6 +295,7 @@ export function ProjectContextMenuPanel({
   if (view === "actions") {
     body = (
       <>
+        {onRename && <button type="button" role="menuitem" onClick={onRename}>{t("sidebar.renameProject")}</button>}
         <button type="button" role="menuitem" onClick={onShowBranches}>
           {t("sidebar.switchBranch")}
         </button>

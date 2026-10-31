@@ -66,3 +66,5 @@ pi-gui-session-preview.png
 
 # upstream e2e scratch files
 e2e_*.mjs
+/.idea/
+/dsh-claude-style-master/

@@ -42,6 +42,7 @@ import { useChatAppearance } from "@/hooks/useChatAppearance";
 import type { ToolPreset } from "@/lib/tool-presets";
 import { SelectorRow } from "./SelectorRow";
 import { ModelSelector } from "./ModelSelector";
+import { ThinkingLevelSlider } from "./ThinkingLevelSlider";
 import {
   composeMessageWithAttachedFiles,
   extractDocxText,
@@ -2969,7 +2970,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   const vh = typeof window !== "undefined" ? window.visualViewport?.height ?? window.innerHeight : 800;
                   const maxH = Math.max(120, vh * 0.6);
                   return (
-                  <div className="native-popover app-menu composer-run-menu" role="listbox" style={{
+                  <div className="native-popover app-menu composer-run-menu" role="dialog" aria-label={t("chat.reasoningHeading")} style={{
                     position: "absolute",
                     bottom: "calc(100% + 6px)",
                     ...(isMobile ? { left: 0 } : { right: 0 }),
@@ -2980,51 +2981,30 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     <div className="app-menu-list">
                     {onThinkingLevelChange && (
                       <>
-                      <div className="composer-menu-heading">{t("chat.reasoningHeading")}</div>
-                      {THINKING_LEVELS.filter((lvl) => {
-                        if (!availableThinkingLevels) return true;
-                        if (lvl === "auto") return true;
-                        return availableThinkingLevels.includes(lvl);
-                      }).map((lvl) => {
-                        const isActive = lvl === "auto"
-                          ? isAutoThinkingSelection
-                          : !isAutoThinkingSelection && resolvedThinkingLevel === lvl;
-                        const desc = t(THINKING_LEVEL_DESC_KEYS[lvl]);
-                        const mappedVal = (lvl !== "auto" && thinkingLevelMap) ? thinkingLevelMap[lvl] : undefined;
-                        const displayLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : lvl;
-                        const showOriginal = mappedVal != null && mappedVal !== lvl;
-                        return (
-                          <SelectorRow
-                            key={lvl}
-                            active={isActive}
-                            onSelect={() => {
-                              setThinkingDropdownOpen(false);
-                              if (lvl === "auto") {
-                                if (!isAutoThinkingSelection) onThinkingLevelChange("auto");
-                                return;
-                              }
-                              if (!isActive || isAutoThinkingSelection) onThinkingLevelChange(lvl);
-                            }}
-                            gutter={Boolean(onSetDefaultThinkingLevel)}
-                            star={onSetDefaultThinkingLevel && lvl !== "auto"
-                              ? {
-                                  isDefault: savedDefaultThinkingLevel === lvl,
-                                  saveLabel: t("chat.saveDefaultThinking"),
-                                  defaultLabel: t("chat.defaultThinking"),
-                                  onSave: () => {
-                                    onSetDefaultThinkingLevel(lvl);
-                                  },
-                                }
-                              : undefined}
-                          >
-                            <span style={{ flex: 1 }}>
-                              {displayLabel}
-                              {showOriginal && <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)", marginLeft: 5 }}>({lvl})</span>}
-                            </span>
-                            <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
-                          </SelectorRow>
-                        );
-                      })}
+                      {(() => {
+                        const sliderLevels = THINKING_LEVELS.filter((lvl) => {
+                          if (!availableThinkingLevels) return true;
+                          if (lvl === "auto") return true;
+                          return availableThinkingLevels.includes(lvl);
+                        });
+                        return <ThinkingLevelSlider
+                          key={`${model?.provider}/${model?.modelId}:${sliderLevels.join(",")}`}
+                          steps={sliderLevels.map(level => ({
+                            value: level,
+                            label: level === "off" ? t("chat.thinkingOff") : thinkingLevelMap?.[level] ?? level,
+                            description: t(THINKING_LEVEL_DESC_KEYS[level]),
+                          }))}
+                          value={isAutoThinkingSelection ? "auto" : resolvedThinkingLevel ?? "auto"}
+                          label={t("chat.changeReasoningLabel")}
+                          faster={t("chat.effortFaster")}
+                          deeper={t("chat.effortDeeper")}
+                          onChange={level => onThinkingLevelChange(level as typeof THINKING_LEVELS[number])}
+                          defaultLevel={savedDefaultThinkingLevel}
+                          onSaveDefault={onSetDefaultThinkingLevel ? level => onSetDefaultThinkingLevel(level as Exclude<typeof THINKING_LEVELS[number], "auto">) : undefined}
+                          saveDefaultLabel={t("chat.saveDefaultThinking")}
+                          defaultLabel={t("chat.defaultThinking")}
+                        />;
+                      })()}
                       </>
                     )}
 

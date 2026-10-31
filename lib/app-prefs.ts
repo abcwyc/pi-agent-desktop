@@ -8,6 +8,8 @@
 export const APP_PREF_KEYS = {
   theme: "pi-theme",
   fonts: "pi-fonts",
+  homeMascot: "pi-home-mascot",
+  homeDashboard: "pi-home-dashboard",
   locale: "pi-locale",
   soundEnabled: "pi-sound-enabled",
   quoteSelectionEnabled: "pi-quote-selection-enabled",
@@ -15,6 +17,7 @@ export const APP_PREF_KEYS = {
   rightPanelWidth: "pi-right-panel-width",
   unreadSessionIds: "pi-web:unread-session-ids",
   archivedProjects: "pi-web:archived-projects",
+  projectNames: "pi-web:project-names",
   /** Sidebar Projects pane layout: grouped project tree or chronological sessions. */
   projectViewMode: "pi-web:project-view-mode",
   /** Project roots whose session list is folded in the sidebar tree. */

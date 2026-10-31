@@ -39,6 +39,7 @@
     ".next-desktop/dev/types/**/*.ts"
   ],
   "exclude": [
+    "dsh-claude-style-master",
     "node_modules",
     "demo",
     "test-results"

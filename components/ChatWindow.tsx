@@ -14,11 +14,15 @@ import { MessageView } from "./MessageView";
 import { useReportDesktopReady } from "./desktop";
 import { MarkdownBody } from "./MarkdownBody";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
+import { ComposerCompanion } from "./ComposerCompanion";
+import { HomeUsageDashboard } from "./HomeUsageDashboard";
+import { HomeRipple } from "./HomeRipple";
 import { ConversationNavigator, type ConversationTurnLocation } from "./ConversationNavigator";
 import { ExtensionWidgets } from "./ExtensionWidgets";
 import { ExtensionStatusLine, formatExtensionStatusLine } from "./ExtensionStatusLine";
 import { AnsiText } from "./AnsiText";
 import { useI18n } from "@/hooks/useI18n";
+import { useHomeExperience } from "@/hooks/useHomeExperience";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { phaseLabel } from "@/lib/chat-phase-label";
 import { useAgentSession, type NoticeItem } from "@/hooks/useAgentSession";
@@ -928,6 +932,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     return history.reverse();
   }, [messages]);
 
+  const { dashboard: homeDashboardEnabled } = useHomeExperience();
   const isEmptyNew = isNew && !loading && !error && messages.length === 0 && !streamState.isStreaming && !sessionBusy;
   useScrollbarVisibility(scrollContainerRef, Boolean(session?.id) || !isEmptyNew);
 
@@ -966,6 +971,25 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   // through --chat-composer-inset. Both are written straight to the DOM from
   // the ResizeObserver: upstream dropped an earlier state-driven spacer
   // because the extra render made streaming scroll-follow jitter.
+  // Only an explicit local submit arms entrance motion; history loads and
+  // streaming reconciliation must not replay existing bubbles.
+  const pendingMessageEntrance = useRef<{ count: number; at: number } | null>(null);
+  useLayoutEffect(() => {
+    const pending = pendingMessageEntrance.current;
+    if (!pending) return;
+    if (Date.now() - pending.at > 15000) { pendingMessageEntrance.current = null; return; }
+    if (messages.length <= pending.count) return;
+    const bubbles = messageContentRef.current?.querySelectorAll<HTMLElement>(".message-user-bubble");
+    const bubble = bubbles?.[bubbles.length - 1];
+    if (!bubble) return;
+    pendingMessageEntrance.current = null;
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) bubble.dataset.messageEnter = "grow";
+  }, [messages]);
+  const sendWithEntrance = useCallback< typeof handleSend >((...args) => {
+    pendingMessageEntrance.current = { count: messages.length, at: Date.now() };
+    return handleSend(...args);
+  }, [handleSend, messages.length]);
+
   const composerOverlayRef = useRef<HTMLDivElement | null>(null);
   const composerOverlaySpacerRef = useRef<HTMLDivElement | null>(null);
   const chatContentRegionRef = useRef<HTMLDivElement | null>(null);
@@ -1153,7 +1177,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   const chatInputElement = (
     <ChatInput
       ref={chatInputRef}
-      onSend={handleSend}
+      onSend={sendWithEntrance}
       onAttachFiles={onAttachFiles}
       onAbort={handleAbort}
       onSteer={agentRunning ? handleSteer : undefined}
@@ -1246,12 +1270,14 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     <div
       className="chat-window chat-content relative flex h-full min-w-0 flex-col overflow-hidden"
       data-session-busy={sessionBusy ? "true" : undefined}
+      data-home-dashboard={isEmptyNew && homeDashboardEnabled ? "true" : undefined}
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {isEmptyNew && homeDashboardEnabled && <HomeRipple />}
       {/* Search owns only rendered transcript text. Reveal the local window on
           open, but keep server history paging explicit and reuse loadContext's
           session/request guards. A leaf switch is a new search scope too. */}
@@ -1350,6 +1376,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
         {extensionCustomUi && (
           <ExtensionCustomPanel key={extensionCustomUi.id} request={extensionCustomUi} waitingCount={waitingExtensionCustomUiCount} onInput={sendExtensionCustomInput} />
         )}
+        {isEmptyNew && <HomeUsageDashboard />}
         {!isEmptyNew && <>
         <div
           ref={scrollContainerRef}
@@ -1748,6 +1775,10 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
             </div>
           </div>
         )}
+        <ComposerCompanion key={session?.id ?? newSessionDraftKey} state={extensionDialog || extensionCustomUi ? "attention"
+          : error ? "error" : isCompacting ? "compacting"
+          : bashRunning || agentPhase?.kind === "running_tools" || agentPhase?.kind === "running_command" ? "working"
+          : streamState.isStreaming && hasStreamingContent ? "typing" : sessionBusy ? "thinking" : "idle"} />
         {chatInputElement}
         {chatUnlockDialog && chatAccess && (
           <ChatConfirmDialog
@@ -1772,7 +1803,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
           </div>
         )}
       </div>
-      {isEmptyNew && <div className="min-h-0 flex-1" />}
+      {isEmptyNew && !homeDashboardEnabled && <div className="min-h-0 flex-1" />}
     </div>
   );
 }

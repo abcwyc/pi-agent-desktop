@@ -114,6 +114,55 @@ The Projects header's hover-only `…` menu switches between `grouped` (project 
 - Skill toggling edits only the `disable-model-invocation` frontmatter key on the target `SKILL.md`; keep that surgical so user formatting survives.
 - `/api/skills/install` shells through `npx skills add ... --agent pi`; project installs run with the selected cwd.
 
+## Claude-style home usage and pixel companion
+
+Settings › Appearance has independent switches for the local usage dashboard and pixel
+crab. Both default on; an explicitly saved false remains off. Preferences use
+`APP_PREF_KEYS.homeDashboard` / `homeMascot`. ChatWindow mounts the dashboard only for
+an empty new conversation; the companion follows model/tool activity, streaming text,
+compaction, blocking extension input, errors and a short run-ended animation.
+`lib/companion-sheets.ts` describes the reference sprite sheets in
+`public/claude-companion/`; their separate artwork notice is retained in `NOTICE.txt`.
+The player supports idle routines, sleep, click/tickle and horizontal dragging, pauses
+when hidden and paints a still frame under reduced motion. Resize clamps the drag offset.
+The Claude palette and prose typography live in `native-theme.css`; custom CSS still wins.
+Proprietary Anthropic fonts and the reference's Sodium engine are not bundled.
+
+The dashboard home uses the full remaining height above the bottom composer; the
+classic centered composer's trailing flex spacer is rendered only when the dashboard
+is off. The dashboard has no artificial overlay clearance; short viewports and expanded
+model lists can still scroll when needed.
+
+`HomeRipple.tsx` owns a non-interactive canvas below home content. Its glyph renderer,
+noise and damped wave equation in `lib/home-ripple/` are adapted from the reference's
+MIT home-ripple feature. Blank-area clicks reveal blue glyph waves; native controls do
+not start waves. Resize recreates the field, theme changes invalidate it, hidden pages
+pause, reduced motion renders a static field, and unavailable WebGL hides the effect.
+`ChatWindow` arms a one-shot entrance only on local composer submission: the new user
+bubble scales from its bottom-right corner. History loading and streaming reconciliation
+do not replay it. Reduced motion disables entrance transforms. Verify the lifecycle with
+`components/ChatWindow.message-motion.test.mjs` and glyph motion with the home E2E.
+
+`GET /api/home-usage?range=all|30|7` reads only catalogue-owned local JSONL paths,
+projects away content, and caches each range for up to 60 seconds. Sessions means files
+created in the selected range; messages means user/assistant records across all branches,
+not tool results. Copies with the same entry identity and timestamp (fork ancestry) count
+once. Tokens sum recorded input, output, cache-read and cache-write buckets, including
+usage/compaction entries, and may be incomplete; missing usage is not fabricated as a
+known zero. Dates, ranges and peak hours use UTC. The blue activity grid covers the
+latest 26 weeks, aligned to Sunday; the stacked model chart covers the latest 30 days.
+Both retain their windows when the metric/ranking range changes. Daily model totals are
+projected with the same fork deduplication as totals. Model ranking initially shows five
+rows and expands to all recorded models. A time-based greeting heads the 480px panel
+aligned with the composer's left edge; the visible home refreshes every minute/on focus.
+No provider query, pricing estimate, prompt content or local path is returned.
+Unreadable files are reported as partial data. No scan runs while the dashboard is off.
+
+Validation: `node --test lib/home-usage.test.mjs` and
+`node e2e/home-experience.mjs` (local mocked usage, real components, light/dark,
+320–1280px, defaults/opt-out, persistence, reference sprite loading, click interaction,
+states, reduced motion, model charts and error/retry).
+
 ## Completion sound
 - `hooks/useAudio.ts` stores the toggle in `localStorage` as `pi-sound-enabled` and reuses one `AudioContext`. The switch is in Settings › General (`settings.completionSound`), not the composer row.
 - Browser autoplay policy means sound must be unlocked from a user gesture; `ChatInput` calls the unlock hook from interactive controls, and `ChatWindow` plays the tone from `onAgentEnd`.
