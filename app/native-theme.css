@@ -10139,3 +10139,61 @@ html.dark .artifacts-thumb[data-tone="data"] { --tone: #4fc1d6; }
 
 /* CJK units ("17小时") are wider than "17h"; keep them off the title's ellipsis. */
 .session-item-time { margin-left: 6px; }
+
+/* ---- Render error screen (app/error.tsx, app/global-error.tsx) ------------
+   Replaces Next's built-in "This page couldn't load" page, which the packaged
+   app showed with no way to see the exception (no DevTools). */
+.app-error {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+}
+
+.app-error-card {
+  width: min(720px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.app-error-title {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: var(--fw-semibold);
+}
+
+.app-error-hint {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.app-error-details {
+  margin: 0;
+  max-height: 50dvh;
+  overflow: auto;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--tool-bg);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.app-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
