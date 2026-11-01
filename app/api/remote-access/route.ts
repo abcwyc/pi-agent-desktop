@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { isLoopbackHost } from "@/lib/open-in-file-manager";
 import {
+  isLocalRequest,
   normalizeRemoteHostname,
   readRemoteAccessConfig,
   writeRemoteAccessConfig,
@@ -17,7 +17,7 @@ export async function GET(req: Request) {
   return NextResponse.json({
     config: readRemoteAccessConfig(),
     tailscale: await readTailscaleStatus(),
-    local: isLoopbackHost(req.headers.get("host")),
+    local: isLocalRequest(req),
   }, { headers: { "Cache-Control": "no-store" } });
 }
 
@@ -27,7 +27,7 @@ export async function PUT(req: Request) {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
-  if (!isLoopbackHost(req.headers.get("host"))) {
+  if (!isLocalRequest(req)) {
     return NextResponse.json({ error: "Remote access can only be changed on this computer." }, { status: 403 });
   }
   if (!hasJsonContentType(req)) {

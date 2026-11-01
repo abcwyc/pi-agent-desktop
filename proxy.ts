@@ -10,6 +10,7 @@ import {
 } from "@/lib/request-security";
 import {
   isRemoteAccessHost,
+  isTailscaleFunnelRequest,
   isRemoteAccessRequestAuthorized,
   readRemoteAccessConfig,
 } from "@/lib/remote-access";
@@ -36,6 +37,15 @@ export function proxy(request: NextRequest) {
   const isTrustedRequest = isApiRequest
     ? isApiRequestAllowed(request)
     : isApiRequestHostAllowed(request);
+
+  // Tailscale Funnel puts this port on the public internet. Without a web password
+  // that is a shell for anyone, so refuse it however the Host header reads.
+  if (isTailscaleFunnelRequest(request) && !isWebPasswordEnabled(process.env.PI_WEB_PASSWORD)) {
+    return new NextResponse("Pi refuses Tailscale Funnel (public) traffic. Use tailscale serve, which keeps it inside your tailnet.", {
+      status: 403,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
 
   if (!isTrustedRequest) {
     // The tailnet name from Settings › Remote access, reached without a Tailscale user:

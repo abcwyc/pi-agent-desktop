@@ -41,8 +41,7 @@ export function TasksView({ sessions, runningSessionIds, onOpenSession }: Props)
         if (cancelled) return;
         setSnapshots(data.tasks);
         setFailed(false);
-        const live = data.tasks.some((task) => task.running || task.waiting.length > 0);
-        if (live) timer = setTimeout(() => { if (document.visibilityState === "visible") void load(); else schedule(); }, LIVE_REFRESH_MS);
+        if (data.tasks.some((task) => task.running || task.waiting.length > 0)) schedule();
       } catch {
         if (!cancelled) {
           setFailed(true);
@@ -50,8 +49,11 @@ export function TasksView({ sessions, runningSessionIds, onOpenSession }: Props)
         }
       }
     };
-    // A hidden page (phone locked) checks again once it is visible.
-    const schedule = () => { timer = setTimeout(() => void load(), LIVE_REFRESH_MS); };
+    // Only a visible page polls; a hidden one (phone locked) waits for visibilitychange.
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { if (document.visibilityState === "visible") void load(); }, LIVE_REFRESH_MS);
+    };
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
       if (timer) clearTimeout(timer);

@@ -24,6 +24,8 @@ import { userHome } from "./user-home.ts";
  */
 
 export const TAILSCALE_USER_LOGIN_HEADER = "tailscale-user-login";
+/** Serve marks public (Funnel) traffic with this header, and strips any copy a client sends. */
+export const TAILSCALE_FUNNEL_HEADER = "tailscale-funnel-request";
 
 export interface RemoteAccessConfig {
   /** The tailnet name of this computer, e.g. `mac.tail1234.ts.net`. */
@@ -177,4 +179,26 @@ export function isRemoteAccessOrigin(origin: string, request: Request, config: R
   } catch {
     return false;
   }
+}
+
+export function isTailscaleFunnelRequest(request: Request): boolean {
+  return request.headers.has(TAILSCALE_FUNNEL_HEADER);
+}
+
+/**
+ * A request from this computer: a loopback Host, and nothing Tailscale Serve
+ * adds on the way in. Serve keeps the original Host for a TCP backend, so the
+ * header check is a second line: a request it forwarded is never "local",
+ * whatever Host it arrives with.
+ */
+export function isLocalRequest(request: Request): boolean {
+  const hostname = requestHostname(request)?.replace(/^\[|\]$/g, "");
+  if (!hostname) return false;
+  const loopback = hostname === "localhost"
+    || hostname.endsWith(".localhost")
+    || hostname === "::1"
+    || (isIP(hostname) === 4 && hostname.startsWith("127."));
+  return loopback
+    && !request.headers.has(TAILSCALE_USER_LOGIN_HEADER)
+    && !isTailscaleFunnelRequest(request);
 }

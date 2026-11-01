@@ -1898,7 +1898,6 @@ export class AgentSessionWrapper {
     } as ExtensionUiRequest as AgentEvent;
     this.pendingUiRequests.set(id, event);
     this.emit(event);
-    this.notifyAttentionNeeded({ method: "custom" });
   }
 
   private closeCustomUi(id: string, value: unknown): void {
@@ -2000,6 +1999,8 @@ export class AgentSessionWrapper {
           };
           this.activeCustomUis.set(id, custom);
           this.emitCustomUiRender(id, custom);
+          // Once per dialog: it re-renders on every keypress and redraw.
+          this.notifyAttentionNeeded({ method: "custom" });
         })
         .catch((error) => {
           if (completed) return;
@@ -2987,15 +2988,18 @@ export async function startRpcSession(
       onAgentRunComplete: (completedSessionId, outcome) => {
         // A run the user stopped needs no message on their phone.
         if (outcome.status === "aborted") return;
+        // The live session knows its own name; no need to scan every session file.
+        const sessionName = inner.sessionManager.getSessionName() ?? null;
         const push = outcome.status === "failed"
-          ? notifySessionEvent(completedSessionId, { kind: "failed", detail: outcome.error })
-          : notifySessionEvent(completedSessionId, { kind: "complete" });
+          ? notifySessionEvent(completedSessionId, { kind: "failed", detail: outcome.error }, sessionName)
+          : notifySessionEvent(completedSessionId, { kind: "complete" }, sessionName);
         void push.catch((error) => {
           console.error("[pi-web] failed to send completion push:", error instanceof Error ? error.message : error);
         });
       },
       onAttentionNeeded: (waitingSessionId, prompt) => {
-        void notifySessionEvent(waitingSessionId, { kind: "attention", detail: prompt }).catch((error) => {
+        const sessionName = inner.sessionManager.getSessionName() ?? null;
+        void notifySessionEvent(waitingSessionId, { kind: "attention", detail: prompt }, sessionName).catch((error) => {
           console.error("[pi-web] failed to send attention push:", error instanceof Error ? error.message : error);
         });
       },

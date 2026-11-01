@@ -42,7 +42,8 @@ export interface WebPushNotifier {
   removeSubscription: (endpoint: string) => boolean;
   hasSubscription: (endpoint: string) => boolean;
   notifySessionComplete: (sessionId: string) => Promise<void>;
-  notifySessionEvent: (sessionId: string, event: SessionPushEvent) => Promise<void>;
+  /** `sessionName`: the caller's copy of the title (null = untitled); omitted, it is looked up. */
+  notifySessionEvent: (sessionId: string, event: SessionPushEvent, sessionName?: string | null) => Promise<void>;
   /** Send a test notification to one subscription; false when it is not registered. */
   sendTest: (endpoint: string) => Promise<boolean>;
 }
@@ -241,9 +242,11 @@ export function createWebPushNotifier(environment: WebPushEnvironment): WebPushN
     }
   };
 
-  const notifySessionEvent = async (sessionId: string, event: SessionPushEvent) => {
+  const notifySessionEvent = async (sessionId: string, event: SessionPushEvent, knownName?: string | null) => {
     if (state.subscriptions.length === 0) return;
-    const sessionName = (await environment.listSessionNames()).get(sessionId);
+    const sessionName = knownName !== undefined
+      ? knownName ?? undefined
+      : (await environment.listSessionNames()).get(sessionId);
     await sendAll([...state.subscriptions], (locale) => sessionPushPayload(sessionId, sessionName, event, locale));
   };
 
@@ -307,9 +310,13 @@ export async function notifySessionComplete(sessionId: string): Promise<void> {
   await notifier.notifySessionComplete(sessionId);
 }
 
-export async function notifySessionEvent(sessionId: string, event: SessionPushEvent): Promise<void> {
+export async function notifySessionEvent(
+  sessionId: string,
+  event: SessionPushEvent,
+  sessionName?: string | null,
+): Promise<void> {
   const notifier = await getNotifier();
-  await notifier.notifySessionEvent(sessionId, event);
+  await notifier.notifySessionEvent(sessionId, event, sessionName);
 }
 
 export function removeSubscription(endpoint: string): Promise<boolean> {
