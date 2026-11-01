@@ -58,7 +58,18 @@ export function parseTailscaleStatus(raw: string): TailscaleStatus {
   };
 }
 
-export async function readTailscaleStatus(): Promise<TailscaleStatus> {
+// Settings and a phone's settings page both ask; one CLI run serves a few seconds of them.
+const STATUS_TTL_MS = 5000;
+let cached: { at: number; status: Promise<TailscaleStatus> } | null = null;
+
+export function readTailscaleStatus(): Promise<TailscaleStatus> {
+  if (cached && Date.now() - cached.at < STATUS_TTL_MS) return cached.status;
+  const status = readTailscaleStatusUncached();
+  cached = { at: Date.now(), status };
+  return status;
+}
+
+async function readTailscaleStatusUncached(): Promise<TailscaleStatus> {
   for (const binary of tailscaleBinaries()) {
     try {
       return parseTailscaleStatus(await run(binary));

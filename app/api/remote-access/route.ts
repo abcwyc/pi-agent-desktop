@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   isLocalRequest,
-  normalizeRemoteHostname,
+  parseRemoteAccessUpdate,
   readRemoteAccessConfig,
   writeRemoteAccessConfig,
 } from "@/lib/remote-access";
@@ -21,7 +21,7 @@ export async function GET(req: Request) {
   }, { headers: { "Cache-Control": "no-store" } });
 }
 
-// PUT /api/remote-access  body: { hostname: string | null, logins?: string[] }
+// PUT /api/remote-access  body: { hostname: string | null, logins?: string[], anyTailnetUser?: true }
 // Opening the server to the tailnet is a choice made on this computer, never from a phone.
 export async function PUT(req: Request) {
   if (!isApiRequestAllowed(req)) {
@@ -34,20 +34,9 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 415 });
   }
   try {
-    const body = await req.json() as { hostname?: unknown; logins?: unknown };
-    if (body.hostname === null) {
-      return NextResponse.json({ config: writeRemoteAccessConfig(null) });
-    }
-    const hostname = normalizeRemoteHostname(body.hostname);
-    if (!hostname) {
-      return NextResponse.json({ error: "hostname must be a DNS name such as mac.tail1234.ts.net" }, { status: 400 });
-    }
-    if (body.logins !== undefined
-      && (!Array.isArray(body.logins) || body.logins.some((login) => typeof login !== "string"))) {
-      return NextResponse.json({ error: "logins must be a list of strings" }, { status: 400 });
-    }
-    const logins = (body.logins as string[] | undefined) ?? [];
-    return NextResponse.json({ config: writeRemoteAccessConfig({ hostname, logins }) });
+    const parsed = parseRemoteAccessUpdate(await req.json());
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    return NextResponse.json({ config: writeRemoteAccessConfig(parsed.config) });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : String(error) },

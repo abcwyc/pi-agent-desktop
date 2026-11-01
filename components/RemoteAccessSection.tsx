@@ -128,6 +128,7 @@ export function RemoteAccessSection() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hostnameDraft, setHostnameDraft] = useState("");
+  const [loginDraft, setLoginDraft] = useState("");
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -140,6 +141,7 @@ export function RemoteAccessSection() {
         setData(next);
         setHostnameDraft(next.config?.hostname
           ?? (next.tailscale.state === "running" ? next.tailscale.hostname : ""));
+        setLoginDraft(next.tailscale.state === "running" ? next.tailscale.login ?? "" : "");
       })
       .catch(() => { if (!controller.signal.aborted) setLoadFailed(true); });
     return () => controller.abort();
@@ -167,16 +169,15 @@ export function RemoteAccessSection() {
   const tailscale = data?.tailscale;
   const config = data?.config ?? null;
   const enabled = config !== null;
-  const ownLogin = tailscale?.state === "running" ? tailscale.login : null;
-
   const toggle = (next: boolean) => {
     if (!next) {
       void save({ hostname: null });
       return;
     }
-    // Default to letting in only the account this computer is signed in with, so a
-    // shared tailnet does not hand every member a shell here.
-    void save({ hostname: hostnameDraft.trim(), logins: ownLogin ? [ownLogin] : [] });
+    // Only the named account gets in (prefilled with the one this computer is signed in
+    // with), so a shared tailnet does not hand every member a shell here. The route
+    // refuses an empty list; letting every tailnet user in is an API-only choice.
+    void save({ hostname: hostnameDraft.trim(), logins: [loginDraft.trim()] });
   };
 
   const statusText = !data
@@ -224,6 +225,19 @@ export function RemoteAccessSection() {
             />
           </label>
         )}
+        {data && !enabled && data.local && (
+          <label className="remote-access-step">
+            <span className="settings-option-hint">{t("remoteAccess.loginLabel")}</span>
+            <input
+              className="mcp-add-input"
+              value={loginDraft}
+              placeholder="you@example.com"
+              spellCheck={false}
+              autoCapitalize="off"
+              onChange={(event) => setLoginDraft(event.target.value)}
+            />
+          </label>
+        )}
         <div className="settings-option">
           <span className="settings-option-text">
             <span className="settings-option-title">{t("remoteAccess.switch")}</span>
@@ -234,7 +248,7 @@ export function RemoteAccessSection() {
           <ConfigSwitch
             checked={enabled}
             loading={!data || saving}
-            disabled={!data?.local || (!enabled && !hostnameDraft.trim())}
+            disabled={!data?.local || (!enabled && (!hostnameDraft.trim() || !loginDraft.trim()))}
             label={t("remoteAccess.switch")}
             onChange={toggle}
           />

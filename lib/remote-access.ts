@@ -155,13 +155,40 @@ export function isRemoteAccessHost(request: Request, config: RemoteAccessConfig 
 }
 
 /**
+ * Serve sends a non-ASCII login RFC 2047 Q-encoded (`=?utf-8?q?j=C3=B6rg@…?=`,
+ * `encTailscaleHeaderValue` in tailscale's ipn/ipnlocal/serve.go); ASCII passes
+ * through as is. Anything that does not decode cleanly is returned unchanged,
+ * so it simply fails to match the allow list.
+ */
+export function decodeTailscaleHeaderValue(value: string): string {
+  const match = /^=\?utf-8\?q\?(.*)\?=$/i.exec(value.trim());
+  if (!match) return value;
+  const text = match[1].replace(/_/g, " ");
+  const bytes: number[] = [];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "=" && /^[0-9a-f]{2}$/i.test(text.slice(i + 1, i + 3))) {
+      bytes.push(parseInt(text.slice(i + 1, i + 3), 16));
+      i += 2;
+    } else {
+      bytes.push(text.charCodeAt(i));
+    }
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(bytes));
+  } catch {
+    return value;
+  }
+}
+
+/**
  * Whether a request on the tailnet name may go on: Tailscale vouched for the
  * user, and the user is on the list when there is one.
  */
 export function isRemoteAccessRequestAuthorized(request: Request, config: RemoteAccessConfig): boolean {
   if (!isRemoteAccessHost(request, config)) return false;
-  const login = request.headers.get(TAILSCALE_USER_LOGIN_HEADER)?.trim().toLowerCase();
-  if (!login) return false;
+  const raw = request.headers.get(TAILSCALE_USER_LOGIN_HEADER)?.trim();
+  if (!raw) return false;
+  const login = decodeTailscaleHeaderValue(raw).toLowerCase();
   return config.logins.length === 0 || config.logins.includes(login);
 }
 
@@ -185,20 +212,82 @@ export function isTailscaleFunnelRequest(request: Request): boolean {
   return request.headers.has(TAILSCALE_FUNNEL_HEADER);
 }
 
+function isLoopbackAddress(address: string): boolean {
+  const bare = address.replace(/^\[|\]$/g, "").replace(/^::ffff:/i, "");
+  return bare === "::1" || (isIP(bare) === 4 && bare.startsWith("127."));
+}
+
 /**
- * A request from this computer: a loopback Host, and nothing Tailscale Serve
- * adds on the way in. Serve keeps the original Host for a TCP backend, so the
- * header check is a second line: a request it forwarded is never "local",
- * whatever Host it arrives with.
+ * Whether a proxy relayed this request from another machine. Next fills in
+ * X-Forwarded-For with the socket address (127.0.0.1 for this computer) when
+ * the request has none, and keeps a proxy's value; Tailscale Serve overwrites
+ * it with the visitor's tailnet address. The server binds 127.0.0.1, so a
+ * non-loopback first hop can only have come through a proxy. (A local process
+ * could forge one, but it is already on this computer.)
+ */
+export function isRelayedFromAnotherMachine(request: Request): boolean {
+  const first = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return Boolean(first) && !isLoopbackAddress(first!);
+}
+
+/**
+ * A request from this computer: a loopback Host, not relayed from another
+ * machine, and nothing Tailscale Serve adds. Serve routes by TLS SNI and passes
+ * the client's Host through, so the Host alone proves nothing.
+ *
+ * This guards the actions that change who can reach Pi (the remote-access
+ * setting, unlocking a chat). It is not a sandbox for an allowed phone, which
+ * reaches the same terminals and sessions as this computer: a tailnet login on
+ * the allow list is treated as the owner.
  */
 export function isLocalRequest(request: Request): boolean {
   const hostname = requestHostname(request)?.replace(/^\[|\]$/g, "");
   if (!hostname) return false;
   const loopback = hostname === "localhost"
     || hostname.endsWith(".localhost")
-    || hostname === "::1"
-    || (isIP(hostname) === 4 && hostname.startsWith("127."));
+    || isLoopbackAddress(hostname);
   return loopback
+    && !isRelayedFromAnotherMachine(request)
     && !request.headers.has(TAILSCALE_USER_LOGIN_HEADER)
     && !isTailscaleFunnelRequest(request);
+}
+
+/** The decoded Tailscale login Serve vouched for, or null (this computer, a tagged device). */
+export function tailscaleLoginOf(request: Request): string | null {
+  const raw = request.headers.get(TAILSCALE_USER_LOGIN_HEADER)?.trim();
+  return raw ? decodeTailscaleHeaderValue(raw).toLowerCase() : null;
+}
+
+/** Whether the saved setting still lets this login in (push subscriptions are checked on each send). */
+export function isTailscaleLoginAllowed(login: string, settingsPath = remoteAccessSettingsPath()): boolean {
+  const config = readRemoteAccessConfig(settingsPath);
+  if (!config) return false;
+  return config.logins.length === 0 || config.logins.includes(login.toLowerCase());
+}
+
+// What `tailscale status` reports for a tagged node's login; never a person.
+const TAGGED_LOGIN = "tagged-devices";
+
+/**
+ * Validate a `PUT /api/remote-access` body. An empty allow list lets in every
+ * signed-in user of the tailnet, which on a shared tailnet hands each member a
+ * shell here, so it has to be asked for (`anyTailnetUser: true`), never fallen into.
+ */
+export function parseRemoteAccessUpdate(body: unknown):
+  | { ok: true; config: RemoteAccessConfig | null }
+  | { ok: false; error: string } {
+  const record = (body && typeof body === "object" ? body : {}) as { hostname?: unknown; logins?: unknown; anyTailnetUser?: unknown };
+  if (record.hostname === null) return { ok: true, config: null };
+  const hostname = normalizeRemoteHostname(record.hostname);
+  if (!hostname) return { ok: false, error: "hostname must be a DNS name such as mac.tail1234.ts.net" };
+  if (record.logins !== undefined
+    && (!Array.isArray(record.logins) || record.logins.some((login) => typeof login !== "string"))) {
+    return { ok: false, error: "logins must be a list of strings" };
+  }
+  const logins = normalizeLogins(record.logins);
+  if (logins.includes(TAGGED_LOGIN)) return { ok: false, error: "tagged devices carry no Tailscale identity; list a person's login" };
+  if (logins.length === 0 && record.anyTailnetUser !== true) {
+    return { ok: false, error: "name at least one Tailscale login, or set anyTailnetUser to let in every tailnet user" };
+  }
+  return { ok: true, config: { hostname, logins } };
 }

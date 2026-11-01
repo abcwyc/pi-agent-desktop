@@ -318,6 +318,52 @@ const FORK_FEATURES = [
     markers: ["ScheduledView", "scheduledOpen", "pageOpenRef", "handleOpenScheduled", "setWorkspaceView(null)", "useScheduledRunNotifications"],
   },
   {
+    name: "Tasks entry in the sidebar",
+    file: "components/SessionSidebar.tsx",
+    markers: ["TasksSidebarRow", "onOpenTasks"],
+  },
+  {
+    name: "Tasks page in AppShell",
+    file: "components/AppShell.tsx",
+    // Shares `?view=` with Scheduled and Artifacts; the phone's overview of every session.
+    markers: ["<TasksView", "handleOpenTasks", 'value === "tasks"'],
+  },
+  {
+    name: "Remote access settings and Notify this device",
+    file: "components/SettingsPanel.tsx",
+    markers: ["<RemoteAccessSection />"],
+  },
+  {
+    name: "Remote access gate in the proxy",
+    file: "proxy.ts",
+    // Funnel would put a shell on the public internet; the tailnet name needs a Tailscale user.
+    markers: ["isTailscaleFunnelRequest(request)", "isRemoteAccessRequestAuthorized(request, remoteAccess)"],
+  },
+  {
+    name: "Remote access host and origin rules",
+    file: "lib/request-security.ts",
+    // Serve passes the client's Host through: a relayed request must not count as local,
+    // and the tailnet name must not skip the login check because an env var lists it.
+    markers: ["isRelayedFromAnotherMachine(request)", "hostname === remoteAccess.hostname", "isRemoteAccessOrigin("],
+  },
+  {
+    name: "Phone pushes: failed, waiting, login-bound",
+    file: "lib/web-push.ts",
+    markers: ["notifySessionEvent", "sessionPushPayload", "isLoginAllowed", "sendTest"],
+  },
+  {
+    name: "Tap-driven push enable for iOS",
+    file: "lib/push-client.ts",
+    markers: ["enablePushOnThisDevice", "pushRegistration"],
+  },
+  {
+    name: "Run outcome, attention and task snapshots",
+    file: "lib/rpc-manager.ts",
+    // agent_settled.aborted keeps a Stop during retry from pushing "failed"; recent
+    // outcomes keep the Tasks page right after the idle eviction.
+    markers: ["onAttentionNeeded", "getRpcTaskSnapshots", "recordRecentRunOutcome", "event.aborted === true", "notifySessionEvent("],
+  },
+  {
     name: "Artifacts entry in the sidebar",
     file: "components/SessionSidebar.tsx",
     markers: ["ArtifactsSidebarRow", "onOpenArtifacts"],

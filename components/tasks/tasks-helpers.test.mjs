@@ -45,3 +45,39 @@ test("labels: title, project folder or chats, and the current step", () => {
   assert.equal(describeActivity({ kind: "retrying" }, t), "tasks.activity.retrying");
   assert.equal(describeActivity(null, t), "tasks.activity.thinking");
 });
+
+test("the poller fetches only while visible and something is live", async () => {
+  const { createTasksPoller } = await import("./tasks-helpers.ts");
+  const timers = [];
+  let visible = true;
+  let fetches = 0;
+  let live = true;
+  const poller = createTasksPoller({
+    intervalMs: 3000,
+    load: async () => { fetches += 1; return { live }; },
+    isVisible: () => visible,
+    setTimer: (fn) => { timers.push(fn); return timers.length; },
+    clearTimer: () => {},
+  });
+  const tick = async () => { const fn = timers.shift(); fn?.(); await new Promise((r) => setImmediate(r)); };
+
+  await poller.start();
+  assert.equal(fetches, 1);
+  await tick();
+  assert.equal(fetches, 2, "visible and live: polls");
+
+  visible = false;
+  await tick();
+  assert.equal(fetches, 2, "hidden: the timer fires but nothing is fetched");
+  assert.equal(timers.length, 0, "and nothing is rescheduled while hidden");
+
+  visible = true;
+  await poller.onVisibilityChange();
+  assert.equal(fetches, 3, "coming back fetches at once");
+
+  live = false;
+  await tick();
+  assert.equal(fetches, 4);
+  assert.equal(timers.length, 0, "idle: stops polling");
+  poller.stop();
+});

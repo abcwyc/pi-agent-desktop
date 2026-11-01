@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { formatRelativeTime } from "@/lib/i18n/format";
 import type { AgentTaskSnapshot, SessionInfo } from "@/lib/types";
-import { describeActivity, groupTasks, projectLabel, sessionTitle, type TaskRow } from "./tasks-helpers";
+import { createTasksPoller, describeActivity, groupTasks, projectLabel, sessionTitle, type TaskRow } from "./tasks-helpers";
 
 interface Props {
   sessions: SessionInfo[];
@@ -32,38 +32,33 @@ export function TasksView({ sessions, runningSessionIds, onOpenSession }: Props)
 
   useEffect(() => {
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const load = async () => {
-      try {
-        const response = await fetch("/api/agent/tasks", { cache: "no-store" });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json() as { tasks: AgentTaskSnapshot[] };
-        if (cancelled) return;
-        setSnapshots(data.tasks);
-        setFailed(false);
-        if (data.tasks.some((task) => task.running || task.waiting.length > 0)) schedule();
-      } catch {
-        if (!cancelled) {
-          setFailed(true);
-          schedule();
+    const poller = createTasksPoller({
+      intervalMs: LIVE_REFRESH_MS,
+      isVisible: () => document.visibilityState === "visible",
+      setTimer: (fn, ms) => setTimeout(fn, ms),
+      clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+      load: async () => {
+        try {
+          const response = await fetch("/api/agent/tasks", { cache: "no-store" });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const data = await response.json() as { tasks: AgentTaskSnapshot[] };
+          if (!cancelled) {
+            setSnapshots(data.tasks);
+            setFailed(false);
+          }
+          return { live: data.tasks.some((task) => task.running || task.waiting.length > 0) };
+        } catch (error) {
+          if (!cancelled) setFailed(true);
+          throw error;
         }
-      }
-    };
-    // Only a visible page polls; a hidden one (phone locked) waits for visibilitychange.
-    const schedule = () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => { if (document.visibilityState === "visible") void load(); }, LIVE_REFRESH_MS);
-    };
-    const onVisible = () => {
-      if (document.visibilityState !== "visible") return;
-      if (timer) clearTimeout(timer);
-      void load();
-    };
-    void load();
+      },
+    });
+    const onVisible = () => void poller.onVisibilityChange();
+    void poller.start();
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
-      if (timer) clearTimeout(timer);
+      poller.stop();
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [runningKey]);

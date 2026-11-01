@@ -52,3 +52,55 @@ export function groupTasks(
   }
   return groups;
 }
+
+interface TasksPollerOptions {
+  intervalMs: number;
+  /** One fetch; reports whether anything is live (running or waiting). Throws on failure. */
+  load: () => Promise<{ live: boolean }>;
+  isVisible: () => boolean;
+  setTimer: (fn: () => void, ms: number) => unknown;
+  clearTimer: (handle: unknown) => void;
+}
+
+/**
+ * Refresh the Tasks page while something is live, and only while it can be
+ * seen: a locked phone fetches nothing until the page is visible again. A
+ * failed fetch retries on the same terms.
+ */
+export function createTasksPoller({ intervalMs, load, isVisible, setTimer, clearTimer }: TasksPollerOptions) {
+  let timer: unknown;
+  let stopped = false;
+  const clear = () => {
+    if (timer !== undefined) clearTimer(timer);
+    timer = undefined;
+  };
+  const schedule = () => {
+    clear();
+    timer = setTimer(() => {
+      timer = undefined;
+      if (isVisible()) void run();
+    }, intervalMs);
+  };
+  const run = async () => {
+    if (stopped) return;
+    let again: boolean;
+    try {
+      again = (await load()).live;
+    } catch {
+      again = true;
+    }
+    if (!stopped && again) schedule();
+  };
+  return {
+    start: run,
+    onVisibilityChange: async () => {
+      if (stopped || !isVisible()) return;
+      clear();
+      await run();
+    },
+    stop: () => {
+      stopped = true;
+      clear();
+    },
+  };
+}

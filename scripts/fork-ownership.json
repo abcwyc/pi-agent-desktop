@@ -197,6 +197,27 @@
       "structuralDrift": 40,
       "disposition": "accepted",
       "reason": "Routes homedir() through userHome() so Next's file tracer stops folding it into a build-time glob of the whole user profile — the walk that made every Windows build fail. Also recognizes the hidden Chat workspace and returns its server-owned identity instead of treating it as a project. Incoming changes to path validation require review."
+    },
+    "lib/web-push.ts": {
+      "risk": "medium",
+      "drift": 173,
+      "structuralDrift": 173,
+      "disposition": "accepted",
+      "reason": "Fork adds failed / waiting-for-you pushes (notifySessionEvent, sessionPushPayload), a caller-supplied session name that skips SessionManager.listAll(), and per-device test send / unsubscribe. An upstream rewrite of the notifier must keep all three event kinds, 404/410 pruning, and sendTest rethrowing delivery errors."
+    },
+    "lib/push-client.ts": {
+      "risk": "medium",
+      "drift": 70,
+      "structuralDrift": 70,
+      "disposition": "accepted",
+      "reason": "Fork adds the tap-driven enable/disable/test path iOS requires (permission only from a user gesture in a Home Screen web app) and pushRegistration(), which never waits on serviceWorker.ready unbounded: dev builds and the desktop shell register no worker."
+    },
+    "lib/request-security.ts": {
+      "risk": "low",
+      "drift": 19,
+      "structuralDrift": 19,
+      "disposition": "accepted",
+      "reason": "Admits the Settings › Remote access tailnet name only for an authorized Tailscale user, and its https Origin. A merge that drops the remoteAccess parameter fails closed (the phone loses access); one that admits the host without isRemoteAccessRequestAuthorized would open the server to the whole tailnet."
     }
   },
   "forkOwnedPaths": [
@@ -283,6 +304,7 @@
     "reduce": "Drift that can be removed without losing anything — desktop-only code that belongs in components/desktop/, or fork additions sitting in an upstream file that can move to a fork-owned one. Act on these."
   },
   "decisionLog": [
+    "2026-11-01 — Remote access (PR 194): lib/web-push.ts and lib/push-client.ts carry the phone push events and the iOS tap-to-enable path; lib/request-security.ts and proxy.ts gate the Tailscale Serve hostname on Tailscale-User-Login and refuse Funnel traffic. Markers in components/fork-extractions.test.mjs pin the wiring.",
     "2026-10-21 — MarkdownBody now integrates @lobehub/streamdown through fork-owned StreamingMarkdown and useStreamingMarkdown, retaining Pi's remark/rehype pipeline, widgets, final-text flush and document-scoped fallbacks. Stable block caching and paced word fades replace full-document parsing on every streamed snapshot; no Lobe UI theme is imported. Browser replay measures parse volume against the former 120ms strategy.",
     "2026-07-26 — lib/api-types.ts: fork update types moved to lib/app-update-types.ts; file now matches upstream and left the manifest.",
     "2026-07-26 — components/AppShell.tsx: desktop window chrome moved to components/desktop/ (-53 structural). The remaining 376 lines are the top-bar redesign; accepted.",

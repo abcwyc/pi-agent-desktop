@@ -107,6 +107,31 @@ type AgentRunCompleteListener = (sessionId: string, outcome: AgentRunOutcome) =>
 /** A blocking extension dialog (select / confirm / input / editor / custom) is waiting for the user. */
 type AttentionNeededListener = (sessionId: string, prompt: string) => void;
 
+// How recent runs ended, kept past the wrapper: the idle timeout destroys a
+// wrapper 10 minutes after its run, and the Tasks page is often read later than
+// that (from a phone). Process-wide, so a server restart forgets them.
+type RecentRunOutcome = NonNullable<AgentTaskSnapshot["lastRun"]>;
+const RECENT_RUN_OUTCOME_LIMIT = 200;
+const RECENT_RUN_OUTCOMES_KEY = Symbol.for("pi-web:recent-run-outcomes");
+
+function recentRunOutcomes(): Map<string, RecentRunOutcome> {
+  const store = globalThis as unknown as Record<symbol, Map<string, RecentRunOutcome> | undefined>;
+  return store[RECENT_RUN_OUTCOMES_KEY] ??= new Map();
+}
+
+function recordRecentRunOutcome(sessionId: string, run: RecentRunOutcome): void {
+  const outcomes = recentRunOutcomes();
+  outcomes.delete(sessionId);
+  outcomes.set(sessionId, run);
+  while (outcomes.size > RECENT_RUN_OUTCOME_LIMIT) {
+    outcomes.delete(outcomes.keys().next().value as string);
+  }
+}
+
+export function resetRecentRunOutcomesForTests(): void {
+  recentRunOutcomes().clear();
+}
+
 const BLOCKING_UI_METHODS = new Set<string>(["select", "confirm", "input", "editor", "custom"]);
 
 function agentRunOutcome(event: AgentEvent): AgentRunOutcome {
@@ -565,6 +590,9 @@ export class AgentSessionWrapper {
         notifyRunningChange();
       }
       if (event.type === "agent_settled") {
+        // Stop during a retry back-off ends the run with no new agent_end (agent-session.js
+        // _finishCancelledRetry), so the last one still says "error"; the SDK reports the Stop here.
+        if (event.aborted === true) this.lastRunOutcome = { status: "aborted" };
         this.composerQueue.wake();
         this.notifyAgentRunCompleteIfIdle();
       }
@@ -598,12 +626,14 @@ export class AgentSessionWrapper {
   }
 
   private notifyAgentRunCompleteIfIdle(): void {
+    if (!this.isRunning()) this.runStartedAt = null;
     if (!this.agentRunNeedsCompletion || this.isRunning() || this.composerQueue.snapshot().length) return;
     this.agentRunNeedsCompletion = false;
     this.runStartedAt = null;
     this.retrying = false;
     this.lastFinishedRun = { outcome: this.lastRunOutcome, finishedAt: Date.now() };
     if (this.suppressCompletionNotifications) return;
+    recordRecentRunOutcome(this.sessionId, this.lastFinishedRun);
     try {
       this.onAgentRunComplete?.(this.sessionId, this.lastRunOutcome);
     } catch (error) {
@@ -622,6 +652,7 @@ export class AgentSessionWrapper {
           : "";
       waiting.push({ method, prompt });
     }
+    if (!running) this.runStartedAt = null;
     let activity: AgentTaskSnapshot["activity"] = null;
     if (running) {
       const tools = [...this.activeToolEvents.values()];
@@ -634,7 +665,8 @@ export class AgentSessionWrapper {
     return {
       sessionId: this.sessionId,
       running,
-      runStartedAt: running ? this.runStartedAt ?? Date.now() : null,
+      // Running before agent_start (MCP prepare, preflight): pin the start so it does not drift.
+      runStartedAt: running ? this.runStartedAt ??= Date.now() : null,
       activity,
       waiting,
       lastRun: this.lastFinishedRun,
@@ -2676,6 +2708,10 @@ export function getRpcTaskSnapshots(): AgentTaskSnapshot[] {
     if (typeof session.getTaskSnapshot !== "function") continue;
     const snapshot = session.getTaskSnapshot();
     snapshots.set(session.sessionId || sessionId, { ...snapshot, sessionId: session.sessionId || sessionId });
+  }
+  for (const [sessionId, lastRun] of recentRunOutcomes()) {
+    if (snapshots.has(sessionId)) continue;
+    snapshots.set(sessionId, { sessionId, running: false, runStartedAt: null, activity: null, waiting: [], lastRun });
   }
   return [...snapshots.values()];
 }

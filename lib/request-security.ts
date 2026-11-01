@@ -1,5 +1,6 @@
 import { isIP } from "node:net";
 import {
+  isRelayedFromAnotherMachine,
   isRemoteAccessOrigin,
   isRemoteAccessRequestAuthorized,
   readRemoteAccessConfig,
@@ -48,6 +49,18 @@ function normalizeConfiguredHostname(value: string | undefined): string | null {
 
 function isLoopbackHostname(hostname: string): boolean {
   return hostname === "localhost" || hostname.endsWith(".localhost");
+}
+
+function isLoopbackIp(hostname: string): boolean {
+  return hostname === "::1" || (isIP(hostname) === 4 && hostname.startsWith("127."));
+}
+
+/** Started to listen beyond loopback (`dev:lan`, `pi-web --hostname 0.0.0.0`): other machines connect directly. */
+function isListeningBeyondLoopback(): boolean {
+  const configured = process.env.PI_WEB_HOSTNAME?.trim().toLowerCase();
+  if (!configured) return false;
+  const bare = configured.replace(/^\[|\]$/g, "");
+  return !(bare === "localhost" || isLoopbackIp(bare));
 }
 
 function configuredHostnamesFromEnvironment(): string[] {
@@ -101,13 +114,21 @@ export function isApiRequestHostAllowed(
   const host = request.headers.get("host");
   const hostname = host ? hostnameFromAuthority(host) : null;
   if (!hostname) return false;
-  if (isLoopbackHostname(hostname) || isIP(hostname)) return true;
+  // The tailnet name from Settings › Remote access: only a user Tailscale vouched for,
+  // even when PI_WEB_ALLOWED_HOSTS also names it.
+  if (remoteAccess !== null && hostname === remoteAccess.hostname) {
+    return isRemoteAccessRequestAuthorized(request, remoteAccess);
+  }
+  // Tailscale Serve (or any proxy) passes the client's Host through, so a relayed
+  // request can claim to be local. A loopback Host is trusted only from this computer,
+  // and an IP literal from another machine only when the server listens on the network.
+  const relayed = isRelayedFromAnotherMachine(request);
+  if (isLoopbackHostname(hostname) || isLoopbackIp(hostname)) return !relayed;
+  if (isIP(hostname)) return !relayed || isListeningBeyondLoopback();
 
-  if (configuredHostnames.some(
+  return configuredHostnames.some(
     (configured) => normalizeConfiguredHostname(configured) === hostname,
-  )) return true;
-  // The tailnet name from Settings › Remote access, only for a user Tailscale vouched for.
-  return remoteAccess !== null && isRemoteAccessRequestAuthorized(request, remoteAccess);
+  );
 }
 
 /**

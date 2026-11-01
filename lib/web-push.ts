@@ -6,11 +6,14 @@ import { writePrivateFileAtomicSync } from "./atomic-file";
 import { enLocale } from "./i18n/messages/en";
 import { zhCNLocale } from "./i18n/messages/zh-CN";
 import { getAgentDir } from "./session-reader";
+import { isTailscaleLoginAllowed } from "./remote-access";
 
 export interface PushSubscriptionRecord {
   endpoint: string;
   keys: { p256dh: string; auth: string };
   locale: string;
+  /** The Tailscale login that subscribed through Settings › Remote access; absent for this computer's own browser. */
+  login?: string;
 }
 
 interface PushStateFile {
@@ -28,6 +31,8 @@ interface WebPushEnvironment {
   saveState: (state: PushStateFile) => void;
   generateVapidKeys: () => PushStateFile["vapidKeys"];
   listSessionNames: () => Promise<Map<string, string>>;
+  /** Whether a remote subscriber's login is still let in; a revoked phone stops getting titles and prompts. */
+  isLoginAllowed?: (login: string) => boolean;
 }
 
 /** What happened in a session: a run finished, failed, or is waiting on a dialog. */
@@ -101,6 +106,7 @@ function getDefaultEnvironment(): WebPushEnvironment {
       writePrivateFileAtomicSync(path, JSON.stringify(state));
     },
     generateVapidKeys: () => webpush.generateVAPIDKeys(),
+    isLoginAllowed: (login) => isTailscaleLoginAllowed(login),
     async listSessionNames() {
       const names = new Map<string, string>();
       try {
@@ -242,12 +248,16 @@ export function createWebPushNotifier(environment: WebPushEnvironment): WebPushN
     }
   };
 
+  const deliverable = (subscription: PushSubscriptionRecord) =>
+    !subscription.login || (environment.isLoginAllowed?.(subscription.login) ?? false);
+
   const notifySessionEvent = async (sessionId: string, event: SessionPushEvent, knownName?: string | null) => {
-    if (state.subscriptions.length === 0) return;
+    const recipients = state.subscriptions.filter(deliverable);
+    if (recipients.length === 0) return;
     const sessionName = knownName !== undefined
       ? knownName ?? undefined
       : (await environment.listSessionNames()).get(sessionId);
-    await sendAll([...state.subscriptions], (locale) => sessionPushPayload(sessionId, sessionName, event, locale));
+    await sendAll(recipients, (locale) => sessionPushPayload(sessionId, sessionName, event, locale));
   };
 
   return {
@@ -278,7 +288,7 @@ export function createWebPushNotifier(environment: WebPushEnvironment): WebPushN
     notifySessionEvent,
     async sendTest(endpoint) {
       const subscription = state.subscriptions.find((s) => s.endpoint === endpoint);
-      if (!subscription) return false;
+      if (!subscription || !deliverable(subscription)) return false;
       const text = EVENT_TEXT[pushLocale(subscription.locale)];
       await sendAll([subscription], () => ({ title: text.testTitle, body: text.testBody, url: "/", tag: "pi-push-test" }), true);
       return true;
