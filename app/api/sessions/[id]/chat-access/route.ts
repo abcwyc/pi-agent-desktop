@@ -3,6 +3,7 @@ import { existsSync } from "fs";
 import { isChatFolderPath, isChatWorkspacePath } from "@/lib/chat-workspace";
 import { readChatUnlocked } from "@/lib/chat-unlock";
 import { isNetworkExposedServer } from "@/lib/chat-file-access";
+import { isLoopbackHost } from "@/lib/open-in-file-manager";
 import { getRpcSession, setRpcChatUnlock } from "@/lib/rpc-manager";
 import { openSessionManager, readSessionHeader, resolveSessionPath } from "@/lib/session-reader";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
@@ -70,6 +71,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const body = await req.json() as { unlocked?: unknown };
     if (typeof body.unlocked !== "boolean") {
       return NextResponse.json({ error: "unlocked must be a boolean" }, { status: 400 });
+    }
+    // Letting a chat use the computer is decided at the computer, not from a phone
+    // reaching it through Settings › Remote access. Locking it again is fine from anywhere.
+    if (body.unlocked && !isLoopbackHost(req.headers.get("host"))) {
+      return NextResponse.json({ error: "A chat can only be allowed to use this computer on the computer itself." }, { status: 403 });
     }
     const described = await describeChat(id);
     if (!described) return NextResponse.json({ error: "Session not found" }, { status: 404 });

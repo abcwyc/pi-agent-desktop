@@ -1,4 +1,10 @@
 import { isIP } from "node:net";
+import {
+  isRemoteAccessOrigin,
+  isRemoteAccessRequestAuthorized,
+  readRemoteAccessConfig,
+  type RemoteAccessConfig,
+} from "./remote-access.ts";
 
 function normalizeHostname(value: string): string {
   const unbracketed = value.startsWith("[") && value.endsWith("]")
@@ -90,15 +96,18 @@ function isUserInitiatedSessionExportNavigation(request: Request): boolean {
 export function isApiRequestHostAllowed(
   request: Request,
   configuredHostnames = configuredHostnamesFromEnvironment(),
+  remoteAccess: RemoteAccessConfig | null = readRemoteAccessConfig(),
 ): boolean {
   const host = request.headers.get("host");
   const hostname = host ? hostnameFromAuthority(host) : null;
   if (!hostname) return false;
   if (isLoopbackHostname(hostname) || isIP(hostname)) return true;
 
-  return configuredHostnames.some(
+  if (configuredHostnames.some(
     (configured) => normalizeConfiguredHostname(configured) === hostname,
-  );
+  )) return true;
+  // The tailnet name from Settings › Remote access, only for a user Tailscale vouched for.
+  return remoteAccess !== null && isRemoteAccessRequestAuthorized(request, remoteAccess);
 }
 
 /**
@@ -129,7 +138,10 @@ function isProxyRewrittenSameOrigin(request: Request, origin: string): boolean {
 }
 
 /** Reject browser cross-site API requests while preserving non-browser clients. */
-export function isApiRequestOriginAllowed(request: Request): boolean {
+export function isApiRequestOriginAllowed(
+  request: Request,
+  remoteAccess: RemoteAccessConfig | null = readRemoteAccessConfig(),
+): boolean {
   const origin = request.headers.get("origin");
   const fetchSite = request.headers.get("sec-fetch-site");
   if (fetchSite === "cross-site") return false;
@@ -137,6 +149,7 @@ export function isApiRequestOriginAllowed(request: Request): boolean {
 
   const requestOrigin = getRequestOrigin(request);
   if (requestOrigin !== null && canonicalOrigin(origin) === requestOrigin) return true;
+  if (isRemoteAccessOrigin(origin, request, remoteAccess)) return true;
 
   return isProxyRewrittenSameOrigin(request, origin);
 }

@@ -9,6 +9,11 @@ import {
   isApiRequestHostAllowed,
 } from "@/lib/request-security";
 import {
+  isRemoteAccessHost,
+  isRemoteAccessRequestAuthorized,
+  readRemoteAccessConfig,
+} from "@/lib/remote-access";
+import {
   isValidWebSessionToken,
   isValidBasicAuthorization,
   isWebPasswordEnabled,
@@ -33,6 +38,16 @@ export function proxy(request: NextRequest) {
     : isApiRequestHostAllowed(request);
 
   if (!isTrustedRequest) {
+    // The tailnet name from Settings › Remote access, reached without a Tailscale user:
+    // Funnel (public) traffic, a tagged device, or a login that is not on the list.
+    const remoteAccess = readRemoteAccessConfig();
+    if (remoteAccess && isRemoteAccessHost(request, remoteAccess)
+      && !isRemoteAccessRequestAuthorized(request, remoteAccess)) {
+      return new NextResponse("Remote access needs a signed-in Tailscale device that is allowed in Pi's settings.", {
+        status: 403,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
     if (!isApiRequest) {
       return new NextResponse("Untrusted request", { status: 403 });
     }

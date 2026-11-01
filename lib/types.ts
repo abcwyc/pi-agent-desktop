@@ -447,3 +447,23 @@ export interface SessionContext {
   thinkingLevel: string;
   model: { provider: string; modelId: string } | null;
 }
+
+/** How a run ended, for the completion push: the final assistant message's stop reason. */
+export type AgentRunOutcome =
+  | { status: "done" }
+  | { status: "failed"; error: string }
+  | { status: "aborted" };
+
+/** What the Tasks page shows for one live session (`GET /api/agent/tasks`). */
+export interface AgentTaskSnapshot {
+  sessionId: string;
+  running: boolean;
+  /** When the current run started (ms); null while idle. */
+  runStartedAt: number | null;
+  /** The step the run is on: a tool by name, compacting, waiting to retry, or thinking. */
+  activity: { kind: "tool"; name: string } | { kind: "compacting" } | { kind: "retrying" } | { kind: "thinking" } | null;
+  /** Dialogs the session is blocked on, oldest first. */
+  waiting: { method: string; prompt: string }[];
+  /** How the last finished run ended, and when; null when none finished in this process. */
+  lastRun: { outcome: AgentRunOutcome; finishedAt: number } | null;
+}

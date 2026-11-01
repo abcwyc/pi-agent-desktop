@@ -69,6 +69,9 @@ app/api/
   agent/[id]/events/route.ts      GET SSE stream
   agent/running/route.ts          GET currently-running session ids
   agent/running/events/route.ts   GET SSE stream of currently-running session ids
+  agent/tasks/route.ts            GET live task snapshots (running step, waiting dialogs, last outcome) for the Tasks page
+  remote-access/route.ts          GET/PUT Tailscale remote-access setting (PUT only from loopback)
+  push/{config,subscribe,unsubscribe,test}/route.ts  Web Push key, device subscriptions, test send
   auth/all-providers/route.ts     GET API-key provider list
   auth/api-key/[provider]/route.ts GET/POST/DELETE provider API key status/storage
   auth/login/[provider]/route.ts  GET OAuth/device-code SSE | POST manual code
@@ -146,6 +149,8 @@ components/
   PluginsConfig.tsx   modal for installed package plugins
   SkillsConfig.tsx    modal for loaded/search/installable skills
   scheduled/          Scheduled page (list, detail, editor, run history) and its sidebar row
+  tasks/              Tasks page (waiting / running / recent across projects) and its sidebar row
+  RemoteAccessSection.tsx  Settings › General › Remote access (Tailscale) and "Notify this device"
   SettingsPanel.tsx   settings dialog; its General tab hosts the app intro, Version & Updates and the desktop-only switches
   AppUpdatesSection.tsx  Version & Updates block at the top of General
   desktop/DesktopAppSection.tsx  window/tray prefs; renders nothing outside Tauri

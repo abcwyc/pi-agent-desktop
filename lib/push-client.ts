@@ -66,3 +66,79 @@ export async function setupPushSubscription(locale: string): Promise<boolean> {
   });
   return attempt;
 }
+
+export type PushDeviceState = "unsupported" | "denied" | "off" | "on";
+
+/**
+ * The page's service worker, or undefined when there is none: it registers only
+ * in production builds and never inside the desktop shell, where `ready` would
+ * wait forever. A first load may still be registering, so `ready` gets a moment.
+ */
+async function pushRegistration(): Promise<ServiceWorkerRegistration | undefined> {
+  const existing = await navigator.serviceWorker.getRegistration();
+  if (existing) return existing;
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 3000)),
+  ]);
+}
+
+/** Whether this browser gets pushes from this server, as far as the browser knows. */
+export async function getPushDeviceState(): Promise<PushDeviceState> {
+  if (!isPushSupported()) return "unsupported";
+  if (Notification.permission === "denied") return "denied";
+  try {
+    const registration = await pushRegistration();
+    if (!registration) return "unsupported";
+    if (Notification.permission !== "granted") return "off";
+    return (await registration.pushManager.getSubscription()) ? "on" : "off";
+  } catch {
+    return "off";
+  }
+}
+
+/**
+ * Turn pushes on from a click. iOS grants the permission only inside a user
+ * gesture, which is why the automatic path in AppShell never reaches an iPhone.
+ */
+export async function enablePushOnThisDevice(locale: string): Promise<PushDeviceState> {
+  if (!isPushSupported() || !(await pushRegistration())) return "unsupported";
+  const permission = Notification.permission === "default"
+    ? await Notification.requestPermission()
+    : Notification.permission;
+  if (permission === "denied") return "denied";
+  if (permission !== "granted") return "off";
+  return (await setupPushSubscription(locale)) ? "on" : "off";
+}
+
+export async function disablePushOnThisDevice(): Promise<PushDeviceState> {
+  if (!isPushSupported()) return "unsupported";
+  const registration = await pushRegistration();
+  const subscription = await registration?.pushManager.getSubscription();
+  if (subscription) {
+    await fetch("/api/push/unsubscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: subscription.endpoint }),
+    }).catch(() => undefined);
+    await subscription.unsubscribe();
+  }
+  activeSubscriptionPromise = null;
+  return "off";
+}
+
+/** Ask the server to push a test notification to this device. */
+export async function sendTestPushToThisDevice(): Promise<void> {
+  const registration = await pushRegistration();
+  const subscription = await registration?.pushManager.getSubscription();
+  if (!subscription) throw new Error("This device is not subscribed");
+  const response = await fetch("/api/push/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint: subscription.endpoint }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error || `HTTP ${response.status}`);
+  }
+}

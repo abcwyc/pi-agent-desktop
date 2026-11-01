@@ -24,6 +24,7 @@ import { LazyTerminalPanel as TerminalPanel, preloadTerminalPanel } from "./Lazy
 // syntax highlighting a second time and only matters once a file tab opens.
 const FileViewer = dynamic(() => import("./FileViewer").then((m) => m.FileViewer), { ssr: false });
 const FileExplorer = dynamic(() => import("./FileExplorer").then((m) => m.FileExplorer), { ssr: false });
+const TasksView = dynamic(() => import("./tasks/TasksView").then((m) => m.TasksView), { ssr: false });
 const ScheduledView = dynamic(() => import("./scheduled/ScheduledView").then((m) => m.ScheduledView), { ssr: false });
 import { openFileTab, saveFileViewerState } from "./file-tab-state";
 import { SettingsPanel } from "./SettingsPanel";
@@ -110,10 +111,10 @@ import { getLastSettingsSection, type SettingsSection } from "@/lib/settings-nav
 
 type SessionCopyField = "file" | "id" | "projectDir" | "gitBranch" | "gitWorktree";
 /** A page covering the chat area, named by `?view=`. */
-type WorkspaceView = "scheduled" | "artifacts" | null;
+type WorkspaceView = "tasks" | "scheduled" | "artifacts" | null;
 
 function parseWorkspaceView(value: string | null | undefined): WorkspaceView {
-  return value === "scheduled" || value === "artifacts" ? value : null;
+  return value === "tasks" || value === "scheduled" || value === "artifacts" ? value : null;
 }
 type AutoNameStatus =
   | { kind: "idle" }
@@ -198,6 +199,7 @@ export function AppShell() {
   // The Scheduled and Artifacts pages cover the chat area without unmounting
   // it, so the open session keeps its state. At most one is open (`?view=`).
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>(() => parseWorkspaceView(searchParams?.get("view")));
+  const tasksOpen = workspaceView === "tasks";
   const scheduledOpen = workspaceView === "scheduled";
   const artifactsOpen = workspaceView === "artifacts";
   const pageOpen = workspaceView !== null;
@@ -1367,6 +1369,7 @@ export function AppShell() {
       router.replace(`?view=${view}`, { scroll: false });
     }
   }, [isMobile, router]);
+  const handleOpenTasks = useCallback(() => openWorkspaceView("tasks"), [openWorkspaceView]);
   const handleOpenScheduled = useCallback(() => openWorkspaceView("scheduled"), [openWorkspaceView]);
   const handleOpenArtifacts = useCallback(() => openWorkspaceView("artifacts"), [openWorkspaceView]);
 
@@ -1870,7 +1873,9 @@ export function AppShell() {
     }
   };
   const activeCwdName = visibleProjectCwd ? getFileName(visibleProjectCwd) || visibleProjectCwd : null;
-  const topBarTitle = scheduledOpen
+  const topBarTitle = tasksOpen
+    ? translate("tasks.title")
+    : scheduledOpen
     ? translate("scheduled.title")
     : artifactsOpen
       ? translate("artifacts.page.title")
@@ -1941,6 +1946,8 @@ export function AppShell() {
         onBackgroundTaskDone={handleBackgroundTaskDone}
         onRunningSessionIdsChange={handleRunningSessionIdsChange}
         onSessionsChange={handleSessionsChange}
+        onOpenTasks={handleOpenTasks}
+        tasksOpen={tasksOpen}
         onOpenScheduled={handleOpenScheduled}
         scheduledOpen={scheduledOpen}
         onOpenArtifacts={handleOpenArtifacts}
@@ -2913,6 +2920,13 @@ export function AppShell() {
           ) : null}
         </div>
 
+        {tasksOpen && (
+          <TasksView
+            sessions={sessionCatalog}
+            runningSessionIds={runningSessionIds}
+            onOpenSession={(sessionId) => void handleOpenSession(sessionId)}
+          />
+        )}
         {scheduledOpen && (
           <ScheduledView
             projectRoots={availableProjectRoots}

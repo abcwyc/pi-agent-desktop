@@ -10139,3 +10139,82 @@ html.dark .artifacts-thumb[data-tone="data"] { --tone: #4fc1d6; }
 
 /* CJK units ("17小时") are wider than "17h"; keep them off the title's ellipsis. */
 .session-item-time { margin-left: 6px; }
+
+/* Settings › General › Remote access (components/RemoteAccessSection.tsx) */
+.remote-access-step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  /* Same inset as the .settings-option rows around it. */
+  padding: 10px 14px;
+}
+
+.remote-access-section .settings-option-list > .settings-option-hint {
+  padding: 0 14px 10px;
+}
+
+.remote-access-step-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.remote-access-step-value code {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  white-space: nowrap;
+}
+
+/* Tasks page (components/tasks/TasksView.tsx): reuses the Scheduled page's
+   shell and cards, grouped into Waiting / Running / Recent. */
+.tasks-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tasks-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+}
+
+.tasks-section-count {
+  color: var(--text-dim);
+  font-weight: var(--fw-regular);
+}
+
+.tasks-card .scheduled-card-main { min-width: 0; }
+
+.tasks-status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tasks-status--attention { color: var(--warning); }
+.tasks-status--failed { color: var(--danger); }
+
+.tasks-dot--attention { background: var(--warning); }
+.tasks-dot--running { background: var(--success); animation: scheduled-pulse 1.4s ease-in-out infinite; }
+.tasks-dot--failed { background: var(--danger); }
+.tasks-dot--done { background: var(--text-dim); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tasks-dot--running { animation: none; }
+}

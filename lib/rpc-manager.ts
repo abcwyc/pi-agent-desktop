@@ -15,7 +15,9 @@ import {
 } from "./project-command-env";
 import { cacheSessionPath, getLatestModelChange, getLatestResponseModel, getSessionListVersion, invalidateSessionListCache, readLatestSessionEntryId, resolveSessionPath } from "./session-reader";
 import { getProjectTrustStatus, projectTrustReloadOptions } from "./project-trust";
-import { notifySessionComplete } from "./web-push";
+import { notifySessionEvent } from "./web-push";
+import type { AgentRunOutcome, AgentTaskSnapshot } from "./types";
+export type { AgentRunOutcome, AgentTaskSnapshot } from "./types";
 import { isVerboseLogging } from "../bin/pi-web-options.js";
 import { hasActiveSessionLivenessProvider } from "./session-liveness";
 import type { LoadExtensionsResult, SlashCommandInfo } from "@earendil-works/pi-coding-agent";
@@ -101,7 +103,21 @@ export interface AgentEvent {
 }
 
 type EventListener = (event: AgentEvent) => void;
-type AgentRunCompleteListener = (sessionId: string) => void;
+type AgentRunCompleteListener = (sessionId: string, outcome: AgentRunOutcome) => void;
+/** A blocking extension dialog (select / confirm / input / editor / custom) is waiting for the user. */
+type AttentionNeededListener = (sessionId: string, prompt: string) => void;
+
+const BLOCKING_UI_METHODS = new Set<string>(["select", "confirm", "input", "editor", "custom"]);
+
+function agentRunOutcome(event: AgentEvent): AgentRunOutcome {
+  const messages = Array.isArray(event.messages) ? event.messages as Array<Record<string, unknown>> : [];
+  const last = [...messages].reverse().find((message) => message?.role === "assistant");
+  if (last?.stopReason === "aborted") return { status: "aborted" };
+  if (last?.stopReason === "error") {
+    return { status: "failed", error: typeof last.errorMessage === "string" ? last.errorMessage : "" };
+  }
+  return { status: "done" };
+}
 
 type PendingUiResponse = {
   resolve: (response: ExtensionUiResponse) => void;
@@ -155,6 +171,7 @@ type AgentSessionWrapperOptions = {
   /** The user let this chat use their computer. */
   chatUnlocked?: boolean;
   onAgentRunComplete?: AgentRunCompleteListener;
+  onAttentionNeeded?: AttentionNeededListener;
   suppressCompletionNotifications?: boolean;
   /** Connects the session's MCP servers before a prompt starts a run, and lets go of them when it closes (lib/mcp-host.ts). */
   mcpHost?: Pick<McpHost, "prepareForPrompt" | "dispose">;
@@ -349,7 +366,13 @@ export class AgentSessionWrapper {
   private readonly policy: SessionPolicy;
   private readonly chatFolder: boolean;
   private readonly onAgentRunComplete?: AgentRunCompleteListener;
+  private readonly onAttentionNeeded?: AttentionNeededListener;
   private readonly suppressCompletionNotifications: boolean;
+  // Overwritten by every `agent_end`, so an auto-retry that recovers reports success.
+  private lastRunOutcome: AgentRunOutcome = { status: "done" };
+  private runStartedAt: number | null = null;
+  private retrying = false;
+  private lastFinishedRun: AgentTaskSnapshot["lastRun"] = null;
   private readonly mcpHost?: Pick<McpHost, "prepareForPrompt" | "dispose">;
   private mcpHostDisposed = false;
   // The MCP wait of the prompt being admitted; Stop ends it.
@@ -382,6 +405,7 @@ export class AgentSessionWrapper {
     });
     this.chatFolder = options.chatFolder === true;
     this.onAgentRunComplete = options.onAgentRunComplete;
+    this.onAttentionNeeded = options.onAttentionNeeded;
     this.suppressCompletionNotifications = options.suppressCompletionNotifications ?? false;
     this.mcpHost = options.mcpHost;
     this.composerQueue = new ComposerQueue(inner.sessionId, {
@@ -503,11 +527,15 @@ export class AgentSessionWrapper {
     this.unsubscribe = this.inner.subscribe((event: AgentEvent) => {
       if (event.type === "agent_start") {
         this.agentRunNeedsCompletion = true;
+        this.runStartedAt ??= Date.now();
         // Cross-window liveness: idle → running must reach other windows'
         // sidebars through the running-events stream, not just this one's SSE.
         notifyRunningChange();
       }
+      if (event.type === "auto_retry_start") this.retrying = true;
+      if (event.type === "auto_retry_end" || event.type === "agent_start") this.retrying = false;
       if (event.type === "agent_end") {
+        this.lastRunOutcome = agentRunOutcome(event);
         invalidateSessionListCache();
         notifyRunningChange();
         // Every tool call of the run has finished; nothing is left to replay.
@@ -572,11 +600,56 @@ export class AgentSessionWrapper {
   private notifyAgentRunCompleteIfIdle(): void {
     if (!this.agentRunNeedsCompletion || this.isRunning() || this.composerQueue.snapshot().length) return;
     this.agentRunNeedsCompletion = false;
+    this.runStartedAt = null;
+    this.retrying = false;
+    this.lastFinishedRun = { outcome: this.lastRunOutcome, finishedAt: Date.now() };
     if (this.suppressCompletionNotifications) return;
     try {
-      this.onAgentRunComplete?.(this.sessionId);
+      this.onAgentRunComplete?.(this.sessionId, this.lastRunOutcome);
     } catch (error) {
       console.error("[pi-web] completion listener failed:", error instanceof Error ? error.message : error);
+    }
+  }
+
+  getTaskSnapshot(): AgentTaskSnapshot {
+    const running = this.isRunning();
+    const waiting: AgentTaskSnapshot["waiting"] = [];
+    for (const event of this.pendingUiRequests.values()) {
+      const method = typeof event.method === "string" ? event.method : "";
+      if (!BLOCKING_UI_METHODS.has(method)) continue;
+      const prompt = typeof event.title === "string" ? event.title
+        : typeof event.message === "string" ? event.message
+          : "";
+      waiting.push({ method, prompt });
+    }
+    let activity: AgentTaskSnapshot["activity"] = null;
+    if (running) {
+      const tools = [...this.activeToolEvents.values()];
+      const latest = tools[tools.length - 1];
+      activity = this.inner.isCompacting ? { kind: "compacting" }
+        : this.retrying ? { kind: "retrying" }
+          : latest && typeof latest.toolName === "string" ? { kind: "tool", name: latest.toolName }
+            : { kind: "thinking" };
+    }
+    return {
+      sessionId: this.sessionId,
+      running,
+      runStartedAt: running ? this.runStartedAt ?? Date.now() : null,
+      activity,
+      waiting,
+      lastRun: this.lastFinishedRun,
+    };
+  }
+
+  private notifyAttentionNeeded(request: ExtensionUiRequestBody): void {
+    if (this.suppressCompletionNotifications || !BLOCKING_UI_METHODS.has(request.method)) return;
+    const prompt = typeof request.title === "string" ? request.title
+      : typeof request.message === "string" ? request.message
+        : "";
+    try {
+      this.onAttentionNeeded?.(this.sessionId, prompt);
+    } catch (error) {
+      console.error("[pi-web] attention listener failed:", error instanceof Error ? error.message : error);
     }
   }
 
@@ -1825,6 +1898,7 @@ export class AgentSessionWrapper {
     } as ExtensionUiRequest as AgentEvent;
     this.pendingUiRequests.set(id, event);
     this.emit(event);
+    this.notifyAttentionNeeded({ method: "custom" });
   }
 
   private closeCustomUi(id: string, value: unknown): void {
@@ -1988,6 +2062,7 @@ export class AgentSessionWrapper {
         cancel: () => settle(defaultValue),
       });
       this.emit(fullRequest as AgentEvent);
+      this.notifyAttentionNeeded(request);
     });
   }
 
@@ -2591,6 +2666,19 @@ export function getRunningRpcSessionIds(): string[] {
   return [...ids];
 }
 
+/** Live sessions for the Tasks page; sub-agent runs are reported by their parent. */
+export function getRpcTaskSnapshots(): AgentTaskSnapshot[] {
+  const snapshots = new Map<string, AgentTaskSnapshot>();
+  for (const [sessionId, session] of getRegistry()) {
+    if (!session.isAlive() || session.hasSuppressedCompletionNotifications()) continue;
+    // A wrapper created before a hot reload (kept on globalThis) predates this method.
+    if (typeof session.getTaskSnapshot !== "function") continue;
+    const snapshot = session.getTaskSnapshot();
+    snapshots.set(session.sessionId || sessionId, { ...snapshot, sessionId: session.sessionId || sessionId });
+  }
+  return [...snapshots.values()];
+}
+
 export function getCompletionNotificationSuppressedRpcSessionIds(): string[] {
   const ids = new Set<string>();
   for (const [sessionId, session] of getRegistry()) {
@@ -2896,9 +2984,19 @@ export async function startRpcSession(
       chatWorkspace,
       chatFolder,
       chatUnlocked,
-      onAgentRunComplete: (completedSessionId) => {
-        void notifySessionComplete(completedSessionId).catch((error) => {
+      onAgentRunComplete: (completedSessionId, outcome) => {
+        // A run the user stopped needs no message on their phone.
+        if (outcome.status === "aborted") return;
+        const push = outcome.status === "failed"
+          ? notifySessionEvent(completedSessionId, { kind: "failed", detail: outcome.error })
+          : notifySessionEvent(completedSessionId, { kind: "complete" });
+        void push.catch((error) => {
           console.error("[pi-web] failed to send completion push:", error instanceof Error ? error.message : error);
+        });
+      },
+      onAttentionNeeded: (waitingSessionId, prompt) => {
+        void notifySessionEvent(waitingSessionId, { kind: "attention", detail: prompt }).catch((error) => {
+          console.error("[pi-web] failed to send attention push:", error instanceof Error ? error.message : error);
         });
       },
       suppressCompletionNotifications: Boolean(subagentResources),
