@@ -507,7 +507,8 @@ try {
         const pendingHistory = page.waitForRequest((request) => request.url().includes(`/api/sessions/${LONG}/context?`) && new URL(request.url()).searchParams.has("before"));
         await page.locator(`[title="${text(0)}"]`).click();
         await pendingHistory;
-        await page.getByRole("button", { name: "Branches", exact: true }).click();
+        await page.locator(".app-topbar-more-trigger").click();
+        await page.getByRole("menuitem", { name: /^Branches/ }).click();
         await page.getByText("E2E alternate history branch", { exact: true }).click();
         await page.locator("[data-entry-id='alternate']:not([data-message-role])").waitFor({ state: "visible" });
         await page.screenshot({ path: join(artifacts, "scroll-restore-branch.png") });

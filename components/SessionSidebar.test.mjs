@@ -44,12 +44,24 @@ test("streams running sessions and reconnects after visibility or network change
   assert.match(source, /source\?\.close\(\)/);
 });
 
-test("re-adding a removed project clears only its sidebar marker", () => {
-  assert.match(source, /const activateProject = useCallback\(\(cwd: string\) =>/);
-  assert.match(source, /if \(!previous\.has\(projectRoot\)\) return previous;/);
-  assert.match(source, /next\.delete\(projectRoot\);/);
+test("re-adding an archived project restores it to the list", () => {
+  assert.match(source, /const activateProject = useCallback\(\(cwd: string\) => \{\s*restoreProjectRoot\(projectRootFor\(cwd\) \?\? cwd\);/);
   // The add-project dialog is the only picker left in the sidebar.
   assert.match(source, /onSelectCwd=\{\(cwd\) => \{\s+activateProject\(cwd\);/);
+});
+
+test("archived projects sit in a folded Archive group and need a restore before a new session", () => {
+  // New session in an archived project is refused, never a silent restore.
+  assert.match(source, /if \(archivedProjectRoots\.has\(projectRoot\)\) \{\s*appNotify\.info\([^;]*sidebar\.projectArchivedNewSession[\s\S]*?return;/);
+  // The archived row has no "+" and opens the restore menu, from "…" or a right-click.
+  assert.match(source, /\{!archived && \(\s*<button[\s\S]*?handleNewSession\(group\.projectRoot\)/);
+  assert.match(source, /onContextMenu=\{\(e\) => openProjectMenu\(e, group\.projectRoot, archived\)\}/);
+  assert.match(source, /onRestore=\{\(\) => restoreProject\(projectMenu\.root\)\}/);
+  // The group sits after the project list and unfolds for a search.
+  assert.match(source, /activeProjects\.map\(\(group\) => renderProjectGroup\(group\)\)\}\s*\{archivedProjects\.length > 0 && \(\s*<ArchivedProjectsSection/);
+  assert.match(source, /const archiveShown = archiveExpanded \|\| Boolean\(trimmedSessionQuery\)/);
+  // Unfolding an archived project must not select it (that opens a composer there).
+  assert.match(source, /if \(archived\) \{\s*setExpandedArchivedProjects\(\(prev\) => toggleId\(prev, group\.projectRoot\)\);\s*return;\s*\}/);
 });
 
 test("exposes the polled running-session set to the shell", () => {
@@ -156,7 +168,7 @@ test("Chats show five families at a time even when there are no projects", () =>
   // available when `activeProjects` is empty.
   assert.match(
     source,
-    /sidebar-chats-header[\s\S]*?\{allProjects\.length === 0 \? \(/,
+    /sidebar-chats-header[\s\S]*?\{activeProjects\.length === 0 && !\(trimmedSessionQuery && archivedProjects\.length > 0\) \? \(/,
   );
 });
 

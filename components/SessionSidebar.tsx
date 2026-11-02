@@ -43,6 +43,7 @@ import { SessionSearch } from "./SessionSearch";
 import { ProjectViewMenu, type ProjectViewMode } from "./ProjectViewMenu";
 import { ChatsSectionMenu } from "./ChatsSectionMenu";
 import { orderChatFamilies, toggleId } from "@/lib/chat-groups";
+import { ArchivedProjectsSection } from "./ArchivedProjectsSection";
 import { ScheduledSidebarRow } from "./scheduled/ScheduledSidebarRow";
 import { ArtifactsSidebarRow } from "./artifacts/ArtifactsSidebarRow";
 import { TasksSidebarRow } from "./tasks/TasksSidebarRow";
@@ -50,6 +51,13 @@ import { isScheduledRunSession } from "@/hooks/useScheduledTasks";
 import { prefetchSessionData } from "@/lib/session-data-cache";
 import { isImeComposing } from "@/lib/ime";
 import { appNotify } from "@/lib/notification-store";
+import {
+  archiveProjectRoot,
+  restoreProjectRoot,
+  setArchiveExpanded,
+  useArchiveExpanded,
+  useArchivedProjects,
+} from "@/lib/archived-projects";
 import { useMenuPlacement } from "@/hooks/useMenuPlacement";
 import type { MenuAnchor } from "@/lib/menu-placement";
 
@@ -403,19 +411,17 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       )),
     );
   });
-  const [archivedProjectRoots, setArchivedProjectRoots] = useState<Set<string>>(() => {
-    const stored = getPrefJson<unknown>(APP_PREF_KEYS.archivedProjects);
-    return Array.isArray(stored)
-      ? new Set(stored.filter((root): root is string => typeof root === "string"))
-      : new Set();
-  });
+  const archivedProjectRoots = useArchivedProjects();
+  const archiveExpanded = useArchiveExpanded();
+  // Archived projects open folded; this holds the ones unfolded this visit.
+  const [expandedArchivedProjects, setExpandedArchivedProjects] = useState<Set<string>>(() => new Set());
   const [projectViewMode, setProjectViewMode] = useState<ProjectViewMode>(loadProjectViewMode);
   const [projectViewMenuOpen, setProjectViewMenuOpen] = useState(false);
   const [projectViewMenuPos, setProjectViewMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [projectViewMenuAnchor, setProjectViewMenuAnchor] = useState<MenuAnchor | null>(null);
   const projectViewMenuRef = useRef<HTMLDivElement>(null);
   const projectViewMenuButtonRef = useRef<HTMLButtonElement>(null);
-  const [projectMenu, setProjectMenu] = useState<{ root: string } | null>(null);
+  const [projectMenu, setProjectMenu] = useState<{ root: string; archived?: boolean } | null>(null);
   const [projectMenuPos, setProjectMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [projectMenuAnchor, setProjectMenuAnchor] = useState<MenuAnchor | null>(null);
   const [projectBranchMenu, setProjectBranchMenu] = useState<ProjectBranchMenuState | null>(null);
@@ -589,10 +595,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   useEffect(() => {
     saveUnreadSessionIds(unreadSessionIds);
   }, [unreadSessionIds]);
-
-  useEffect(() => {
-    setPrefJson(APP_PREF_KEYS.archivedProjects, [...archivedProjectRoots]);
-  }, [archivedProjectRoots]);
 
   useEffect(() => {
     if (collapsedProjects.size === 0) removePref(APP_PREF_KEYS.collapsedProjects);
@@ -877,13 +879,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   // project was previously removed from the sidebar, make it visible again
   // without touching any of the session files discovered for that directory.
   const activateProject = useCallback((cwd: string) => {
-    const projectRoot = projectRootFor(cwd) ?? cwd;
-    setArchivedProjectRoots((previous) => {
-      if (!previous.has(projectRoot)) return previous;
-      const next = new Set(previous);
-      next.delete(projectRoot);
-      return next;
-    });
+    restoreProjectRoot(projectRootFor(cwd) ?? cwd);
     setSelectedCwd(cwd);
   }, [projectRootFor]);
 
@@ -1161,16 +1157,13 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     const cwd = cwdOverride ?? selectedCwd ?? chatWorkspaceCwd;
     if (!cwd) return;
     const workspaceKind = workspaceKindOverride ?? (isChatCwd(cwd) ? "chat" : "project");
-    // Creating a session is also the activation gesture for an archived
-    // project. This keeps the archive list useful without a second step.
+    // An archived project's sessions stay readable, but a new one needs the
+    // project restored to the list first (its row menu, or "Add project").
     if (workspaceKind === "project") {
       const projectRoot = projectRootFor(cwd) ?? cwd;
       if (archivedProjectRoots.has(projectRoot)) {
-        setArchivedProjectRoots((prev) => {
-          const next = new Set(prev);
-          next.delete(projectRoot);
-          return next;
-        });
+        appNotify.info({ message: t("sidebar.projectArchivedNewSession", { name: getProjectDisplayName(projectRoot, [projectRoot]) }) });
+        return;
       }
     }
     if (cwd !== selectedCwd) setSelectedCwd(cwd);
@@ -1180,7 +1173,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       ? crypto.randomUUID()
       : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
     onNewSession?.(tempId, cwd, workspaceKind);
-  }, [selectedCwd, chatWorkspaceCwd, archivedProjectRoots, onNewSession, projectRootFor, isChatCwd]);
+  }, [selectedCwd, chatWorkspaceCwd, archivedProjectRoots, onNewSession, projectRootFor, isChatCwd, t]);
 
   const handleAddProject = useCallback(async () => {
     if (!isTauriDesktop()) {
@@ -1197,12 +1190,25 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   }, [selectedCwd, homeDir, activateProject]);
 
   const archiveProject = useCallback((projectRoot: string) => {
-    setArchivedProjectRoots((prev) => {
+    archiveProjectRoot(projectRoot);
+    closeProjectMenu();
+    // The selection must not stay on an archived project, or the next "New
+    // session" would land there. Move to the most recent project still listed.
+    if (selectedCwd && !isChatCwd(selectedCwd) && (projectRootFor(selectedCwd) ?? selectedCwd) === projectRoot) {
+      const next = recentProjects.find((root) => root !== projectRoot && !archivedProjectRoots.has(root));
+      setSelectedCwd(next ?? chatWorkspaceCwd ?? null);
+    }
+  }, [archivedProjectRoots, chatWorkspaceCwd, closeProjectMenu, isChatCwd, projectRootFor, recentProjects, selectedCwd]);
+
+  const restoreProject = useCallback((projectRoot: string) => {
+    restoreProjectRoot(projectRoot);
+    closeProjectMenu();
+    setExpandedArchivedProjects((prev) => {
+      if (!prev.has(projectRoot)) return prev;
       const next = new Set(prev);
-      next.add(projectRoot);
+      next.delete(projectRoot);
       return next;
     });
-    closeProjectMenu();
   }, [closeProjectMenu]);
 
   // Desktop shell: native popup versions of the project menu and its branch
@@ -1247,12 +1253,15 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     },
   }), [openDomProjectMenu, requestWorktreeRemoval, resetWorktreeActions, selectedCwd, t]);
 
-  const showNativeProjectMenu = useCallback(async (projectRoot: string, at: NativeMenuPoint): Promise<boolean> => {
-    setProjectMenu({ root: projectRoot });
+  const showNativeProjectMenu = useCallback(async (projectRoot: string, at: NativeMenuPoint, archived = false): Promise<boolean> => {
+    setProjectMenu({ root: projectRoot, archived });
     setProjectMenuPos(null);
     setProjectBranchMenu(null);
     setProjectRevealError(null);
-    const shown = await showNativeMenu([
+    const shown = await showNativeMenu(archived ? [
+      { label: t("sidebar.restoreProject"), onSelect: () => restoreProject(projectRoot) },
+      { label: revealProjectLabel, onSelect: () => void revealProjectInFileManager(projectRoot) },
+    ] : [
       { label: `${t("sidebar.switchBranch")}…`, onSelect: () => void showNativeBranchMenu(projectRoot, at) },
       { label: t("sidebar.worktrees"), onSelect: () => void showNativeWorktreeMenu(projectRoot, at) },
       ...(onOpenTerminal
@@ -1264,27 +1273,33 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     ], at);
     setProjectMenu((current) => (current?.root === projectRoot ? null : current));
     return shown;
-  }, [archiveProject, onOpenTerminal, revealProjectInFileManager, revealProjectLabel, showNativeBranchMenu, showNativeWorktreeMenu, t]);
+  }, [archiveProject, onOpenTerminal, restoreProject, revealProjectInFileManager, revealProjectLabel, showNativeBranchMenu, showNativeWorktreeMenu, t]);
 
-  const openProjectMenu = useCallback((e: React.MouseEvent<HTMLButtonElement>, projectRoot: string) => {
+  /** "…" opens the menu under the button; a right-click opens it at the cursor. */
+  const openProjectMenu = useCallback((e: React.MouseEvent<HTMLElement>, projectRoot: string, archived = false) => {
+    const atCursor = e.type === "contextmenu";
+    if (atCursor) e.preventDefault();
     e.stopPropagation();
     resetWorktreeActions();
     if (canUseNativeMenu()) {
-      void showNativeProjectMenu(projectRoot, menuPointBelow(e.currentTarget));
+      void showNativeProjectMenu(projectRoot, atCursor ? { x: e.clientX, y: e.clientY } : menuPointBelow(e.currentTarget), archived);
       return;
     }
-    if (projectMenu?.root === projectRoot) {
+    if (projectMenu?.root === projectRoot && !atCursor) {
       closeProjectMenu();
       return;
     }
     const rect = e.currentTarget.getBoundingClientRect();
     const menuWidth = 168;
-    const left = Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8));
-    setProjectMenu({ root: projectRoot });
-    setProjectMenuPos({ top: rect.bottom + 4, left });
+    const anchor = atCursor
+      ? { top: e.clientY, bottom: e.clientY, right: e.clientX + menuWidth }
+      : { top: rect.top, bottom: rect.bottom, right: rect.right };
+    const left = Math.max(8, Math.min(anchor.right - menuWidth, window.innerWidth - menuWidth - 8));
+    setProjectMenu({ root: projectRoot, archived });
+    setProjectMenuPos({ top: anchor.bottom + 4, left });
     // The menu measures its own height and flips above the row when the space
     // below is too small, so the last items stay reachable.
-    setProjectMenuAnchor({ top: rect.top, bottom: rect.bottom, right: rect.right });
+    setProjectMenuAnchor(anchor);
     setProjectBranchMenu(null);
     setProjectMenuView("actions");
     setProjectRevealError(null);
@@ -1320,6 +1335,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const activeProjects = allProjects.filter((group) => !archivedProjectRoots.has(group.projectRoot));
   const activeProjectRoots = activeProjects.map((group) => group.projectRoot);
   const projectDisplayNames = getProjectDisplayNames(activeProjectRoots);
+  // A search looks inside the archive too, and unfolds it to show the matches.
+  const archivedProjects = allProjects.filter((group) => archivedProjectRoots.has(group.projectRoot));
+  const archivedDisplayNames = getProjectDisplayNames(archivedProjects.map((group) => group.projectRoot));
+  const archiveShown = archiveExpanded || Boolean(trimmedSessionQuery);
   const canCollapseAllProjects = activeProjects.some((group) => !collapsedProjects.has(group.projectRoot));
   const canExpandAllProjects = activeProjects.some((group) => collapsedProjects.has(group.projectRoot));
   const timelineFamilies = projectViewMode === "timeline"
@@ -1395,8 +1414,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     );
   };
 
-  const renderProjectGroup = (group: ReturnType<typeof groupByProject>[number]) => {
-    const isCollapsed = !trimmedSessionQuery && collapsedProjects.has(group.projectRoot);
+  const renderProjectGroup = (group: ReturnType<typeof groupByProject>[number], archived = false) => {
+    // Archived projects open folded and unfold only for this visit.
+    const isCollapsed = !trimmedSessionQuery && (archived
+      ? !expandedArchivedProjects.has(group.projectRoot)
+      : collapsedProjects.has(group.projectRoot));
     const isActive = group.projectRoot === projectRootFor(selectedCwd);
     const runningCount = group.runningIds.size;
     const unreadCount = group.unreadIds.size;
@@ -1423,6 +1445,12 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           ? `${group.branches[0]} +${group.branches.length - 1}`
           : null;
     const toggleCollapse = () => {
+      // Unfolding an archived project only shows its sessions: selecting it
+      // would open a new-session composer there.
+      if (archived) {
+        setExpandedArchivedProjects((prev) => toggleId(prev, group.projectRoot));
+        return;
+      }
       setCollapsedProjects((prev) => {
         const next = new Set(prev);
         if (next.has(group.projectRoot)) next.delete(group.projectRoot);
@@ -1442,8 +1470,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     const rowTitle = branchSubtitle ? `${group.projectRoot} · ${branchSubtitle}` : group.projectRoot;
 
     return (
-      <div key={group.projectRoot} className={`sidebar-project-tree-group${isCollapsed ? " is-collapsed" : ""}${isActive ? " is-active" : ""}`}>
-        <div className={`sidebar-project-tree-row${isMenuOpen ? " is-menu-open" : ""}`}>
+      <div key={group.projectRoot} className={`sidebar-project-tree-group${isCollapsed ? " is-collapsed" : ""}${isActive ? " is-active" : ""}${archived ? " is-archived" : ""}`}>
+        <div
+          className={`sidebar-project-tree-row${isMenuOpen ? " is-menu-open" : ""}`}
+          onContextMenu={(e) => openProjectMenu(e, group.projectRoot, archived)}
+        >
           <button
             type="button"
             className="sidebar-project-tree-row-main"
@@ -1480,7 +1511,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               </svg>
             </span>
             <span className="sidebar-project-tree-name">
-              {projectDisplayNames.get(group.projectRoot) ?? group.displayName}
+              {(archived ? archivedDisplayNames : projectDisplayNames).get(group.projectRoot) ?? group.displayName}
             </span>
             {/* A folded project hides its rows, so the count (and any running
                 or unread chips) must stay readable on the header itself. */}
@@ -1507,6 +1538,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           {/* Hover-only overlay at the row's trailing edge: it covers the tail of a
               long name instead of reserving width the rest of the time. */}
           <div className="sidebar-project-tree-row-actions" data-no-drag>
+            {/* No new session in an archived project until it is restored. */}
+            {!archived && (
             <button
               type="button"
               className="sidebar-project-tree-action"
@@ -1519,10 +1552,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
             </button>
+            )}
               <button
               type="button"
               className="sidebar-project-tree-action sidebar-project-tree-more"
-              onClick={(e) => openProjectMenu(e, group.projectRoot)}
+              onClick={(e) => openProjectMenu(e, group.projectRoot, archived)}
               title={t("sidebar.moreActions")}
               aria-label={t("sidebar.moreActions")}
                 aria-haspopup="menu"
@@ -1999,7 +2033,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             </button>
           </div>
         </div>
-        {allProjects.length === 0 ? (
+        {activeProjects.length === 0 && !(trimmedSessionQuery && archivedProjects.length > 0) ? (
           <div className="sidebar-project-tree-empty">
             {loading
               ? t("sidebar.loading")
@@ -2042,6 +2076,18 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         ) : projectViewMode === "timeline"
           ? renderTimeline()
           : activeProjects.map((group) => renderProjectGroup(group))}
+        {archivedProjects.length > 0 && (
+          <ArchivedProjectsSection
+            count={archivedProjects.length}
+            expanded={archiveShown}
+            runningCount={archivedProjects.reduce((sum, group) => sum + group.runningIds.size, 0)}
+            unreadCount={archivedProjects.reduce((sum, group) => sum + group.unreadIds.size, 0)}
+            onToggle={() => setArchiveExpanded(!archiveExpanded)}
+            t={t}
+          >
+            {archivedProjects.map((group) => renderProjectGroup(group, true))}
+          </ArchivedProjectsSection>
+        )}
       </div>
       </SessionSearch>
       {chatsMenuOpen && chatsMenuPos && (
@@ -2107,7 +2153,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             onOpenTerminal(cwd);
           } : undefined}
           onReveal={() => void revealProjectInFileManager(projectMenu.root)}
+          archived={projectMenu.archived === true}
           onArchive={() => archiveProject(projectMenu.root)}
+          onRestore={() => restoreProject(projectMenu.root)}
           onSwitchBranch={(branch) => void handleSwitchProjectBranch(projectMenu.root, branch)}
           onFetch={() => void worktreeActions.fetchBranches(projectMenu.root)}
           onSelectWorktree={(path) => {

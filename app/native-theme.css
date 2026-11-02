@@ -3271,6 +3271,12 @@ html:not(.dark) .session-item.is-selected .session-item-time {
   cursor: pointer;
 }
 
+.app-topbar-more-separator {
+  height: var(--hairline);
+  margin: 4px 6px;
+  background: var(--separator);
+}
+
 .app-topbar-more-item:disabled {
   cursor: not-allowed;
   opacity: 0.5;
@@ -9417,6 +9423,18 @@ html.native-desktop :is(
 }
 
 .sidebar-chats-archived-row {
+  opacity: 0.62;
+}
+
+/* Projects: the Archive group at the bottom of the project list. */
+.sidebar-archive-header {
+  margin-top: 6px;
+}
+
+/* Archived project rows read as set aside; their sessions stay at full
+   contrast once unfolded, since reading them is what the archive is for. */
+.sidebar-project-tree-group.is-archived > .sidebar-project-tree-row .sidebar-project-tree-folder,
+.sidebar-project-tree-group.is-archived > .sidebar-project-tree-row .sidebar-project-tree-name {
   opacity: 0.62;
 }
 
