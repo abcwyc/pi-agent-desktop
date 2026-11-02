@@ -49,11 +49,26 @@ export const MODE_SESSION = 1;
 export const MODE_PAIR = 2;
 export const PAIRING_ID_BYTES = 8;
 export const PAIRING_TTL_MS = 5 * 60_000;
-const HANDSHAKE_TIMEOUT_MS = 15_000;
-const MAX_STREAMS = 64;
-const MAX_REQUEST_BODY = 64 * 1024 * 1024;
+export interface ConnectorLimits {
+  handshakeTimeoutMs: number;
+  /** Requests in flight per phone. */
+  maxStreams: number;
+  maxRequestBody: number;
+  /**
+   * Phones connected but not yet authenticated. Bounds what anyone who knows this
+   * desktop's agent id can hold open through the relay, without a lockout that a
+   * stranger's failed attempts could turn against the owner.
+   */
+  maxPendingHandshakes: number;
+}
+
+export const DEFAULT_LIMITS: ConnectorLimits = {
+  handshakeTimeoutMs: 15_000,
+  maxStreams: 64,
+  maxRequestBody: 64 * 1024 * 1024,
+  maxPendingHandshakes: 32,
+};
 const SEND_BUFFER_LIMIT = 4 * 1024 * 1024;
-const FAILED_HANDSHAKES_PER_MINUTE = 30;
 const EMPTY = new Uint8Array(0);
 
 // Hop-by-hop headers, anything that would let a phone claim another identity
@@ -133,6 +148,7 @@ export interface ConnectorOptions {
   fetchImpl?: typeof fetch;
   log?: (line: string) => void;
   onChange?: () => void;
+  limits?: Partial<ConnectorLimits>;
 }
 
 class PhoneSession {
@@ -156,7 +172,7 @@ class PhoneSession {
     // finished it but never proved the secret.
     this.timer = setTimeout(() => {
       if (!this.transport || this.pairingCandidate) this.close("handshake timeout");
-    }, HANDSHAKE_TIMEOUT_MS);
+    }, connector.limits.handshakeTimeoutMs);
   }
 
   receive(bytes: Uint8Array): void {
@@ -195,15 +211,16 @@ export class RelayConnector {
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly sessions = new Map<string, PhoneSession>();
   private readonly pairings = new Map<string, Pairing>();
-  private failedHandshakes: { start: number; count: number } = { start: 0, count: 0 };
   private staticKey: KeyPair | null = null;
   readonly agentId: string;
+  readonly limits: ConnectorLimits;
   private config: RelayConfig;
   private readonly options: ConnectorOptions;
 
   constructor(options: ConnectorOptions) {
     this.options = options;
     this.config = options.config;
+    this.limits = { ...DEFAULT_LIMITS, ...options.limits };
     this.agentId = agentIdFor(options.identity.signingPublicSpki);
     relayMarkSecret();
   }
@@ -332,7 +349,11 @@ export class RelayConnector {
     const key = Buffer.from(clientId).toString("hex");
     if (kind === KIND_OPEN) {
       this.sessions.get(key)?.close("replaced", false);
-      this.sessions.set(key, new PhoneSession(clientId, this));
+      let pending = 0;
+      for (const session of this.sessions.values()) if (!session.transport || session.pairingCandidate) pending += 1;
+      const session = new PhoneSession(clientId, this);
+      this.sessions.set(key, session);
+      if (pending >= this.limits.maxPendingHandshakes) session.close("too many unauthenticated phones");
     } else if (kind === KIND_DATA) {
       this.sessions.get(key)?.receive(bytes.slice(1 + CLIENT_ID_BYTES));
     } else if (kind === KIND_CLOSE) {
@@ -369,23 +390,12 @@ export class RelayConnector {
     return this.staticKey;
   }
 
-  private allowHandshake(): boolean {
-    const now = Date.now();
-    if (now - this.failedHandshakes.start > 60_000) this.failedHandshakes = { start: now, count: 0 };
-    return this.failedHandshakes.count < FAILED_HANDSHAKES_PER_MINUTE;
-  }
-
-  private recordFailedHandshake(): void {
-    this.failedHandshakes.count += 1;
-  }
-
   async handlePhoneMessage(session: PhoneSession, bytes: Uint8Array): Promise<void> {
     if (!session.transport) return this.handshake(session, bytes);
     let plaintext: Uint8Array;
     try {
       plaintext = await session.transport.receive.decrypt(EMPTY, bytes);
     } catch {
-      if (session.pairingCandidate) this.recordFailedHandshake();
       return session.close("bad ciphertext");
     }
     if (!session.deviceId) {
@@ -410,7 +420,6 @@ export class RelayConnector {
   }
 
   private async handshake(session: PhoneSession, bytes: Uint8Array): Promise<void> {
-    if (!this.allowHandshake()) return session.close("too many failed handshakes");
     const mode = bytes[0];
     const prologue = relayPrologue(this.agentId);
     const s = await this.staticKeyPair();
@@ -422,7 +431,6 @@ export class RelayConnector {
         const deviceId = deviceIdFor(phoneKey);
         const device = readDevices(this.options.dir).find((d) => d.id === deviceId && d.publicKey === base64UrlEncode(phoneKey));
         if (!device) {
-          this.recordFailedHandshake();
           return session.close("unknown device");
         }
         session.transport = await this.finish(state, session);
@@ -437,7 +445,6 @@ export class RelayConnector {
         const id = base64UrlEncode(bytes.subarray(1, 1 + PAIRING_ID_BYTES));
         const pairing = this.pairings.get(id);
         if (!pairing || pairing.used || pairing.expiresAt < Date.now()) {
-          this.recordFailedHandshake();
           return session.close("no such pairing");
         }
         const state = await HandshakeState.create({ pattern: "IKpsk2", initiator: false, prologue, s, psk: pairing.secret });
@@ -448,10 +455,8 @@ export class RelayConnector {
         session.pairingCandidate = { pairing, phoneKey: state.remoteStatic! };
         return;
       }
-      this.recordFailedHandshake();
       session.close("unknown mode");
     } catch (error) {
-      this.recordFailedHandshake();
       session.close(error instanceof NoiseError ? "handshake failed" : `handshake error: ${error instanceof Error ? error.message : error}`);
     }
   }
@@ -481,7 +486,7 @@ export class RelayConnector {
       return;
     }
     if (type === FrameType.RequestHead) {
-      if (session.streams.has(streamId) || session.streams.size >= MAX_STREAMS) {
+      if (session.streams.has(streamId) || session.streams.size >= this.limits.maxStreams) {
         void session.send(FrameType.ResponseError, streamId, encodeJson({ message: "too many requests in flight" }));
         return;
       }
@@ -497,7 +502,7 @@ export class RelayConnector {
     if (!stream) return;
     if (type === FrameType.RequestBody) {
       stream.size += payload.length;
-      if (stream.size > MAX_REQUEST_BODY) {
+      if (stream.size > this.limits.maxRequestBody) {
         session.streams.delete(streamId);
         void session.send(FrameType.ResponseError, streamId, encodeJson({ message: "request body too large" }));
         return;
