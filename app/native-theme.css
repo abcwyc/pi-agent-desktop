@@ -9420,6 +9420,18 @@ html.native-desktop :is(
   opacity: 0.62;
 }
 
+/* Projects: the Archive group at the bottom of the project list. */
+.sidebar-archive-header {
+  margin-top: 6px;
+}
+
+/* Archived project rows read as set aside; their sessions stay at full
+   contrast once unfolded, since reading them is what the archive is for. */
+.sidebar-project-tree-group.is-archived > .sidebar-project-tree-row .sidebar-project-tree-folder,
+.sidebar-project-tree-group.is-archived > .sidebar-project-tree-row .sidebar-project-tree-name {
+  opacity: 0.62;
+}
+
 
 /* Settings › General › Chats: stacked label + control rows. */
 .settings-chats-field {

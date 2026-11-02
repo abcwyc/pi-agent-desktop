@@ -2,7 +2,8 @@
 
 // Fork-owned: the "…" menu on a project row of the sidebar's project tree —
 // switch branch (and fetch remote branches), worktrees (switch, create,
-// remove), open a terminal, reveal in the file manager, archive. Rendered as a
+// remove), open a terminal, reveal in the file manager, archive. An archived
+// project's menu (the sidebar's Archive group) offers only restore and reveal. Rendered as a
 // DOM menu here, or as native popups in the desktop shell (showNative*); the
 // steps a native menu cannot do (typing a branch name, confirming a removal)
 // open the DOM menu at the same point. SessionSidebar (upstream-owned) keeps
@@ -242,7 +243,10 @@ interface ProjectContextMenuProps {
   onBackToActions: () => void;
   onOpenTerminal?: () => void;
   onReveal: () => void;
+  /** The project sits in the Archive group: the menu is Restore + Reveal. */
+  archived?: boolean;
   onArchive: () => void;
+  onRestore: () => void;
   onSwitchBranch: (branch: string) => void;
   onFetch: () => void;
   onSelectWorktree: (path: string) => void;
@@ -259,7 +263,7 @@ export function ProjectContextMenuPanel({
   menuRef, projectRoot, pos, anchor, view, branchMenu, branchLoading, selectedCwd, switchingBranch,
   fetching, worktreeBusy, worktreeError, confirmRemove, newBranch,
   canReveal, revealLabel, projectRevealError, t,
-  onShowBranches, onShowWorktrees, onShowNewWorktree, onBackToActions, onOpenTerminal, onReveal, onArchive,
+  onShowBranches, onShowWorktrees, onShowNewWorktree, onBackToActions, onOpenTerminal, onReveal, archived = false, onArchive, onRestore,
   onSwitchBranch, onFetch, onSelectWorktree, onRequestRemove, onConfirmRemove, onCancelRemove,
   onNewBranchChange, onCreateWorktree,
   onClose = () => {},
@@ -291,7 +295,23 @@ export function ProjectContextMenuPanel({
   );
 
   let body;
-  if (view === "actions") {
+  if (archived) {
+    body = (
+      <>
+        <button type="button" role="menuitem" onClick={onRestore}>
+          {t("sidebar.restoreProject")}
+        </button>
+        {canReveal && (
+          <button type="button" role="menuitem" onClick={onReveal}>
+            {revealLabel}
+          </button>
+        )}
+        {projectRevealError && (
+          <div className="sidebar-project-context-menu-hint" role="alert">{projectRevealError}</div>
+        )}
+      </>
+    );
+  } else if (view === "actions") {
     body = (
       <>
         <button type="button" role="menuitem" onClick={onShowBranches}>
