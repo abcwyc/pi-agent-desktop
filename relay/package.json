@@ -1,0 +1,16 @@
+{
+  "name": "pi-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "End-to-end encrypted relay between a desktop Pi and its paired phones",
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test server.test.mjs"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "ws": "8.22.0"
+  }
+}
