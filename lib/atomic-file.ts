@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { renameSync, unlinkSync, writeFileSync } from "fs";
+import { chmodSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "fs";
 import { basename, dirname, join } from "path";
 
 /**
@@ -30,5 +30,36 @@ export function writePrivateFileAtomicSync(path: string, contents: string): void
         throw error;
       }
     }
+  }
+}
+
+/**
+ * Replace a file the user owns (a session transcript, settings.json, a SKILL.md,
+ * auth.json) so that a crash or a full disk leaves either the old text or the
+ * new one, never a truncated file. A symlinked file is replaced at its target,
+ * keeping the link (dotfiles setups link ~/.pi/agent files), and the file keeps
+ * its permission bits unless `mode` is given.
+ */
+export function replaceFileAtomicSync(path: string, contents: string, options: { mode?: number } = {}): void {
+  let target = path;
+  let mode = options.mode;
+  try {
+    target = realpathSync(path);
+    mode ??= statSync(target).mode & 0o7777;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  const tempPath = join(dirname(target), `.${basename(target)}-${randomUUID()}.tmp`);
+  try {
+    writeFileSync(tempPath, contents, { encoding: "utf8", flag: "wx", mode: 0o600, flush: true });
+    chmodSync(tempPath, mode ?? 0o644);
+    renameSync(tempPath, target);
+  } catch (error) {
+    try {
+      unlinkSync(tempPath);
+    } catch {
+      // Never created, or already renamed.
+    }
+    throw error;
   }
 }

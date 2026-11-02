@@ -22,6 +22,7 @@ Fork-owned notes moved out of `AGENTS.md` to keep it short. The upstream doc on 
 ## File access allow-list
 - `/api/files` is intentionally not a general filesystem browser. Allowed roots come from session cwds, their resolved project roots, `~/pi-cwd-*`, and roots explicitly added with `allowFileRoot()`.
 - `/api/cwd/validate`, `/api/default-cwd`, and `/api/worktrees` call `allowFileRoot()` when they make a new location browsable.
+- Inside the roots, `lib/credential-paths.ts` still refuses credential stores under the home directory (`~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.kube`, `~/.netrc`, `~/.git-credentials`, `~/.npmrc`, `~/.pi/agent/auth.json`, …) for every GET type and as an upload target. The check covers a link pointing into one of them and, on macOS and Windows, any case variant. It applies even when a session's cwd is `~` or a transcript mentions the file: on a network-exposed server a password alone would otherwise download private keys without a prompt or a transcript. Project files such as `.env` are deliberately not on the list.
 
 ## Web password throttling
 - `lib/auth-throttle.ts` is deliberately global, not per-IP: Next 16 route handlers have no socket address and `x-forwarded-for` is spoofable, while the server binds `127.0.0.1` for a single operator. Failures double the delay (1s → 60s cap) for everyone; a success or 5 idle minutes resets it. The reset window must stay longer than the max delay or waiting out one block restarts the burst.
