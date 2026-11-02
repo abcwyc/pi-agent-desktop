@@ -159,7 +159,6 @@ export const zhCNLocale: LocalePlugin = {
     "theme.auto": "主题：跟随系统",
     "history.full": "完整历史",
     "history.unsaved": "会话保存后才能查看完整历史",
-    "history.label": "完整历史",
     "title.generating": "正在生成...",
     "title.updated": "标题已更新",
     "title.failed": "生成失败",

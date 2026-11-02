@@ -159,7 +159,6 @@ export const zhTWLocale: LocalePlugin = {
     "theme.auto": "主題：跟隨系統",
     "history.full": "完整紀錄",
     "history.unsaved": "工作階段儲存後才能查看完整紀錄",
-    "history.label": "完整紀錄",
     "title.generating": "正在產生...",
     "title.updated": "標題已更新",
     "title.failed": "產生失敗",
