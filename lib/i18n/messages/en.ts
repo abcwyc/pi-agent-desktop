@@ -159,7 +159,6 @@ export const enLocale: LocalePlugin = {
     "theme.auto": "Theme: System",
     "history.full": "Full history",
     "history.unsaved": "Full history is available after the session is saved",
-    "history.label": "Full history",
     "title.generating": "Generating...",
     "title.updated": "Title updated",
     "title.failed": "Generation failed",

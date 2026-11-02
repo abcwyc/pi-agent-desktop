@@ -3271,6 +3271,12 @@ html:not(.dark) .session-item.is-selected .session-item-time {
   cursor: pointer;
 }
 
+.app-topbar-more-separator {
+  height: var(--hairline);
+  margin: 4px 6px;
+  background: var(--separator);
+}
+
 .app-topbar-more-item:disabled {
   cursor: not-allowed;
   opacity: 0.5;
