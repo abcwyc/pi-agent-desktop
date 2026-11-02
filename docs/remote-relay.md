@@ -154,6 +154,32 @@ is refused by the tunnel worker; a removed phone is shut out. Node tests add byt
 Noise vectors, relay routing and limits, and a man-in-the-middle tap showing the relay
 never sees request paths, headers, bodies, device names or the relay mark.
 
+## Independent review and mutation testing (2026-11-03)
+
+An adversarial review found no break in the Noise core, the pairing proof, or the
+mark / desktop-token guards, and ten weaker points, all fixed with tests:
+the mark secret moved from `process.env` (inherited by the agent's shell) to a
+`globalThis` symbol and is accepted only from the connector's own loopback requests;
+nonces are reserved before awaiting; a phone counts as connected only after its first
+valid frame (a replayed handshake used to); a six-digit code from the handshake hash is
+shown on both ends while pairing, and a new QR retires older ones; the relay keeps
+authenticated phones apart from strangers (the oldest stranger makes room, a byte budget
+before authentication, backpressure) and reports "not paired" as its own close code
+(4001); a pairing link on a paired phone needs an explicit replace; the shell frames only
+app pages from an outside `?path=` (a link could otherwise run `/api/…` GETs with the
+owner's authority) and refuses to run framed; malformed headers and duplicate ends no
+longer strand or repeat requests.
+
+Mutation testing reverts each security check alone and requires a failing test: 34 relay
+mutants and 25 remote-access mutants, all killed. One equivalent mutant is left out: the
+relay's guard against a replaced desktop socket writing, which the relay's own close makes
+unreachable in practice.
+
+Not verified here: a real iPhone (service-worker lifetime during long streams, behaviour
+when backgrounded, whether Safari keeps the CryptoKey or the raw-key fallback runs), a
+deployed relay behind Caddy, and `docker build` (no Docker daemon was running; the image's
+steps were reproduced by hand).
+
 ## Phases
 
 | Phase | Scope | Proof |

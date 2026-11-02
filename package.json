@@ -54,7 +54,7 @@
     "check:deps": "node scripts/check-installed-deps.mjs",
     "relay:shell": "node scripts/build-relay-shell.mjs",
     "pretest": "npm run check:deps",
-    "test": "node --experimental-strip-types --test --test-concurrency=4 \"app/**/*.test.mjs\" \"lib/**/*.test.mjs\" \"scripts/**/*.test.mjs\" \"components/**/*.test.mjs\" \"hooks/**/*.test.mjs\" \"relay/**/*.test.mjs\" \"public/**/*.test.mjs\"",
+    "test": "node --experimental-strip-types --test --test-concurrency=4 \"app/**/*.test.mjs\" \"lib/**/*.test.mjs\" \"scripts/**/*.test.mjs\" \"components/**/*.test.mjs\" \"hooks/**/*.test.mjs\" \"relay/**/*.test.mjs\" \"relay-shell/**/*.test.mjs\" \"public/**/*.test.mjs\"",
     "lint": "eslint . && npm run check:branding",
     "check:branding": "node --test lib/branding.test.mjs",
     "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public",
