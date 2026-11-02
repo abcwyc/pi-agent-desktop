@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import type { Credential } from "@earendil-works/pi-ai";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import lockfile from "proper-lockfile";
+import { replaceFileAtomicSync } from "./atomic-file";
 import type { ProviderCredentialType } from "@/lib/provider-listing";
 
 const AUTH_FILE_WRITE_OPTIONS = { encoding: "utf-8" as const, mode: 0o600 };
@@ -58,8 +59,7 @@ async function updateStoredCredentials<T>(
     const { result, changed } = update(parsed);
     if (changed) {
       throwIfCompromised();
-      writeFileSync(authPath, JSON.stringify(parsed, null, 2), AUTH_FILE_WRITE_OPTIONS);
-      chmodSync(authPath, 0o600);
+      replaceFileAtomicSync(authPath, JSON.stringify(parsed, null, 2), { mode: 0o600 });
       throwIfCompromised();
     }
     return result;
