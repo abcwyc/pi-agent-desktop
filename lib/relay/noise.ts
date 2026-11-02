@@ -153,8 +153,8 @@ export class CipherState {
 
 class SymmetricState {
   readonly cipher = new CipherState();
-  ck = new Uint8Array(HASHLEN);
-  h = new Uint8Array(HASHLEN);
+  ck: Uint8Array = new Uint8Array(HASHLEN);
+  h: Uint8Array = new Uint8Array(HASHLEN);
 
   async initialize(protocolName: string): Promise<void> {
     const name = encoder.encode(protocolName);

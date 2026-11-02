@@ -23,6 +23,13 @@ export const FrameType = {
   Pong: 10,
   /** Desktop → phone after a pairing handshake: { ok, reason? }. */
   PairResult: 11,
+  /**
+   * Phone → desktop, the first transport message of a pairing: { name }. IKpsk2
+   * mixes the secret in only at the second handshake message, so the desktop's
+   * side can finish without the phone holding it; this message, encrypted with
+   * keys that depend on the secret, is the proof.
+   */
+  PairRequest: 12,
 } as const;
 
 export type FrameTypeValue = (typeof FrameType)[keyof typeof FrameType];

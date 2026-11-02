@@ -86,7 +86,8 @@
     "semver": "7.8.5",
     "undici": "8.11.0",
     "web-push": "^3.6.7",
-    "@radix-ui/react-select": "^2.3.8"
+    "@radix-ui/react-select": "^2.3.8",
+    "qrcode-generator": "2.0.4"
   },
   "devDependencies": {
     "@lobehub/streamdown": "1.4.1",
