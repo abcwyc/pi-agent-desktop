@@ -19,6 +19,7 @@ import {
   getImageMime,
   getVideoMime,
 } from "@/lib/file-types";
+import { isCredentialPath } from "@/lib/credential-paths";
 import { resolveDirentIsDirectory } from "@/lib/file-dirent";
 import { getFileTreeVisibility } from "@/lib/file-tree-visibility";
 import { isFilePathReferencedBySession } from "@/lib/session-file-references";
@@ -153,7 +154,7 @@ async function getUploadDirectory(segments: string[]): Promise<
       // Ignore stale session roots that no longer exist.
     }
   }
-  if (!isFilePathAllowed(realDirectory, realRoots)) {
+  if (!isFilePathAllowed(realDirectory, realRoots) || isCredentialPath(realDirectory)) {
     return { response: NextResponse.json({ error: "Access denied" }, { status: 403 }) };
   }
 
@@ -661,6 +662,10 @@ export async function GET(
       !allowedBySessionReference
       && !isExistingFilePathAllowed(existingAuthorizationPath, allowedRoots)
     ) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
+    // Even a session cwd of ~ or a transcript that mentions the file does not open a key store.
+    if (isCredentialPath(filePath)) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
