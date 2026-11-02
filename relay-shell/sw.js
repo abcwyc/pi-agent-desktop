@@ -8,6 +8,16 @@ const SHELL_PREFIX = "/__shell/";
 const OWN_FILES = new Set(["/tunnel-sw.js"]);
 const NULL_BODY = new Set([101, 103, 204, 205, 304]);
 const SHELL_WAIT_MS = 20_000;
+// A shell window that does not acknowledge a request this fast is gone (a reload
+// can leave the unloading window listed for a moment); the next one is tried.
+const ACK_MS = 2_000;
+// The window whose tunnel last reported open. Lost when the worker sleeps; the
+// acknowledgement fallback covers that.
+let activeShellId = null;
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "pi-shell-ready" && event.source) activeShellId = event.source.id;
+});
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
@@ -35,28 +45,48 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(tunnel(request, url, event.clientId || event.resultingClientId));
 });
 
-/** The shell window that holds the tunnel: the one framing the requesting client, else any. */
-async function shellClient() {
+/** Shell windows that may hold the tunnel, the one that last reported ready first. */
+async function shellCandidates(skip) {
   const deadline = Date.now() + SHELL_WAIT_MS;
   for (;;) {
     const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    const shells = clients.filter((client) => new URL(client.url).pathname.startsWith(SHELL_PREFIX));
-    const shell = shells.find((client) => client.focused) ?? shells.find((client) => client.visibilityState === "visible") ?? shells[0];
-    if (shell || Date.now() > deadline) return shell ?? null;
+    const shells = clients
+      .filter((client) => new URL(client.url).pathname.startsWith(SHELL_PREFIX) && !skip.has(client.id))
+      .sort((a, b) => (b.id === activeShellId) - (a.id === activeShellId)
+        || (b.visibilityState === "visible") - (a.visibilityState === "visible"));
+    if (shells.length || Date.now() > deadline) return shells;
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
 }
 
 async function tunnel(request, url) {
-  const shell = await shellClient();
-  if (!shell) return new Response("Pi is not connected. Open Pi from the home screen.", { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } });
   const body = request.method === "GET" || request.method === "HEAD" ? null : await request.arrayBuffer();
+  const tried = new Set();
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const [shell] = await shellCandidates(tried);
+    if (!shell) break;
+    tried.add(shell.id);
+    const response = await sendToShell(shell, request, url, body);
+    if (response) return response;
+  }
+  return new Response("Pi is not connected. Open Pi from the home screen.", { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } });
+}
+
+/** Resolves with the response, or null when this shell window did not acknowledge in time. */
+function sendToShell(shell, request, url, body) {
   const { port1, port2 } = new MessageChannel();
+  // The body is copied, not transferred: a retry on another window needs it again.
   shell.postMessage(
-    { type: "pi-tunnel-request", method: request.method, url: url.pathname + url.search, headers: [...request.headers], body },
-    [port2, ...(body ? [body] : [])],
+    { type: "pi-tunnel-request", method: request.method, url: url.pathname + url.search, headers: [...request.headers], body: body ? body.slice(0) : null },
+    [port2],
   );
   return new Promise((resolve) => {
+    let acknowledged = false;
+    const ackTimer = setTimeout(() => {
+      if (acknowledged) return;
+      port1.close();
+      resolve(null);
+    }, ACK_MS);
     let controller = null;
     let settled = false;
     const stream = new ReadableStream({
@@ -67,6 +97,11 @@ async function tunnel(request, url) {
     request.signal?.addEventListener("abort", cancel, { once: true });
     port1.onmessage = (event) => {
       const message = event.data;
+      if (!acknowledged) {
+        acknowledged = true;
+        clearTimeout(ackTimer);
+      }
+      if (message.type === "ack") return;
       if (message.type === "head") {
         settled = true;
         resolve(new Response(NULL_BODY.has(message.status) ? null : stream, { status: message.status, headers: message.headers }));

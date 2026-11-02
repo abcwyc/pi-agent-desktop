@@ -1,4 +1,4 @@
-import { generateKeyPair, type KeyPair } from "../lib/relay/noise.ts";
+import { exportPrivateKey, generateKeyPair, keyPairFromPrivate, type KeyPair } from "../lib/relay/noise.ts";
 import { PhoneTunnel, pairPhone, parsePairingTicket, type PhoneConfig } from "../lib/relay/phone-client.ts";
 
 /**
@@ -15,7 +15,10 @@ interface StoredConfig {
   relayUrl: string;
   agentId: string;
   desktopKey: Uint8Array;
-  devicePrivate: CryptoKey;
+  /** Non-extractable key, where the browser can keep a CryptoKey in IndexedDB. */
+  devicePrivate?: CryptoKey;
+  /** Raw private key, where it cannot (see canKeepCryptoKeys). */
+  devicePrivateRaw?: Uint8Array;
   devicePublic: Uint8Array;
   deviceId: string;
   pairedAt: string;
@@ -50,6 +53,36 @@ async function dbPut(value: StoredConfig | null): Promise<void> {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+}
+
+/**
+ * Whether a CryptoKey survives a round trip through IndexedDB here. Safari keeps
+ * one by wrapping it with a keychain key; where that is unavailable (seen in
+ * Playwright's WebKit) it stores null, and a non-extractable key would be lost on
+ * the next launch. Then the device key is kept as raw bytes instead: same-origin
+ * script could copy it rather than only use it, which is the price of not
+ * silently forgetting the pairing.
+ */
+async function canKeepCryptoKeys(): Promise<boolean> {
+  try {
+    const probe = await crypto.subtle.generateKey({ name: "X25519" }, false, ["deriveBits"]) as CryptoKeyPair;
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).put({ probe: probe.privateKey }, "probe");
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    const value = await new Promise<{ probe?: unknown } | undefined>((resolve) => {
+      const request = db.transaction(STORE).objectStore(STORE).get("probe");
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(undefined);
+    });
+    db.transaction(STORE, "readwrite").objectStore(STORE).delete("probe");
+    return value?.probe instanceof CryptoKey;
+  } catch {
+    return false;
+  }
 }
 
 function show(screen: "pair" | "unpaired" | "app" | "message", text?: string): void {
@@ -90,6 +123,8 @@ function tunnelReady(timeoutMs: number): Promise<PhoneTunnel | null> {
 async function serve(message: { method: string; url: string; headers: [string, string][]; body: ArrayBuffer | null }, port: MessagePort): Promise<void> {
   const controller = new AbortController();
   port.onmessage = (event) => { if (event.data?.type === "cancel") controller.abort(); };
+  // Tell the worker this window is alive and has the request; it tries another window otherwise.
+  port.postMessage({ type: "ack" });
   const ready = await tunnelReady(15_000);
   if (!ready) {
     port.postMessage({ type: "error", status: 503, message: "Not connected to your computer." });
@@ -142,6 +177,7 @@ async function connect(): Promise<void> {
     tunnel = next;
     retryMs = 1000;
     setStatus("open");
+    navigator.serviceWorker.controller?.postMessage({ type: "pi-shell-ready" });
     for (const wake of waitingForTunnel.splice(0)) wake();
     next.onClose = (error) => {
       if (tunnel === next) tunnel = null;
@@ -191,11 +227,18 @@ function initialPath(): string {
 }
 
 async function startApp(stored: StoredConfig): Promise<void> {
+  const privateKey = stored.devicePrivate instanceof CryptoKey
+    ? stored.devicePrivate
+    : stored.devicePrivateRaw ? (await keyPairFromPrivate(stored.devicePrivateRaw, false)).privateKey : null;
+  if (!privateKey) {
+    show("message", "This phone lost its pairing key. Pair it again from Settings › Remote relay on the computer.");
+    return;
+  }
   config = {
     relayUrl: stored.relayUrl,
     agentId: stored.agentId,
     desktopKey: stored.desktopKey,
-    device: { privateKey: stored.devicePrivate, publicKey: stored.devicePublic },
+    device: { privateKey, publicKey: stored.devicePublic },
     deviceId: stored.deviceId,
   };
   show("app");
@@ -222,7 +265,8 @@ async function runPairing(ticketText: string): Promise<void> {
     button.disabled = true;
     status.textContent = "Connecting to your computer…";
     try {
-      const device: KeyPair = await generateKeyPair(false);
+      const keepKey = await canKeepCryptoKeys();
+      const device: KeyPair = await generateKeyPair(!keepKey);
       const { deviceId } = await pairPhone({
         ticket,
         device,
@@ -233,7 +277,7 @@ async function runPairing(ticketText: string): Promise<void> {
         relayUrl: ticket.relayUrl,
         agentId: ticket.agentId,
         desktopKey: ticket.desktopKey,
-        devicePrivate: device.privateKey,
+        ...(keepKey ? { devicePrivate: device.privateKey } : { devicePrivateRaw: await exportPrivateKey(device) }),
         devicePublic: device.publicKey,
         deviceId,
         pairedAt: new Date().toISOString(),
