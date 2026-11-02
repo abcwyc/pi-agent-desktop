@@ -1,0 +1,285 @@
+import { generateKeyPair, type KeyPair } from "../lib/relay/noise.ts";
+import { PhoneTunnel, pairPhone, parsePairingTicket, type PhoneConfig } from "../lib/relay/phone-client.ts";
+
+/**
+ * The phone shell (docs/remote-relay.md): served by the entry host at /__shell/,
+ * it holds the encrypted session to the desktop and frames the Pi app, whose
+ * every request the tunnel service worker hands back here.
+ */
+
+const DB_NAME = "pi-relay";
+const STORE = "config";
+const KEY = "phone";
+
+interface StoredConfig {
+  relayUrl: string;
+  agentId: string;
+  desktopKey: Uint8Array;
+  devicePrivate: CryptoKey;
+  devicePublic: Uint8Array;
+  deviceId: string;
+  pairedAt: string;
+}
+
+const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
+function openDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(STORE);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function dbGet(): Promise<StoredConfig | null> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(STORE).objectStore(STORE).get(KEY);
+    request.onsuccess = () => resolve((request.result as StoredConfig | undefined) ?? null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function dbPut(value: StoredConfig | null): Promise<void> {
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    if (value) tx.objectStore(STORE).put(value, KEY);
+    else tx.objectStore(STORE).delete(KEY);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function show(screen: "pair" | "unpaired" | "app" | "message", text?: string): void {
+  for (const id of ["pair", "unpaired", "app", "message"]) $(`screen-${id}`).hidden = id !== screen;
+  if (text !== undefined) $("message-text").textContent = text;
+}
+
+function setStatus(state: "connecting" | "open" | "offline", detail = ""): void {
+  const pill = $("status");
+  pill.dataset.state = state;
+  $("status-text").textContent = state === "open" ? "Connected" : state === "connecting" ? "Connecting…" : `Offline${detail ? ` · ${detail}` : ""}`;
+}
+
+function defaultDeviceName(): string {
+  const ua = navigator.userAgent;
+  if (/iPhone/.test(ua)) return "iPhone";
+  if (/iPad/.test(ua)) return "iPad";
+  if (/Android/.test(ua)) return "Android phone";
+  return "Browser";
+}
+
+// ---- requests from the tunnel service worker ----
+
+let tunnel: PhoneTunnel | null = null;
+const waitingForTunnel: (() => void)[] = [];
+
+function tunnelReady(timeoutMs: number): Promise<PhoneTunnel | null> {
+  if (tunnel?.state === "open") return Promise.resolve(tunnel);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), timeoutMs);
+    waitingForTunnel.push(() => {
+      clearTimeout(timer);
+      resolve(tunnel?.state === "open" ? tunnel : null);
+    });
+  });
+}
+
+async function serve(message: { method: string; url: string; headers: [string, string][]; body: ArrayBuffer | null }, port: MessagePort): Promise<void> {
+  const controller = new AbortController();
+  port.onmessage = (event) => { if (event.data?.type === "cancel") controller.abort(); };
+  const ready = await tunnelReady(15_000);
+  if (!ready) {
+    port.postMessage({ type: "error", status: 503, message: "Not connected to your computer." });
+    return;
+  }
+  try {
+    const { head, body } = await ready.request(
+      { method: message.method, url: message.url, headers: message.headers },
+      message.body ? new Uint8Array(message.body) : undefined,
+      controller.signal,
+    );
+    port.postMessage({ type: "head", status: head.status, headers: head.headers });
+    const reader = body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = value.slice().buffer;
+      port.postMessage({ type: "chunk", data: chunk }, [chunk]);
+    }
+    port.postMessage({ type: "end" });
+  } catch (error) {
+    if (!controller.signal.aborted) port.postMessage({ type: "error", message: error instanceof Error ? error.message : String(error) });
+  }
+}
+
+navigator.serviceWorker?.addEventListener("message", (event) => {
+  const data = event.data as { type?: string; path?: string };
+  if (data?.type === "pi-tunnel-request" && event.ports[0]) {
+    void serve(event.data, event.ports[0]);
+  } else if (data?.type === "pi-open-path" && typeof data.path === "string" && data.path.startsWith("/") && !data.path.startsWith("//")) {
+    ($("app-frame") as HTMLIFrameElement).src = data.path;
+  }
+});
+
+// ---- connection lifecycle ----
+
+let config: PhoneConfig | null = null;
+let retryMs = 1000;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let connecting = false;
+
+async function connect(): Promise<void> {
+  if (!config || connecting || tunnel?.state === "open") return;
+  connecting = true;
+  if (retryTimer) clearTimeout(retryTimer);
+  setStatus("connecting");
+  const next = new PhoneTunnel(config);
+  try {
+    await next.connect();
+    tunnel = next;
+    retryMs = 1000;
+    setStatus("open");
+    for (const wake of waitingForTunnel.splice(0)) wake();
+    next.onClose = (error) => {
+      if (tunnel === next) tunnel = null;
+      setStatus("offline", error.code === 4404 ? "computer offline" : "");
+      scheduleReconnect();
+    };
+  } catch (error) {
+    const code = (error as { code?: number }).code;
+    // 4404: the desktop is not connected to the relay. A refused handshake (closed by
+    // the desktop) means this phone is no longer paired.
+    setStatus("offline", code === 4404 ? "computer offline" : code === 4000 ? "this phone was removed" : "");
+    if (code === 4000) {
+      show("message", "This phone is no longer paired with your computer. Pair it again from Settings › Remote relay on the computer.");
+      return;
+    }
+    scheduleReconnect();
+  } finally {
+    connecting = false;
+  }
+}
+
+function scheduleReconnect(): void {
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = setTimeout(() => void connect(), retryMs);
+  retryMs = Math.min(retryMs * 2, 15_000);
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && tunnel?.state !== "open") {
+    retryMs = 1000;
+    void connect();
+  }
+});
+window.addEventListener("online", () => { retryMs = 1000; void connect(); });
+
+async function registerWorker(): Promise<void> {
+  await navigator.serviceWorker.register("/tunnel-sw.js", { scope: "/", updateViaCache: "none" });
+  await navigator.serviceWorker.ready;
+  if (!navigator.serviceWorker.controller) {
+    await new Promise<void>((resolve) => navigator.serviceWorker.addEventListener("controllerchange", () => resolve(), { once: true }));
+  }
+}
+
+function initialPath(): string {
+  const path = new URLSearchParams(location.search).get("path") ?? "/";
+  return path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/__shell") ? path : "/";
+}
+
+async function startApp(stored: StoredConfig): Promise<void> {
+  config = {
+    relayUrl: stored.relayUrl,
+    agentId: stored.agentId,
+    desktopKey: stored.desktopKey,
+    device: { privateKey: stored.devicePrivate, publicKey: stored.devicePublic },
+    deviceId: stored.deviceId,
+  };
+  show("app");
+  $("status").hidden = false;
+  await registerWorker();
+  await connect();
+  ($("app-frame") as HTMLIFrameElement).src = initialPath();
+}
+
+async function runPairing(ticketText: string): Promise<void> {
+  const ticket = parsePairingTicket(ticketText);
+  if (!ticket) {
+    show("message", "This pairing link is not valid. Create a new QR code on your computer.");
+    return;
+  }
+  // The secret is in the fragment; drop it from the address bar and history now.
+  history.replaceState(null, "", location.pathname);
+  show("pair");
+  const nameInput = $<HTMLInputElement>("pair-name");
+  nameInput.value = defaultDeviceName();
+  const button = $<HTMLButtonElement>("pair-button");
+  const status = $("pair-status");
+  button.onclick = async () => {
+    button.disabled = true;
+    status.textContent = "Connecting to your computer…";
+    try {
+      const device: KeyPair = await generateKeyPair(false);
+      const { deviceId } = await pairPhone({
+        ticket,
+        device,
+        name: nameInput.value,
+        onWaitingForApproval: () => { status.textContent = "Approve this phone on your computer…"; },
+      });
+      const stored: StoredConfig = {
+        relayUrl: ticket.relayUrl,
+        agentId: ticket.agentId,
+        desktopKey: ticket.desktopKey,
+        devicePrivate: device.privateKey,
+        devicePublic: device.publicKey,
+        deviceId,
+        pairedAt: new Date().toISOString(),
+      };
+      await dbPut(stored);
+      await startApp(stored);
+    } catch (error) {
+      status.textContent = error instanceof Error && error.message !== "relay connection closed (1006)"
+        ? error.message
+        : "Pairing failed. The QR code may have expired; create a new one on your computer.";
+      button.disabled = false;
+    }
+  };
+}
+
+$("forget-button").addEventListener("click", async () => {
+  if (!confirm("Unpair this phone? You will need to scan a new QR code on your computer.")) return;
+  tunnel?.close();
+  await dbPut(null);
+  location.replace("/__shell/");
+});
+$("status").addEventListener("click", () => {
+  const menu = $("menu");
+  menu.hidden = !menu.hidden;
+});
+$("reconnect-button").addEventListener("click", () => {
+  $("menu").hidden = true;
+  retryMs = 1000;
+  void connect();
+});
+
+async function main(): Promise<void> {
+  if (!("serviceWorker" in navigator) || !crypto?.subtle) {
+    show("message", "This browser cannot run Pi remotely. Use Safari (iOS 17 or later) or a current Chrome.");
+    return;
+  }
+  try {
+    await crypto.subtle.generateKey({ name: "X25519" }, false, ["deriveBits"]);
+  } catch {
+    show("message", "This browser lacks X25519 encryption. Update to iOS 17 or later, or a current Chrome.");
+    return;
+  }
+  if (location.hash.includes("pair=")) return runPairing(location.hash);
+  const stored = await dbGet();
+  if (stored) return startApp(stored);
+  show("unpaired");
+}
+
+void main();

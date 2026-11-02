@@ -22,6 +22,9 @@ export function PwaRegistration() {
     if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) {
       return;
     }
+    // Framed by the relay's phone shell: its tunnel worker owns the "/" scope on the
+    // entry host, and registering ours would replace it and cut the connection.
+    if (window.self !== window.top) return;
 
     const register = () => {
       const appVersion = process.env.NEXT_PUBLIC_APP_VERSION ?? "dev";

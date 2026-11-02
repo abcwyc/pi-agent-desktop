@@ -52,6 +52,7 @@
     "desktop:verify": "node scripts/verify-packaged-codemode.mjs && node scripts/verify-packaged-terminal.mjs",
     "test:release-tools": "node --test scripts/*.test.mjs",
     "check:deps": "node scripts/check-installed-deps.mjs",
+    "relay:shell": "node scripts/build-relay-shell.mjs",
     "pretest": "npm run check:deps",
     "test": "node --experimental-strip-types --test --test-concurrency=4 \"app/**/*.test.mjs\" \"lib/**/*.test.mjs\" \"scripts/**/*.test.mjs\" \"components/**/*.test.mjs\" \"hooks/**/*.test.mjs\" \"relay/**/*.test.mjs\" \"public/**/*.test.mjs\"",
     "lint": "eslint . && npm run check:branding",
