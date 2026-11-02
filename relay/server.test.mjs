@@ -232,6 +232,19 @@ test("the desktop says which closes mean 'not paired'", async (t) => {
   a.ws.close();
 });
 
+test("a phone is closed rather than queued when its desktop is not reading", async (t) => {
+  // Below zero, any queued byte counts as over the limit: the check runs on every message.
+  const { relay, url } = await startRelay({ maxQueuedBytes: -1 });
+  t.after(() => relay.close());
+  const a = await connectAgent(url, await agentKeys());
+  const phone = connectClient(url, a.ready.agentId);
+  await phone.opened;
+  phone.send(Buffer.from("x"));
+  const [code] = await waitFor(phone, "close");
+  assert.equal(code, 4008);
+  a.ws.close();
+});
+
 test("a newer connection of the same desktop replaces the old one", async (t) => {
   const { relay, url } = await startRelay();
   t.after(() => relay.close());
