@@ -7,7 +7,9 @@
 //   phone    wss://relay/client?agent=<id>  binary only (Noise messages)
 //
 // Desktop ⇄ relay binary frames: [kind: u8][client id: 16 bytes][payload]
-//   kind 1 open (relay → desktop), 2 data (both ways), 3 close (both ways)
+//   kind 1 open (relay → desktop), 2 data (both ways),
+//   3 close (both ways; from the desktop, payload byte 1 = not a paired device),
+//   4 authenticated (desktop → relay: this phone proved itself; stranger limits end)
 
 import { createHash, randomBytes, timingSafeEqual, webcrypto } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
@@ -17,7 +19,9 @@ import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 
-export const KIND = { open: 1, data: 2, close: 3 };
+export const KIND = { open: 1, data: 2, close: 3, auth: 4 };
+/** Close codes phones see: 4001 means "this phone is not (or no longer) paired". */
+export const CLOSE = { byDesktop: 4000, notPaired: 4001, slowDown: 4008, tooMuchBeforeAuth: 4013 };
 const CLIENT_ID_BYTES = 16;
 const PROTOCOL = "pi-relay-agent/1";
 
@@ -64,8 +68,10 @@ function rateLimiter(limit, windowMs) {
     const now = Date.now();
     const entry = windows.get(key);
     if (!entry || now - entry.start >= windowMs) {
+      // Prune only expired windows: clearing everything would let one sender who
+      // spreads over many keys reset everyone's limit.
+      if (windows.size > 10000) for (const [k, w] of windows) if (now - w.start >= windowMs) windows.delete(k);
       windows.set(key, { start: now, count: 1 });
-      if (windows.size > 10000) windows.clear();
       return true;
     }
     entry.count += 1;
@@ -78,7 +84,10 @@ function rateLimiter(limit, windowMs) {
  * @param {string} [options.adminToken] needed to register a new desktop; without it none can register
  * @param {string} options.dataFile JSON file of registered desktops (agent id → public key)
  * @param {string} [options.shellDir] also serve the phone shell (weaker: the relay then serves trusted code)
- * @param {number} [options.maxClientsPerAgent]
+ * @param {number} [options.maxClientsPerAgent] authenticated phones per desktop
+ * @param {number} [options.maxStrangersPerAgent] phones not yet authenticated; the oldest is dropped for a newcomer
+ * @param {number} [options.strangerBytes] what a phone may send before the desktop authenticates it
+ * @param {number} [options.maxQueuedBytes] bytes waiting for a desktop before the sending phone is closed
  * @param {number} [options.maxMessageBytes]
  * @param {number} [options.connectionsPerMinute] per remote address
  * @param {number} [options.helloTimeoutMs]
@@ -92,6 +101,9 @@ export function createRelay(options) {
     dataFile,
     shellDir = "",
     maxClientsPerAgent = 16,
+    maxStrangersPerAgent = 8,
+    strangerBytes = 256 * 1024,
+    maxQueuedBytes = 16 * 1024 * 1024,
     maxMessageBytes = 70 * 1024,
     connectionsPerMinute = 60,
     helloTimeoutMs = 10_000,
@@ -105,7 +117,8 @@ export function createRelay(options) {
   const allowConnection = rateLimiter(connectionsPerMinute, 60_000);
 
   const addressOf = (request) => {
-    const forwarded = trustProxy ? request.headers["x-forwarded-for"]?.split(",")[0]?.trim() : "";
+    // Behind a proxy that appends to X-Forwarded-For, only the last hop is its own.
+    const forwarded = trustProxy ? request.headers["x-forwarded-for"]?.split(",").at(-1)?.trim() : "";
     return forwarded || request.socket.remoteAddress || "unknown";
   };
 
@@ -207,7 +220,11 @@ export function createRelay(options) {
       const client = entry.clients.get(id);
       if (!client) return;
       if (kind === KIND.data) client.send(data.subarray(1 + CLIENT_ID_BYTES), { binary: true });
-      else if (kind === KIND.close) client.close(4000, "closed by desktop");
+      else if (kind === KIND.auth) client.authenticated = true;
+      else if (kind === KIND.close) {
+        const notPaired = data[1 + CLIENT_ID_BYTES] === 1;
+        client.close(notPaired ? CLOSE.notPaired : CLOSE.byDesktop, notPaired ? "not paired" : "closed by desktop");
+      }
     });
 
     ws.on("close", () => {
@@ -251,9 +268,16 @@ export function createRelay(options) {
   function acceptClient(ws, agentId, address) {
     const entry = online.get(agentId);
     if (!entry) return ws.close(4404, "desktop offline");
-    if (entry.clients.size >= maxClientsPerAgent) return ws.close(4429, "too many phones");
+    const clients = [...entry.clients.values()];
+    if (clients.filter((c) => c.authenticated).length >= maxClientsPerAgent) return ws.close(4429, "too many phones");
+    // Strangers (not yet authenticated by the desktop) cannot crowd out the owner: past
+    // the cap the oldest stranger goes, so a new connection always gets its turn.
+    const strangers = clients.filter((c) => !c.authenticated);
+    if (strangers.length >= maxStrangersPerAgent) strangers[0].close(4429, "too many unauthenticated phones");
     const clientId = randomBytes(CLIENT_ID_BYTES);
     const key = clientId.toString("hex");
+    ws.authenticated = false;
+    ws.bytesBeforeAuth = 0;
     entry.clients.set(key, ws);
     entry.socket.send(frame(KIND.open, clientId), { binary: true });
     log(`phone connected to ${agentId} from ${address}`);
@@ -261,6 +285,12 @@ export function createRelay(options) {
     ws.on("message", (data, isBinary) => {
       if (!isBinary) return ws.close(4400, "binary only");
       if (online.get(agentId) !== entry) return ws.close(4502, "desktop disconnected");
+      if (!ws.authenticated) {
+        ws.bytesBeforeAuth += data.length;
+        if (ws.bytesBeforeAuth > strangerBytes) return ws.close(CLOSE.tooMuchBeforeAuth, "too much before authentication");
+      }
+      // The desktop is not keeping up: drop this phone rather than queue without bound.
+      if (entry.socket.bufferedAmount > maxQueuedBytes) return ws.close(CLOSE.slowDown, "desktop busy");
       entry.socket.send(frame(KIND.data, clientId, data), { binary: true });
     });
     ws.on("close", () => {

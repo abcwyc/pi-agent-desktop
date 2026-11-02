@@ -8,6 +8,7 @@ import {
   encodeFrame,
   encodeJson,
   parseRequestHead,
+  verificationCode,
   type FrameTypeValue,
   type RequestHead,
 } from "./frames.ts";
@@ -43,6 +44,8 @@ import {
 const KIND_OPEN = 1;
 const KIND_DATA = 2;
 const KIND_CLOSE = 3;
+/** Desktop → relay: this phone is authenticated (relay/server.mjs). */
+const KIND_AUTH = 4;
 const CLIENT_ID_BYTES = 16;
 /** First byte of a phone's first message. */
 export const MODE_SESSION = 1;
@@ -113,6 +116,8 @@ export interface PendingPairing {
   name: string;
   deviceId: string;
   requestedAt: number;
+  /** Shown on the phone too; the user compares the two. */
+  code: string;
 }
 
 interface Pairing {
@@ -124,6 +129,8 @@ interface Pairing {
 
 interface Stream {
   head: RequestHead | null;
+  /** RequestEnd seen: the request is being replayed; more body or a second end is ignored. */
+  ended: boolean;
   body: Uint8Array[];
   size: number;
   controller: AbortController;
@@ -154,9 +161,15 @@ export interface ConnectorOptions {
 class PhoneSession {
   transport: Transport | null = null;
   deviceId: string | null = null;
-  pairing: { pairing: Pairing; phoneKey: Uint8Array; name: string; requestedAt: number } | null = null;
+  pairing: { pairing: Pairing; phoneKey: Uint8Array; name: string; requestedAt: number; code: string } | null = null;
   /** A pairing handshake whose phone has not yet proven it holds the secret. */
-  pairingCandidate: { pairing: Pairing; phoneKey: Uint8Array } | null = null;
+  pairingCandidate: { pairing: Pairing; phoneKey: Uint8Array; code: string } | null = null;
+  /**
+   * A paired device whose handshake is done but who has sent nothing yet. A replayed
+   * first message completes the desktop's side too (without the phone's ephemeral key
+   * it can go no further), so a phone counts as connected only after a valid frame.
+   */
+  pendingDevice: { id: string; name: string } | null = null;
   readonly streams = new Map<number, Stream>();
   private receiveChain: Promise<void> = Promise.resolve();
   private sendChain: Promise<void> = Promise.resolve();
@@ -171,7 +184,7 @@ class PhoneSession {
     // Closes a phone that has not finished the handshake, or a pairing phone that
     // finished it but never proved the secret.
     this.timer = setTimeout(() => {
-      if (!this.transport || this.pairingCandidate) this.close("handshake timeout");
+      if (!this.transport || this.pairingCandidate || this.pendingDevice) this.close("handshake timeout");
     }, connector.limits.handshakeTimeoutMs);
   }
 
@@ -350,7 +363,7 @@ export class RelayConnector {
     if (kind === KIND_OPEN) {
       this.sessions.get(key)?.close("replaced", false);
       let pending = 0;
-      for (const session of this.sessions.values()) if (!session.transport || session.pairingCandidate) pending += 1;
+      for (const session of this.sessions.values()) if (!session.transport || session.pairingCandidate || session.pendingDevice) pending += 1;
       const session = new PhoneSession(clientId, this);
       this.sessions.set(key, session);
       if (pending >= this.limits.maxPendingHandshakes) session.close("too many unauthenticated phones");
@@ -359,6 +372,15 @@ export class RelayConnector {
     } else if (kind === KIND_CLOSE) {
       this.sessions.get(key)?.close("phone left", false);
     }
+  }
+
+  /** Tell the relay this phone proved itself, so its limits for strangers no longer apply. */
+  private authenticated(session: PhoneSession): void {
+    if (this.socket?.readyState !== 1) return;
+    const out = new Uint8Array(1 + CLIENT_ID_BYTES);
+    out[0] = KIND_AUTH;
+    out.set(session.clientId, 1);
+    this.socket.send(out);
   }
 
   sendToPhone(clientId: Uint8Array, payload: Uint8Array): void {
@@ -375,9 +397,12 @@ export class RelayConnector {
     const key = Buffer.from(session.clientId).toString("hex");
     if (this.sessions.get(key) === session) this.sessions.delete(key);
     if (notifyRelay && this.socket?.readyState === 1) {
-      const out = new Uint8Array(1 + CLIENT_ID_BYTES);
+      // Only these mean "pair again" on the phone; anything else is worth reconnecting after.
+      const notPaired = reason === "unknown device" || reason === "revoked";
+      const out = new Uint8Array(1 + CLIENT_ID_BYTES + 1);
       out[0] = KIND_CLOSE;
       out.set(session.clientId, 1);
+      out[1 + CLIENT_ID_BYTES] = notPaired ? 1 : 0;
       this.socket.send(out);
     }
     if (session.pairing) this.options.onChange?.();
@@ -398,6 +423,17 @@ export class RelayConnector {
     } catch {
       return session.close("bad ciphertext");
     }
+    if (!session.deviceId && session.pendingDevice) {
+      // The first valid frame proves the phone holds the keys of this session.
+      const { id, name } = session.pendingDevice;
+      session.pendingDevice = null;
+      session.deviceId = id;
+      clearTimeout(session.timer);
+      this.touchDevice(id);
+      this.authenticated(session);
+      this.log(`phone ${id} (${name}) connected`);
+      this.options.onChange?.();
+    }
     if (!session.deviceId) {
       // Pairing: only a phone that holds the secret can produce this message.
       const candidate = session.pairingCandidate;
@@ -410,7 +446,8 @@ export class RelayConnector {
       let name = "Phone";
       try { name = cleanDeviceName(decodeJson<{ name?: unknown }>(frame.payload).name); } catch { /* keep default */ }
       session.pairingCandidate = null;
-      session.pairing = { pairing: candidate.pairing, phoneKey: candidate.phoneKey, name, requestedAt: Date.now() };
+      session.pairing = { pairing: candidate.pairing, phoneKey: candidate.phoneKey, name, requestedAt: Date.now(), code: candidate.code };
+      this.authenticated(session);
       this.log(`pairing request from "${name}"`);
       this.options.onChange?.();
       return;
@@ -434,11 +471,7 @@ export class RelayConnector {
           return session.close("unknown device");
         }
         session.transport = await this.finish(state, session);
-        session.deviceId = deviceId;
-        clearTimeout(session.timer);
-        this.touchDevice(deviceId);
-        this.log(`phone ${deviceId} (${device.name}) connected`);
-        this.options.onChange?.();
+        session.pendingDevice = { id: deviceId, name: device.name };
         return;
       }
       if (mode === MODE_PAIR) {
@@ -452,7 +485,7 @@ export class RelayConnector {
         session.transport = await this.finish(state, session);
         // Not a request yet: the phone proves the secret with its first transport message.
         // The handshake timer keeps running until then.
-        session.pairingCandidate = { pairing, phoneKey: state.remoteStatic! };
+        session.pairingCandidate = { pairing, phoneKey: state.remoteStatic!, code: verificationCode(session.transport.handshakeHash) };
         return;
       }
       session.close("unknown mode");
@@ -495,11 +528,11 @@ export class RelayConnector {
         void session.send(FrameType.ResponseError, streamId, encodeJson({ message: "malformed request" }));
         return;
       }
-      session.streams.set(streamId, { head, body: [], size: 0, controller: new AbortController() });
+      session.streams.set(streamId, { head, ended: false, body: [], size: 0, controller: new AbortController() });
       return;
     }
     const stream = session.streams.get(streamId);
-    if (!stream) return;
+    if (!stream || stream.ended) return;
     if (type === FrameType.RequestBody) {
       stream.size += payload.length;
       if (stream.size > this.limits.maxRequestBody) {
@@ -509,6 +542,7 @@ export class RelayConnector {
       }
       stream.body.push(payload.slice());
     } else if (type === FrameType.RequestEnd) {
+      stream.ended = true;
       void this.replay(session, streamId, stream);
     }
   }
@@ -516,9 +550,6 @@ export class RelayConnector {
   private async replay(session: PhoneSession, streamId: number, stream: Stream): Promise<void> {
     const head = stream.head!;
     const fetchImpl = this.options.fetchImpl ?? fetch;
-    const headers = new Headers(sanitizeRequestHeaders(head.headers));
-    headers.set(RELAY_MARK_HEADER, relayMarkSecret());
-    headers.set(RELAY_DEVICE_HEADER, session.deviceId!);
     const hasBody = head.method !== "GET" && head.method !== "HEAD" && stream.size > 0;
     let body: Uint8Array | undefined;
     if (hasBody) {
@@ -530,6 +561,10 @@ export class RelayConnector {
       }
     }
     try {
+      // Inside the try: a header the Fetch spec refuses (CR, LF) fails this one request.
+      const headers = new Headers(sanitizeRequestHeaders(head.headers));
+      headers.set(RELAY_MARK_HEADER, relayMarkSecret());
+      headers.set(RELAY_DEVICE_HEADER, session.deviceId!);
       const response = await fetchImpl(`${this.options.localOrigin()}${head.url}`, {
         method: head.method,
         headers,
@@ -577,8 +612,9 @@ export class RelayConnector {
   // ---- pairing and devices, driven by local-only settings routes ----
 
   createPairing(): { id: string; url: string; expiresAt: number } {
+    // One live QR at a time: a new one retires any older code nobody has used yet.
+    for (const [id, pairing] of this.pairings) if (!pairing.used || pairing.expiresAt < Date.now()) this.pairings.delete(id);
     const now = Date.now();
-    for (const [id, pairing] of this.pairings) if (pairing.expiresAt < now) this.pairings.delete(id);
     const id = base64UrlEncode(randomBytes(PAIRING_ID_BYTES));
     const secret = new Uint8Array(randomBytes(32));
     const expiresAt = now + PAIRING_TTL_MS;
@@ -604,6 +640,7 @@ export class RelayConnector {
         name: session.pairing.name,
         deviceId: deviceIdFor(session.pairing.phoneKey),
         requestedAt: session.pairing.requestedAt,
+        code: session.pairing.code,
       });
     }
     return out;
@@ -650,7 +687,10 @@ export class RelayConnector {
     const remaining = devices.filter((d) => d.id !== deviceId);
     if (remaining.length === devices.length) return false;
     writeDevices(this.options.dir, remaining);
-    for (const session of [...this.sessions.values()]) if (session.deviceId === deviceId) session.close("revoked");
+    // Including a phone that has finished the handshake but not yet sent its first frame.
+    for (const session of [...this.sessions.values()]) {
+      if (session.deviceId === deviceId || session.pendingDevice?.id === deviceId) session.close("revoked");
+    }
     this.log(`revoked ${deviceId}`);
     return true;
   }

@@ -167,20 +167,68 @@ test("the desktop can close a phone; a desktop going away closes its phones", as
   assert.equal(code2, 4502);
 });
 
-test("phones of an offline desktop, text frames and extra phones are refused", async (t) => {
-  const { relay, url } = await startRelay({ maxClientsPerAgent: 1 });
+test("phones of an offline desktop and text frames are refused", async (t) => {
+  const { relay, url } = await startRelay();
   t.after(() => relay.close());
   const [offline] = await waitFor(connectClient(url, "nobody"), "close");
   assert.equal(offline, 4404);
-
   const a = await connectAgent(url, await agentKeys());
   const p1 = connectClient(url, a.ready.agentId);
   await p1.opened;
-  const [tooMany] = await waitFor(connectClient(url, a.ready.agentId), "close");
-  assert.equal(tooMany, 4429);
   p1.send("plain text");
   const [textCode] = await waitFor(p1, "close");
   assert.equal(textCode, 4400);
+  a.ws.close();
+});
+
+test("strangers cannot crowd out the owner: the oldest stranger makes room", async (t) => {
+  const { relay, url } = await startRelay({ maxStrangersPerAgent: 2, maxClientsPerAgent: 1 });
+  t.after(() => relay.close());
+  const a = await connectAgent(url, await agentKeys());
+  const opens = [];
+  a.ws.on("message", (d) => { if (d[0] === KIND.open) opens.push(d.subarray(1, 17)); });
+  const s1 = connectClient(url, a.ready.agentId);
+  const s2 = connectClient(url, a.ready.agentId);
+  await Promise.all([s1.opened, s2.opened]);
+  const s1Closed = waitFor(s1, "close");
+  const owner = connectClient(url, a.ready.agentId);
+  await owner.opened;
+  assert.equal((await s1Closed)[0], 4429, "the oldest stranger was dropped, the newcomer got in");
+  // The desktop authenticates the owner; authenticated phones have their own cap.
+  await new Promise((r) => setTimeout(r, 50));
+  a.ws.send(Buffer.concat([Buffer.of(KIND.auth), opens[2]]));
+  await new Promise((r) => setTimeout(r, 50));
+  const second = connectClient(url, a.ready.agentId);
+  await second.opened;
+  owner.send(Buffer.from("still here"));
+  const got = await new Promise((r) => a.ws.on("message", (d) => { if (d[0] === KIND.data) r(String(d.subarray(17))); }));
+  assert.equal(got, "still here", "the authenticated owner is unaffected by newcomers");
+  a.ws.close();
+});
+
+test("a stranger may send only so much before the desktop authenticates it", async (t) => {
+  const { relay, url } = await startRelay({ strangerBytes: 1000 });
+  t.after(() => relay.close());
+  const a = await connectAgent(url, await agentKeys());
+  const phone = connectClient(url, a.ready.agentId);
+  await phone.opened;
+  phone.send(Buffer.alloc(600));
+  phone.send(Buffer.alloc(600));
+  const [code] = await waitFor(phone, "close");
+  assert.equal(code, 4013);
+  a.ws.close();
+});
+
+test("the desktop says which closes mean 'not paired'", async (t) => {
+  const { relay, url } = await startRelay();
+  t.after(() => relay.close());
+  const a = await connectAgent(url, await agentKeys());
+  const phone = connectClient(url, a.ready.agentId);
+  const open = await nextMessage(a.ws);
+  await phone.opened;
+  a.ws.send(Buffer.concat([Buffer.of(KIND.close), open.data.subarray(1, 17), Buffer.of(1)]));
+  const [code] = await waitFor(phone, "close");
+  assert.equal(code, 4001);
   a.ws.close();
 });
 

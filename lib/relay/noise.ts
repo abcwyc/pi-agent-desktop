@@ -131,21 +131,25 @@ export class CipherState {
   async encrypt(ad: Uint8Array, plaintext: Uint8Array): Promise<Uint8Array> {
     if (!this.key) return plaintext;
     if (this.n >= MAX_NONCE) throw new NoiseError("nonce exhausted");
-    const out = await subtle.encrypt({ name: "AES-GCM", iv: buffer(nonceBytes(this.n)), additionalData: buffer(ad) }, this.key, buffer(plaintext));
+    // Reserve the nonce before awaiting: two concurrent calls must never share one.
+    const n = this.n;
     this.n += 1;
+    const out = await subtle.encrypt({ name: "AES-GCM", iv: buffer(nonceBytes(n)), additionalData: buffer(ad) }, this.key, buffer(plaintext));
     return new Uint8Array(out);
   }
 
   async decrypt(ad: Uint8Array, ciphertext: Uint8Array): Promise<Uint8Array> {
     if (!this.key) return ciphertext;
     if (this.n >= MAX_NONCE) throw new NoiseError("nonce exhausted");
+    const n = this.n;
+    this.n += 1;
     try {
-      const out = await subtle.decrypt({ name: "AES-GCM", iv: buffer(nonceBytes(this.n)), additionalData: buffer(ad) }, this.key, buffer(ciphertext));
-      this.n += 1;
+      const out = await subtle.decrypt({ name: "AES-GCM", iv: buffer(nonceBytes(n)), additionalData: buffer(ad) }, this.key, buffer(ciphertext));
       return new Uint8Array(out);
     } catch {
-      // The nonce does not advance: a forged or replayed message leaves the session unusable
-      // for that slot, and callers close the session on any failure.
+      // A forged or replayed message does not use up the slot (callers close the
+      // session on any failure anyway).
+      if (this.n === n + 1) this.n = n;
       throw new NoiseError("decryption failed");
     }
   }

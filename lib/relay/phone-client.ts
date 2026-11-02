@@ -6,6 +6,7 @@ import {
   encodeFrame,
   encodeJson,
   parseResponseHead,
+  verificationCode,
   type RequestHead,
   type ResponseHead,
 } from "./frames.ts";
@@ -180,7 +181,8 @@ export async function pairPhone(options: {
   device: KeyPair;
   name: string;
   socket?: SocketFactory;
-  onWaitingForApproval?: () => void;
+  /** With the code the desktop shows next to this request; the user compares them. */
+  onWaitingForApproval?: (code: string) => void;
 }): Promise<{ deviceId: string }> {
   const { ticket } = options;
   const channel = await Channel.open(`${ticket.relayUrl}/client?agent=${encodeURIComponent(ticket.agentId)}`, options.socket ?? defaultSocket);
@@ -196,7 +198,7 @@ export async function pairPhone(options: {
     });
     // Encrypted with keys that depend on the secret: the desktop's proof that we hold it.
     channel.send(await transport.send.encrypt(EMPTY, encodeFrame(FrameType.PairRequest, 0, encodeJson({ name: options.name }))));
-    options.onWaitingForApproval?.();
+    options.onWaitingForApproval?.(verificationCode(transport.handshakeHash));
     const frame = decodeFrame(await transport.receive.decrypt(EMPTY, await channel.next()));
     if (frame.type !== FrameType.PairResult) throw new Error("unexpected reply while pairing");
     const result = decodeJson<{ ok?: boolean; deviceId?: string; reason?: string }>(frame.payload);
@@ -257,6 +259,8 @@ export class PhoneTunnel {
       });
     });
     this.state = "open";
+    // The first frame proves this session to the desktop (a replayed handshake cannot send one).
+    void this.sendFrame(FrameType.Ping, 0);
     this.ping = setInterval(() => { void this.sendFrame(FrameType.Ping, 0); }, PING_INTERVAL_MS);
   }
 

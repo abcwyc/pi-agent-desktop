@@ -80,6 +80,15 @@ export function decodeFrame(bytes: Uint8Array): Frame {
   };
 }
 
+/**
+ * Six digits both ends show while pairing, from the handshake hash: the user checks
+ * that the phone in hand is the one asking, not someone who saw the QR code.
+ */
+export function verificationCode(handshakeHash: Uint8Array): string {
+  const view = new DataView(handshakeHash.buffer, handshakeHash.byteOffset, handshakeHash.byteLength);
+  return String(view.getUint32(0) % 1_000_000).padStart(6, "0");
+}
+
 export function encodeJson(value: unknown): Uint8Array {
   return encoder.encode(JSON.stringify(value));
 }
