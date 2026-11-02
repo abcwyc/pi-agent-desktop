@@ -101,7 +101,7 @@ function render(overrides = {}) {
     projectRevealError: null,
     t: (key, params) => params ? `${key}(${Object.values(params).join(",")})` : key,
     onShowBranches: noop, onShowWorktrees: noop, onShowNewWorktree: noop, onBackToActions: noop,
-    onOpenTerminal: noop, onReveal: noop, onArchive: noop, onSwitchBranch: noop, onFetch: noop,
+    onOpenTerminal: noop, onReveal: noop, onArchive: noop, onRestore: noop, onSwitchBranch: noop, onFetch: noop,
     onSelectWorktree: noop, onRequestRemove: noop, onConfirmRemove: noop, onCancelRemove: noop,
     onNewBranchChange: noop, onCreateWorktree: noop,
     ...overrides,
@@ -115,6 +115,15 @@ test("the actions page offers branches and worktrees next to the existing entrie
     assert.ok(html.includes(key), key);
   }
   assert.doesNotMatch(html, /sidebar-project-context-menu--wide/);
+});
+
+test("an archived project's menu offers only restore and reveal", () => {
+  const html = render({ archived: true });
+  assert.ok(html.includes("sidebar.restoreProject"));
+  assert.ok(html.includes("Reveal"));
+  for (const key of ["sidebar.switchBranch", "sidebar.worktrees", "sidebar.openTerminalHere", "sidebar.archiveProject"]) {
+    assert.ok(!html.includes(key), key);
+  }
 });
 
 test("the worktree page switches, removes non-main checkouts and creates new ones", () => {
