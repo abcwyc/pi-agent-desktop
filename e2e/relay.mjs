@@ -65,6 +65,7 @@ let relay;
 let shellServer;
 let failed = false;
 let currentPage = null;
+let piLog = "";
 const consoleLines = [];
 
 try {
@@ -89,7 +90,6 @@ try {
   delete env.__NEXT_PRIVATE_ORIGIN;
   delete env.__NEXT_PRIVATE_STANDALONE_CONFIG;
   piServer = spawn(process.execPath, [join(root, "node_modules/next/dist/bin/next"), "start", "-H", "127.0.0.1", "-p", String(piPort)], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
-  let piLog = "";
   piServer.stdout.on("data", (d) => { piLog += d; });
   piServer.stderr.on("data", (d) => { piLog += d; });
   const pi = `http://127.0.0.1:${piPort}`;
@@ -125,7 +125,9 @@ try {
     await page.locator("#pair-button").click();
     const pending = await waitFor(() => api("/api/relay").then((r) => r.body.pending[0]), "the pairing request");
     assert.equal(pending.name, `${engine} phone`);
-    await page.getByText("Approve this phone on your computer").waitFor();
+    await page.getByText("allow this phone only if it shows the code").waitFor();
+    const phoneCode = (await page.locator("#pair-status").innerText()).match(/(\d{3}) (\d{3})/).slice(1).join("");
+    assert.equal(phoneCode, pending.code, "the phone and the desktop show the same code");
     const approved = await api(`/api/relay/pairing/${pending.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "approve" }) });
     assert.equal(approved.status, 200);
     step("paired from the QR link after approval on the desktop");
@@ -146,7 +148,11 @@ try {
     assert.equal((await fromPhone("/api/relay", { method: "PUT", headers: { "Content-Type": "application/json" }, body: "{}" })).status, 403);
     assert.equal((await fromPhone("/api/relay/pairing", { method: "POST" })).status, 403, "a phone cannot mint pairing links");
     assert.equal((await fromPhone("/api/remote-access", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hostname: null }) })).status, 403);
-    step("POST works; relay, pairing and remote-access settings stay local-only");
+    assert.equal((await fromPhone("/api/relay/pairing/anything", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "approve" }) })).status, 403, "a phone cannot approve pairings");
+    const ownId = (await api("/api/relay")).body.devices.find((d) => d.name === `${engine} phone`).id;
+    assert.equal((await fromPhone(`/api/relay/devices/${ownId}`, { method: "DELETE" })).status, 403, "a phone cannot remove phones");
+    assert.equal((await fromPhone("/api/sessions/any/chat-access", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ unlocked: true }) })).status, 403, "a phone cannot unlock a chat");
+    step("POST works; relay, pairing, device, chat-unlock and remote-access changes stay local-only");
 
     const sse = await app.evaluate(() => new Promise((resolve) => {
       const es = new EventSource("/api/agent/running/events");
@@ -160,6 +166,23 @@ try {
     await page.reload();
     await page.frameLocator("#app-frame").getByText("New Session").first().waitFor({ timeout: 60_000 });
     step("reload reconnects with the stored device key, no new pairing");
+
+    // A link from anywhere can open the shell with ?path=; it frames only app pages.
+    await page.goto(`${entry}/__shell/?path=${encodeURIComponent("/api/relay")}`);
+    await page.frameLocator("#app-frame").getByText("New Session").first().waitFor({ timeout: 60_000 });
+    assert.equal(await page.locator("#app-frame").getAttribute("src"), "/", "?path=/api/… is not framed");
+    step("an outside ?path= frames only app pages");
+
+    // A pairing link on an already paired phone must not silently replace the pairing.
+    const second = await api("/api/relay/pairing", { method: "POST" });
+    await page.goto(second.body.url);
+    await page.locator("#pair-replace").waitFor();
+    await page.locator("#pair-button").click();
+    await page.getByText("Tick the box to replace").waitFor();
+    assert.equal((await api("/api/relay")).body.pending.length, 0, "nothing was sent without the tick");
+    await page.goto(`${entry}/__shell/`);
+    await page.frameLocator("#app-frame").getByText("New Session").first().waitFor({ timeout: 60_000 });
+    step("a pairing link on a paired phone needs an explicit replace");
 
     // A page on another site posts a form to the entry host: the tunnel worker refuses it.
     const other = await context.newPage();
@@ -195,6 +218,7 @@ try {
   })).catch((e) => `unavailable: ${e.message}`);
   console.error("shell state:", JSON.stringify(state));
   console.error(consoleLines.slice(-25).join("\n"));
+  console.error("Pi server log (tail):\n" + piLog.split("\n").slice(-15).join("\n"));
 } finally {
   piServer?.kill();
   shellServer?.close();

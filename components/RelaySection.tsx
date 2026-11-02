@@ -214,7 +214,7 @@ export function RelaySection() {
           <div key={request.id} className="settings-option relay-pending" role="alert">
             <span className="settings-option-text">
               <span className="settings-option-title">{t("relay.pendingTitle", { name: request.name })}</span>
-              <span className="settings-option-hint">{t("relay.pendingHint", { id: request.deviceId })}</span>
+              <span className="settings-option-hint">{t("relay.pendingHint", { code: `${request.code.slice(0, 3)} ${request.code.slice(3)}`, id: request.deviceId })}</span>
             </span>
             <span className="relay-actions">
               <ConfigButton variant="ghost" disabled={busy} onClick={() => void answer(request.id, "deny")}>{t("relay.deny")}</ConfigButton>

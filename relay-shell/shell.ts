@@ -1,5 +1,6 @@
 import { exportPrivateKey, generateKeyPair, keyPairFromPrivate, type KeyPair } from "../lib/relay/noise.ts";
 import { PhoneTunnel, pairPhone, parsePairingTicket, type PhoneConfig } from "../lib/relay/phone-client.ts";
+import { safeAppPath } from "./paths.ts";
 
 /**
  * The phone shell (docs/remote-relay.md): served by the entry host at /__shell/,
@@ -121,6 +122,9 @@ function tunnelReady(timeoutMs: number): Promise<PhoneTunnel | null> {
 }
 
 async function serve(message: { method: string; url: string; headers: [string, string][]; body: ArrayBuffer | null }, port: MessagePort): Promise<void> {
+  // A window without a pairing (a pairing page, say) never answers: the worker then
+  // asks the window that has one instead of waiting on this one.
+  if (!config) return;
   const controller = new AbortController();
   port.onmessage = (event) => { if (event.data?.type === "cancel") controller.abort(); };
   // Tell the worker this window is alive and has the request; it tries another window otherwise.
@@ -154,8 +158,8 @@ navigator.serviceWorker?.addEventListener("message", (event) => {
   const data = event.data as { type?: string; path?: string };
   if (data?.type === "pi-tunnel-request" && event.ports[0]) {
     void serve(event.data, event.ports[0]);
-  } else if (data?.type === "pi-open-path" && typeof data.path === "string" && data.path.startsWith("/") && !data.path.startsWith("//")) {
-    ($("app-frame") as HTMLIFrameElement).src = data.path;
+  } else if (data?.type === "pi-open-path" && config) {
+    ($("app-frame") as HTMLIFrameElement).src = safeAppPath(data.path);
   }
 });
 
@@ -181,22 +185,25 @@ async function connect(): Promise<void> {
     for (const wake of waitingForTunnel.splice(0)) wake();
     next.onClose = (error) => {
       if (tunnel === next) tunnel = null;
+      if (error.code === 4001) return showUnpaired();
       setStatus("offline", error.code === 4404 ? "computer offline" : "");
       scheduleReconnect();
     };
   } catch (error) {
     const code = (error as { code?: number }).code;
-    // 4404: the desktop is not connected to the relay. A refused handshake (closed by
-    // the desktop) means this phone is no longer paired.
-    setStatus("offline", code === 4404 ? "computer offline" : code === 4000 ? "this phone was removed" : "");
-    if (code === 4000) {
-      show("message", "This phone is no longer paired with your computer. Pair it again from Settings › Remote relay on the computer.");
-      return;
-    }
+    // 4001: the desktop does not know this phone's key (removed). 4404: the desktop is
+    // not connected to the relay. Anything else (limits, restarts) is worth a retry.
+    if (code === 4001) return showUnpaired();
+    setStatus("offline", code === 4404 ? "computer offline" : "");
     scheduleReconnect();
   } finally {
     connecting = false;
   }
+}
+
+function showUnpaired(): void {
+  setStatus("offline", "this phone was removed");
+  show("message", "This phone is no longer paired with your computer. Pair it again from Settings › Remote relay on the computer.");
 }
 
 function scheduleReconnect(): void {
@@ -222,8 +229,7 @@ async function registerWorker(): Promise<void> {
 }
 
 function initialPath(): string {
-  const path = new URLSearchParams(location.search).get("path") ?? "/";
-  return path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/__shell") ? path : "/";
+  return safeAppPath(new URLSearchParams(location.search).get("path") ?? "/");
 }
 
 async function startApp(stored: StoredConfig): Promise<void> {
@@ -250,18 +256,28 @@ async function startApp(stored: StoredConfig): Promise<void> {
 
 async function runPairing(ticketText: string): Promise<void> {
   const ticket = parsePairingTicket(ticketText);
+  // The secret is in the fragment; drop it from the address bar and history now.
+  history.replaceState(null, "", location.pathname);
   if (!ticket) {
     show("message", "This pairing link is not valid. Create a new QR code on your computer.");
     return;
   }
-  // The secret is in the fragment; drop it from the address bar and history now.
-  history.replaceState(null, "", location.pathname);
+  // Any site can open a pairing link. Pairing over an existing pairing replaces this
+  // phone's key and points it at another computer, so it has to be meant.
+  const existing = await dbGet();
+  const replace = $("pair-replace");
+  replace.hidden = !existing;
+  $<HTMLInputElement>("pair-replace-check").checked = false;
   show("pair");
   const nameInput = $<HTMLInputElement>("pair-name");
   nameInput.value = defaultDeviceName();
   const button = $<HTMLButtonElement>("pair-button");
   const status = $("pair-status");
   button.onclick = async () => {
+    if (existing && !$<HTMLInputElement>("pair-replace-check").checked) {
+      status.textContent = "This phone is already paired. Tick the box to replace that pairing, or close this page.";
+      return;
+    }
     button.disabled = true;
     status.textContent = "Connecting to your computer…";
     try {
@@ -271,7 +287,9 @@ async function runPairing(ticketText: string): Promise<void> {
         ticket,
         device,
         name: nameInput.value,
-        onWaitingForApproval: () => { status.textContent = "Approve this phone on your computer…"; },
+        onWaitingForApproval: (code) => {
+          status.textContent = `On your computer, allow this phone only if it shows the code ${code.slice(0, 3)} ${code.slice(3)}.`;
+        },
       });
       const stored: StoredConfig = {
         relayUrl: ticket.relayUrl,
@@ -310,6 +328,11 @@ $("reconnect-button").addEventListener("click", () => {
 });
 
 async function main(): Promise<void> {
+  // Framed by another page: refuse (no frame-ancestors from a static host's meta tags).
+  if (window.top !== window.self) {
+    document.body.textContent = "Pi cannot run inside another page.";
+    return;
+  }
   if (!("serviceWorker" in navigator) || !crypto?.subtle) {
     show("message", "This browser cannot run Pi remotely. Use Safari (iOS 17 or later) or a current Chrome.");
     return;

@@ -51,6 +51,10 @@ serves the code that holds your keys on the phone, so choose by how much you tru
 | **B. Same server, second site** | Add a Caddy site for `pi.example.com` with `root * /srv/pi-shell` and `file_server`, and copy `dist/` there. | A compromised relay *process*, not the whole server. |
 | **C. The relay serves it** | Set `RELAY_SHELL_DIR=/srv/pi-shell` on the relay and use the relay's own URL as the entry URL. | Nothing beyond TLS: the relay could serve altered code. Only for trying it out. |
 
+The entry origin must serve **nothing else**: any other page on the same origin (for
+example a project site under `user.github.io/…`) could use the phone's stored device key.
+Use a dedicated host name at the origin root.
+
 Rebuild and re-upload the shell after updating Pi.
 
 ## 3. Connect Pi

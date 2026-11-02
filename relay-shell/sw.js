@@ -37,6 +37,7 @@ self.addEventListener("fetch", (event) => {
     }
     // A top-level visit (home-screen icon, notification, typed URL) opens the
     // shell, which frames the app at that path.
+    // (The shell frames only app pages from ?path=, never /api/….)
     if (request.destination === "document") {
       event.respondWith(Response.redirect(`${SHELL_PATH}?path=${encodeURIComponent(url.pathname + url.search)}`, 302));
       return;

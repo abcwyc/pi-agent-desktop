@@ -25,6 +25,9 @@
   input { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 11px 12px; }
   button.primary { font: inherit; font-weight: 600; color: #fff; background: var(--accent); border: 0; border-radius: 10px; padding: 12px; }
   button.primary:disabled { opacity: .5; }
+  label.replace { color: var(--bad); font-size: 14px; }
+  label.replace[hidden] { display: none; }
+  label.replace input { width: auto; padding: 0; margin-right: 6px; vertical-align: -2px; }
   #screen-app { position: fixed; inset: 0; padding: 0; display: block; }
   #screen-app[hidden], .screen[hidden] { display: none; }
   #app-frame { border: 0; width: 100%; height: 100%; display: block; background: var(--bg); }
@@ -45,6 +48,7 @@
       <h1>Pair with your computer</h1>
       <p>Everything between this phone and your computer is end-to-end encrypted. The relay only passes it on.</p>
       <label>Name for this phone<input id="pair-name" maxlength="60" autocomplete="off"></label>
+      <label id="pair-replace" class="replace" hidden><span><input id="pair-replace-check" type="checkbox"> This phone is already paired with a computer. Replace that pairing.</span></label>
       <button id="pair-button" class="primary" type="button">Pair</button>
       <p id="pair-status" role="status"></p>
     </div>
