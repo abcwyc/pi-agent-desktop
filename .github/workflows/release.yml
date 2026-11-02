@@ -114,45 +114,47 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.8.0
+            ## Pi Agent Desktop 0.8.1
 
             ### New
 
-            - **A welcome screen for new sessions.** An empty session now greets you with the project name and four starter prompts (different ones for chats and projects). Picking one fills the composer without sending it.
-            - **Artifacts page shows what you asked for.** By default it lists the files you named or the agent handed you (HTML, Markdown, PDF, Office, CSV, images, media), including pages produced by shell commands. Files the agent only edited as part of its work stay out of the way, and credentials are never listed. Switch the filter to see process files or everything, and move any file between the two.
-            - **Favorites and a right-click menu on the Artifacts page.** Star an artifact or file and filter the list to favorites. Right-click a row to open the conversation that made it, open the file with its default app, or reveal it in Finder / Explorer. The list column can be resized and remembers its width.
+            - **Follow and drive your sessions from a phone.** Settings › General › Remote access sets up access through your own Tailscale network: Pi keeps listening only on this computer, and only the Tailscale accounts you allow can reach it. Turn on **Notify this device** on the phone to get a push when a run finishes, fails, or is waiting for you.
+            - **Tasks page.** A new sidebar row lists every session that is waiting for you (with the question it is asking), running (with its current step) or recently finished or failed. Tap a row to open the session.
+            - **Project archive.** Right-click a project, or use its "…" menu, and choose "Move to archive" to move it to a folded Archive group at the bottom of the sidebar. Archived sessions stay readable; restore the project before starting new work in it.
 
             ### Improved
 
-            - **Clearer typography and quieter chrome.** Font weights are unified so Latin and Chinese text render at the same weight, small text is larger, headings and prose spacing are tuned, and message dates follow the app language instead of the system locale.
-            - **Friendlier wording and details.** Tool presets show readable names, the usage footer shows just the cost (hover for token counts), and the scheduler notice is one line with details on demand.
-            - **Files that were moved or deleted are explained.** An "Edited N files" row for a file that no longer exists is dimmed and labelled, and opening it says the file was moved or deleted instead of a bare "Not found".
+            - **A tidier topbar.** Branches and Full history moved into the `···` More menu, and branch switching is now blocked on desktop while a session runs.
+            - **Faster start-up and lower memory.** The session list sends only the first line of each prompt (about 60–75% less data on a cold start), and once more than 4 unused sessions are loaded, the oldest are released.
 
             ### Fixed
 
-            - A hydration error in the sidebar when the Chats section had been collapsed.
+            - A render error now shows the message, stack and a **Copy details** button instead of a blank "This page couldn't load" screen.
+            - Credential files such as `~/.ssh` keys and `~/.pi/agent/auth.json` can no longer be opened from the file viewer, even when a session runs in the home folder.
+            - Settings, credentials, skills and session files are now rewritten atomically, so a crash mid-write can no longer leave them half-written.
 
             Bundled components: pi 1.4.0, pi-web 0.10.0.
 
             ---
 
-            ## Pi Agent Desktop 0.8.0
+            ## Pi Agent Desktop 0.8.1
 
             ### 新增
 
-            - **新会话欢迎页。** 空会话现在会显示问候、项目名和四条起手提示（聊天与项目各有不同的提示）。点选后只填入输入框，不会直接发送。
-            - **Artifacts 页面默认只显示你要的成果。** 默认列出你提到的、或 agent 交给你的文件（HTML、Markdown、PDF、Office、CSV、图片、媒体），包括由 shell 命令生成的页面；agent 工作过程中只是编辑过的文件不再干扰列表，凭据类文件永远不会列出。可切换筛选查看过程文件或全部，也能手动在两类之间移动文件。
-            - **Artifacts 页面支持收藏和右键菜单。** 可为 artifact 或文件加星，并按收藏筛选；右键某一行可打开产生它的对话、用默认应用打开文件，或在 Finder / 资源管理器中显示。列表栏可拖动调整宽度，并会记住宽度。
+            - **在手机上查看和操作会话。** 在“设置 › 通用 › 远程访问”中通过你自己的 Tailscale 网络开启访问：Pi 仍只在本机监听，只有你允许的 Tailscale 账号能连上。在手机上打开“通知这台设备”，运行完成、失败或需要你处理时会收到推送。
+            - **任务页面。** 侧栏新增一行，集中显示正在等待你（并显示它的提问）、正在运行（并显示当前步骤）以及最近完成或失败的会话，点按即可打开对应会话。
+            - **项目存档。** 右键项目或点它的“…”菜单，选择“移到存档”，项目会移到侧栏底部默认折叠的“存档”分组。存档项目的会话仍可查看；要在其中开始新工作，需先“还原到项目列表”。
 
             ### 改进
 
-            - **排版更清晰、界面更安静。** 统一字重，使中英文在同一行中粗细一致；提升小字号；调整标题和正文行距；消息日期跟随应用语言而不是系统区域设置。
-            - **措辞和细节更友好。** 工具预设显示易读名称；用量页脚只显示费用（悬停可看 token 数）；调度器提示精简为一行，详情可展开。
-            - **说明已移动或删除的文件。** “编辑了 N 个文件”中已不存在的文件会变灰并标注；打开时会提示文件已被移动或删除，而不再只显示“Not found”。
+            - **顶栏更简洁。** “分支”和“完整历史”移入 `···` 更多菜单；会话运行期间，桌面端也不能切换分支了。
+            - **启动更快、内存更省。** 会话列表只发送每条提示的第一行（冷启动数据量减少约 60–75%）；加载的闲置会话超过 4 个时，会释放最早的那些。
 
             ### 修复
 
-            - 修复折叠 Chats 区域后侧栏出现的 hydration 错误。
+            - 页面渲染出错时，现在会显示错误信息、调用栈和“Copy details”按钮，而不是空白的“This page couldn't load”页面。
+            - 即使会话运行在主目录下，文件查看器也不能再打开 `~/.ssh` 密钥、`~/.pi/agent/auth.json` 等凭据文件。
+            - 设置、凭据、技能和会话文件改为原子写入，写到一半崩溃也不会留下损坏的文件。
 
             内置组件版本：pi 1.4.0、pi-web 0.10.0。
           releaseDraft: true
