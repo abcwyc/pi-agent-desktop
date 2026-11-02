@@ -1,4 +1,5 @@
 import { tailscaleLoginOf } from "@/lib/remote-access";
+import { readRelayMark } from "@/lib/relay/mark";
 import { addSubscription, type PushSubscriptionRecord } from "@/lib/web-push";
 
 export const dynamic = "force-dynamic";
@@ -35,11 +36,15 @@ export async function POST(req: Request): Promise<Response> {
   // A phone subscribing through Tailscale is tied to its login, so removing the login
   // (or turning remote access off) also stops its notifications.
   const login = tailscaleLoginOf(req);
+  // Same for a phone paired through the encrypted relay: revoking it stops its notifications.
+  const relay = readRelayMark(req);
+  const relayDevice = relay && relay !== "forged" ? relay.deviceId : undefined;
   await addSubscription({
     endpoint: body.subscription.endpoint,
     keys: body.subscription.keys,
     locale,
     ...(login ? { login } : {}),
+    ...(relayDevice ? { relayDevice } : {}),
   });
   return Response.json({ ok: true });
 }

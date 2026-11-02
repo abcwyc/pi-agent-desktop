@@ -2,14 +2,16 @@ import { stat } from "fs/promises";
 import { resolve } from "path";
 import { NextResponse } from "next/server";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
-import { isFileManagerSupported, isLoopbackHost, launchFileManager } from "@/lib/open-in-file-manager";
+import { isFileManagerSupported, launchFileManager } from "@/lib/open-in-file-manager";
+import { isLocalRequest } from "@/lib/remote-access";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /** Whether this request may raise a file-manager window on the server. */
 function availabilityFor(request: Request): { supported: boolean; reason: string | null } {
-  if (!isLoopbackHost(request.headers.get("host"))) return { supported: false, reason: "remote" };
+  // A relayed or Tailscale-forwarded request carries a loopback Host too; isLocalRequest tells them apart.
+  if (!isLocalRequest(request)) return { supported: false, reason: "remote" };
   if (!isFileManagerSupported(process.platform)) return { supported: false, reason: "unsupported-platform" };
   return { supported: true, reason: null };
 }
