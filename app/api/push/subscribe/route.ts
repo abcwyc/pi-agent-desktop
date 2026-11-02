@@ -1,3 +1,4 @@
+import { tailscaleLoginOf } from "@/lib/remote-access";
 import { addSubscription, type PushSubscriptionRecord } from "@/lib/web-push";
 
 export const dynamic = "force-dynamic";
@@ -30,11 +31,15 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ error: "Invalid push subscription" }, { status: 400 });
   }
 
-  const locale = body.locale === "zh-CN" ? "zh-CN" : "en";
+  const locale = body.locale === "zh-CN" || body.locale === "zh-TW" ? body.locale : "en";
+  // A phone subscribing through Tailscale is tied to its login, so removing the login
+  // (or turning remote access off) also stops its notifications.
+  const login = tailscaleLoginOf(req);
   await addSubscription({
     endpoint: body.subscription.endpoint,
     keys: body.subscription.keys,
     locale,
+    ...(login ? { login } : {}),
   });
   return Response.json({ ok: true });
 }

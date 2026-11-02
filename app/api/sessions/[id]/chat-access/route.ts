@@ -3,6 +3,7 @@ import { existsSync } from "fs";
 import { isChatFolderPath, isChatWorkspacePath } from "@/lib/chat-workspace";
 import { readChatUnlocked } from "@/lib/chat-unlock";
 import { isNetworkExposedServer } from "@/lib/chat-file-access";
+import { isLocalRequest } from "@/lib/remote-access";
 import { getRpcSession, setRpcChatUnlock } from "@/lib/rpc-manager";
 import { openSessionManager, readSessionHeader, resolveSessionPath } from "@/lib/session-reader";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
@@ -22,7 +23,7 @@ interface ChatAccess {
   available: boolean;
 }
 
-async function describeChat(id: string): Promise<{ access: ChatAccess; filePath: string | undefined } | null> {
+async function describeChat(id: string, local = true): Promise<{ access: ChatAccess; filePath: string | undefined } | null> {
   const live = getRpcSession(id);
   const filePath = (live?.isAlive() ? live.sessionFile : undefined) || await resolveSessionPath(id) || undefined;
   const cwd = live?.isAlive()
@@ -39,16 +40,17 @@ async function describeChat(id: string): Promise<{ access: ChatAccess; filePath:
     unlocked = readChatUnlocked(openSessionManager(filePath).getEntries() as unknown as SessionEntry[]);
   }
   return {
-    access: { chat: true, folder, unlocked, available: Boolean(folder) && !isNetworkExposedServer() },
+    access: { chat: true, folder, unlocked, available: Boolean(folder) && !isNetworkExposedServer() && local },
     filePath,
   };
 }
 
 // GET /api/sessions/[id]/chat-access - the chat's folder and whether it may use the computer.
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    const described = await describeChat(id);
+    // Unlocking is offered only where it can be done: on this computer.
+    const described = await describeChat(id, isLocalRequest(req));
     if (!described) return NextResponse.json({ error: "Session not found" }, { status: 404 });
     return NextResponse.json(described.access, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
@@ -70,6 +72,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const body = await req.json() as { unlocked?: unknown };
     if (typeof body.unlocked !== "boolean") {
       return NextResponse.json({ error: "unlocked must be a boolean" }, { status: 400 });
+    }
+    // Letting a chat use the computer is decided at the computer, not from a phone
+    // reaching it through Settings › Remote access. Locking it again is fine from anywhere.
+    if (body.unlocked && !isLocalRequest(req)) {
+      return NextResponse.json({ error: "A chat can only be allowed to use this computer on the computer itself." }, { status: 403 });
     }
     const described = await describeChat(id);
     if (!described) return NextResponse.json({ error: "Session not found" }, { status: 404 });

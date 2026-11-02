@@ -9,6 +9,12 @@ import {
   isApiRequestHostAllowed,
 } from "@/lib/request-security";
 import {
+  isRemoteAccessHost,
+  isTailscaleFunnelRequest,
+  isRemoteAccessRequestAuthorized,
+  readRemoteAccessConfig,
+} from "@/lib/remote-access";
+import {
   isValidWebSessionToken,
   isValidBasicAuthorization,
   isWebPasswordEnabled,
@@ -32,7 +38,26 @@ export function proxy(request: NextRequest) {
     ? isApiRequestAllowed(request)
     : isApiRequestHostAllowed(request);
 
+  // Tailscale Funnel puts this port on the public internet. Without a web password
+  // that is a shell for anyone, so refuse it however the Host header reads.
+  if (isTailscaleFunnelRequest(request) && !isWebPasswordEnabled(process.env.PI_WEB_PASSWORD)) {
+    return new NextResponse("Pi refuses Tailscale Funnel (public) traffic. Use tailscale serve, which keeps it inside your tailnet.", {
+      status: 403,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
+
   if (!isTrustedRequest) {
+    // The tailnet name from Settings › Remote access, reached without a Tailscale user:
+    // Funnel (public) traffic, a tagged device, or a login that is not on the list.
+    const remoteAccess = readRemoteAccessConfig();
+    if (remoteAccess && isRemoteAccessHost(request, remoteAccess)
+      && !isRemoteAccessRequestAuthorized(request, remoteAccess)) {
+      return new NextResponse("Remote access needs a signed-in Tailscale device that is allowed in Pi's settings.", {
+        status: 403,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
     if (!isApiRequest) {
       return new NextResponse("Untrusted request", { status: 403 });
     }
