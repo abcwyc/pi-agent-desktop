@@ -1,8 +1,21 @@
 # Remote relay with end-to-end encryption — design
 
-Status: design, gated by a feasibility spike (results below). Replaces Tailscale as the
-way to follow and drive local sessions from a phone. Tailscale remote access (PR 194)
-stays as an optional route.
+Status: implemented (R1–R3), verified end to end in Chromium and WebKit; a real iPhone
+and a deployed relay are not yet tested. Replaces Tailscale as the way to follow and
+drive local sessions from a phone; Tailscale remote access (PR 194) stays as an option.
+Deploying: [remote-relay-deploy.md](remote-relay-deploy.md).
+
+## Where it lives
+
+| Piece | Files |
+|---|---|
+| Noise IK / IKpsk2 (X25519, AES-GCM, SHA-256) on WebCrypto, shared by both ends | `lib/relay/noise.ts` (+ cacophony vectors in `__fixtures__/`) |
+| Tunnel frames | `lib/relay/frames.ts` |
+| Relay server, Docker, compose with Caddy | `relay/` |
+| Desktop connector, storage, request mark, runtime | `lib/relay/connector.ts`, `store.ts`, `mark.ts`, `runtime.ts`; boot in `instrumentation-node.ts` |
+| Settings and routes | `components/RelaySection.tsx`, `app/api/relay/**` |
+| Phone client, shell, tunnel worker, build | `lib/relay/phone-client.ts`, `relay-shell/`, `scripts/build-relay-shell.mjs` (`npm run relay:shell`) |
+| Tests | `lib/relay/*.test.mjs`, `relay/server.test.mjs`, `e2e/relay.mjs` (browser, production build) |
 
 ## Goal and threat model
 
@@ -51,14 +64,17 @@ Phone browser (origin E = entry host)                 Relay (wss)              D
 All primitives come from WebCrypto (`crypto.subtle`), available in browsers and in
 Node, so one TypeScript module runs on both ends.
 
-- **Handshake: Noise `KK`** (`-> e, es, ss` / `<- e, ee, se`), DH over P-256, AES-256-GCM,
-  SHA-256 (HKDF per the Noise spec). Both static keys are known after pairing, so each
-  session is mutually authenticated and forward secret. Implemented with Noise's
-  `MixKey`/`MixHash` state machine, tested against fixed vectors on both runtimes.
+- **Handshake: Noise `IK`** (`-> e, es, s, ss` / `<- e, ee, se`), the standard
+  `Noise_IK_25519_AESGCM_SHA256`: the phone knows the desktop's static key from pairing
+  and sends its own encrypted in the first message; the desktop accepts it only if it is
+  a paired device. Mutually authenticated and forward secret. The implementation matches
+  the cacophony test vectors for `IK` and `IKpsk2` byte for byte. (The first draft planned
+  `KK` over P-256; WebCrypto X25519 in Safari 17 and Chrome 133 made the standard,
+  vector-checked suite possible.)
 - **Transport:** the two `CipherState`s from `Split()`; 64-bit counters as nonces; any
   decrypt failure or counter gap closes the session.
 - **Keys:** desktop static key in `~/.pi/agent/pi-web/relay-identity.json` (0600). Each
-  phone generates a non-extractable static key kept in IndexedDB on E.
+  phone generates its static key and keeps it in IndexedDB on E (see "Device key storage").
 - **Relay login:** the desktop proves its agent id (hash of its relay-auth public key) by
   signing a relay challenge (ECDSA P-256). Registering a new agent needs the relay's
   admin token, so strangers cannot use the relay.
@@ -66,12 +82,28 @@ Node, so one TypeScript module runs on both ends.
 ### Pairing
 
 1. Desktop Settings shows a QR: `https://<E>/__shell/#pair=<relay, agent id, desktop
-   static public key, one-time 128-bit secret>`. The fragment never reaches E or the relay.
-   The secret expires after 5 minutes and is single use.
-2. The phone opens it, creates its static key, and sends `{device public key, name}`
-   AES-GCM-encrypted under `HKDF(secret)` through the relay.
-3. The desktop shows "Allow <name>?"; on yes it stores the device key. Devices are listed
-   and revocable in Settings; revoking closes that device's sessions.
+   static public key, pairing id, one-time 256-bit secret>`. The fragment never reaches E
+   or the relay; the shell drops it from the address bar at once. It expires after 5
+   minutes and pairs one phone.
+2. The phone creates its static key and runs Noise `IKpsk2` with the secret as the psk
+   (first byte `2` and the pairing id, in clear, select the ticket).
+3. `IKpsk2` mixes the psk in only at the second message, so the desktop's side of the
+   handshake completes without proof that the phone holds the secret. The phone's first
+   transport message (`PairRequest {name}`, keys derived from the psk) is that proof; only
+   then does the desktop show "Allow <name>?" and burn the ticket. (A test caught the
+   first version accepting the request before the proof.)
+4. On Allow the desktop stores the device key. Devices are listed and revocable in
+   Settings; revoking closes that device's sessions and stops its pushes.
+
+Normal sessions run Noise `IK` (first byte `1`): the desktop accepts only a static key
+that is in its device list, read from disk on every handshake.
+
+### Device key storage on the phone
+
+The shell keeps a non-extractable `CryptoKey` in IndexedDB where it survives the round
+trip; it probes that first (`canKeepCryptoKeys`), because Playwright's WebKit stores a
+CryptoKey as null and a phone would forget its pairing on reload. Where the probe fails,
+the key is kept as raw bytes. Requires X25519 in WebCrypto: iOS 17 / Chrome 133.
 
 ## Desktop side
 
@@ -111,12 +143,23 @@ Findings that shape the design:
 Not yet verified: a real iPhone (service-worker lifetime during long streams, behaviour
 when the PWA is backgrounded), and Safari's handling of very large responses.
 
+## End-to-end results (2026-11-03)
+
+`node e2e/relay.mjs` (production build, real relay, shell on its own origin), Chromium
+and WebKit with the iPhone 14 profile, all passing: pair from the QR link and approve on
+the desktop; the app loads and hydrates through the tunnel; POST reaches its route; the
+relay, pairing and remote-access settings refuse the phone (403, `local: false`); SSE
+streams; reload reconnects with the stored key; a cross-site form POST to the entry host
+is refused by the tunnel worker; a removed phone is shut out. Node tests add byte-exact
+Noise vectors, relay routing and limits, and a man-in-the-middle tap showing the relay
+never sees request paths, headers, bodies, device names or the relay mark.
+
 ## Phases
 
 | Phase | Scope | Proof |
 |---|---|---|
 | R1 transport | framing (multiplexed streams, backpressure, cancel), relay server, connector, shell + worker, app framed-mode fixes | Playwright Chromium + WebKit through a real relay process |
-| R2 E2E | Noise KK module, pairing QR, device registry and revoke UI, request marking in the proxy | cross-runtime vectors; tamper / replay / wrong-key tests; a test that the relay sees only ciphertext; mutation tests |
+| R2 E2E | Noise IK / IKpsk2 module, pairing QR, device registry and revoke UI, request marking in the proxy | cross-runtime vectors; tamper / replay / wrong-key tests; a test that the relay sees only ciphertext; mutation tests |
 | R3 product | push through the tunnel worker, PWA manifest on E, Settings section, relay Dockerfile, entry-host build, deploy guide | end-to-end on a deployed relay |
 | R4 hardening | independent adversarial review, rate limits, reconnect and resume, real iPhone test | review findings closed |
 

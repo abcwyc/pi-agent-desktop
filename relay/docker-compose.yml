@@ -1,0 +1,34 @@
+# Relay behind Caddy, which obtains and renews the HTTPS certificate itself.
+# 1. Point relay.example.com (DNS A record) at this server; open ports 80 and 443.
+# 2. Put RELAY_DOMAIN and RELAY_ADMIN_TOKEN in a .env file next to this file:
+#      RELAY_DOMAIN=relay.example.com
+#      RELAY_ADMIN_TOKEN=<long random string, e.g. openssl rand -hex 32>
+# 3. docker compose up -d
+services:
+  relay:
+    build: .
+    restart: unless-stopped
+    environment:
+      RELAY_ADMIN_TOKEN: ${RELAY_ADMIN_TOKEN:?set RELAY_ADMIN_TOKEN in .env}
+      # Caddy is in front: take the client address from X-Forwarded-For for rate limits.
+      RELAY_TRUST_PROXY: "1"
+    volumes:
+      - relay-data:/data
+    expose:
+      - "8787"
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      RELAY_DOMAIN: ${RELAY_DOMAIN:?set RELAY_DOMAIN in .env}
+    command: caddy reverse-proxy --from ${RELAY_DOMAIN} --to relay:8787
+    volumes:
+      - caddy-data:/data
+    depends_on:
+      - relay
+volumes:
+  relay-data:
+  caddy-data:

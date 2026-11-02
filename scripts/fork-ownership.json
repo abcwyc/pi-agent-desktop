@@ -200,10 +200,10 @@
     },
     "lib/web-push.ts": {
       "risk": "medium",
-      "drift": 173,
-      "structuralDrift": 173,
+      "drift": 189,
+      "structuralDrift": 189,
       "disposition": "accepted",
-      "reason": "Fork adds failed / waiting-for-you pushes (notifySessionEvent, sessionPushPayload), a caller-supplied session name that skips SessionManager.listAll(), and per-device test send / unsubscribe. An upstream rewrite of the notifier must keep all three event kinds, 404/410 pruning, and sendTest rethrowing delivery errors."
+      "reason": "Fork adds failed / waiting-for-you pushes (notifySessionEvent, sessionPushPayload), a caller-supplied session name that skips SessionManager.listAll(), and per-device test send / unsubscribe. An upstream rewrite of the notifier must keep all three event kinds, 404/410 pruning, and sendTest rethrowing delivery errors. Subscriptions made through the encrypted relay carry relayDevice and are skipped once that device is revoked (isRelayDevicePaired)."
     },
     "lib/push-client.ts": {
       "risk": "medium",
@@ -218,6 +218,27 @@
       "structuralDrift": 19,
       "disposition": "accepted",
       "reason": "Admits the Settings › Remote access tailnet name only for an authorized Tailscale user, and its https Origin. A merge that drops the remoteAccess parameter fails closed (the phone loses access); one that admits the host without isRemoteAccessRequestAuthorized would open the server to the whole tailnet."
+    },
+    "components/PwaRegistration.tsx": {
+      "risk": "low",
+      "drift": 18,
+      "structuralDrift": 18,
+      "disposition": "accepted",
+      "reason": "Skips service worker registration when framed: on the relay's entry host the phone shell's tunnel worker owns the '/' scope, and registering /sw.js would replace it and cut the connection."
+    },
+    "app/api/push/subscribe/route.ts": {
+      "risk": "low",
+      "drift": 12,
+      "structuralDrift": 12,
+      "disposition": "accepted",
+      "reason": "Binds a subscription to its Tailscale login or relay device, so revoking either stops that phone's notifications."
+    },
+    "app/api/open-in-explorer/route.ts": {
+      "risk": "low",
+      "drift": 6,
+      "structuralDrift": 6,
+      "disposition": "accepted",
+      "reason": "Asks isLocalRequest() instead of trusting a loopback Host: requests replayed by the relay connector (and Tailscale Host spoofs) carry a loopback Host too."
     }
   },
   "forkOwnedPaths": [
@@ -304,6 +325,7 @@
     "reduce": "Drift that can be removed without losing anything — desktop-only code that belongs in components/desktop/, or fork additions sitting in an upstream file that can move to a fork-owned one. Act on these."
   },
   "decisionLog": [
+    "2026-11-03 — End-to-end encrypted relay (docs/remote-relay.md): PwaRegistration, push/subscribe and open-in-explorer gain small fork edits; lib/web-push.ts binds relay subscriptions. Markers in components/fork-extractions.test.mjs pin the relay wiring in proxy.ts, instrumentation-node.ts, desktop-api-auth.ts and SettingsPanel.tsx.",
     "2026-11-01 — Remote access (PR 194): lib/web-push.ts and lib/push-client.ts carry the phone push events and the iOS tap-to-enable path; lib/request-security.ts and proxy.ts gate the Tailscale Serve hostname on Tailscale-User-Login and refuse Funnel traffic. Markers in components/fork-extractions.test.mjs pin the wiring.",
     "2026-10-21 — MarkdownBody now integrates @lobehub/streamdown through fork-owned StreamingMarkdown and useStreamingMarkdown, retaining Pi's remark/rehype pipeline, widgets, final-text flush and document-scoped fallbacks. Stable block caching and paced word fades replace full-document parsing on every streamed snapshot; no Lobe UI theme is imported. Browser replay measures parse volume against the former 120ms strategy.",
     "2026-07-26 — lib/api-types.ts: fork update types moved to lib/app-update-types.ts; file now matches upstream and left the manifest.",
