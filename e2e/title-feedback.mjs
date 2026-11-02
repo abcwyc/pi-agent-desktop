@@ -87,7 +87,7 @@ try {
   const openMore = () => page.locator(".app-topbar-more-trigger").click();
   const generate = async () => {
     await openMore();
-    await page.locator(".app-topbar-more-menu").getByRole("menuitem").first().click();
+    await page.locator(".app-topbar-more-menu .app-topbar-more-title").click();
   };
   const notice = page.locator(".app-notice-item");
   await page.goto(`${origin}/?session=${first}`);
@@ -101,7 +101,7 @@ try {
   }));
   assert.ok(geometry.noticeTop >= geometry.toolbarBottom + 8, "notice must leave the toolbar reachable");
   await openMore();
-  assert.ok(await page.locator(".app-topbar-more-menu").getByRole("menuitem").first().isDisabled());
+  assert.ok(await page.locator(".app-topbar-more-menu .app-topbar-more-title").isDisabled());
   assert.equal(calls, 1);
   await page.keyboard.press("Escape");
   release();
@@ -150,7 +150,7 @@ try {
   await narrowPage.goto(`${origin}/?session=${first}`);
   await narrowPage.getByText("Synthetic Title target message", { exact: true }).waitFor();
   await narrowPage.locator(".app-topbar-more-trigger").click();
-  await narrowPage.locator(".app-topbar-more-menu").getByRole("menuitem").first().click();
+  await narrowPage.locator(".app-topbar-more-menu .app-topbar-more-title").click();
   await narrowPage.getByText(/当前会话的模型认证失败/).waitFor();
   const fits = await narrowPage.locator(".app-notice-item").evaluate(element => {
     const bounds = element.getBoundingClientRect();

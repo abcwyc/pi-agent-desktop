@@ -2439,7 +2439,7 @@ export function AppShell() {
                         </button>
                         <div className="app-topbar-more-separator" role="separator" />
                         <button
-                          className="app-topbar-more-item"
+                          className="app-topbar-more-item app-topbar-more-title"
                           type="button"
                           role="menuitem"
                           disabled={nameDisabled}
