@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { existsSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import path from "path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { SkillToggleResult } from "@/lib/api-types";
@@ -7,6 +7,7 @@ import { loadSkillsWithInstallInfo } from "@/lib/skills-service";
 import { setDisableModelInvocation } from "@/lib/skill-frontmatter";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
 import { userHome } from "@/lib/user-home";
+import { replaceFileAtomicSync } from "@/lib/atomic-file";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,7 @@ function toggleSkillFile(
   const content = readFileSync(filePath, "utf8");
   const updated = setDisableModelInvocation(content, disableModelInvocation);
   // A skill already in the requested state keeps its file and mtime.
-  if (updated !== content) writeFileSync(filePath, updated, "utf8");
+  if (updated !== content) replaceFileAtomicSync(filePath, updated);
   return null;
 }
 

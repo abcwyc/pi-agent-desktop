@@ -1,7 +1,8 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import lockfile from "proper-lockfile";
+import { replaceFileAtomicSync } from "./atomic-file";
 
 // Locked read-modify-write of the global `settings.json` for the keys pi's
 // SettingsManager has no setter for (`defaultTools`). The lock is the one
@@ -66,8 +67,7 @@ export async function updateGlobalSettings<T>(
   try {
     const settings = parseSettings(settingsPath);
     const result = update(settings);
-    writeFileSync(settingsPath, JSON.stringify(settings, null, 2), "utf8");
-    chmodSync(settingsPath, 0o600);
+    replaceFileAtomicSync(settingsPath, JSON.stringify(settings, null, 2), { mode: 0o600 });
     return result;
   } finally {
     await release();

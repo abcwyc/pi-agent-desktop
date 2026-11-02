@@ -2,7 +2,7 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { createAgentSessionFromServices, createAgentSessionServices, getAgentDir, initTheme, SessionManager, SettingsManager, Theme } from "@earendil-works/pi-coding-agent";
 import { KeybindingsManager as TuiKeybindingsManager, TUI_KEYBINDINGS } from "@earendil-works/pi-tui";
 import { randomUUID } from "crypto";
-import { existsSync, realpathSync, writeFileSync } from "fs";
+import { existsSync, realpathSync, statSync, writeFileSync } from "fs";
 import { resolve } from "path";
 import { validateAgentImages } from "./image-attachments";
 import { userImageDisplayText, userMessageImageCount } from "./user-image-display";
@@ -20,6 +20,7 @@ import type { AgentRunOutcome, AgentTaskSnapshot } from "./types";
 export type { AgentRunOutcome, AgentTaskSnapshot } from "./types";
 import { isVerboseLogging } from "../bin/pi-web-options.js";
 import { hasActiveSessionLivenessProvider } from "./session-liveness";
+import { IDLE_SESSION_CAP_GRACE_MS, selectIdleSessionsToEvict, type IdleSessionCandidate } from "./idle-session-cap";
 import type { LoadExtensionsResult, SlashCommandInfo } from "@earendil-works/pi-coding-agent";
 import { PRODUCT_NAME } from "./branding";
 import type { AgentSessionLike, ExtensionUiContextLike, NavigateTreeOptions, ToolInfo } from "./pi-types";
@@ -404,6 +405,9 @@ export class AgentSessionWrapper {
   private mcpPromptWait: { controller: AbortController; done: Promise<void> } | null = null;
   private unsubscribe: (() => void) | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  // Last time a listener was attached or left, or a command/event reset the idle timer.
+  private lastUsedAt = Date.now();
+  private onUnwatchedCallback: (() => void) | null = null;
   private onDestroyCallback: (() => void) | null = null;
   private shutdownPromise: Promise<void> | null = null;
   private sessionShutdownEmitted = false;
@@ -854,6 +858,7 @@ export class AgentSessionWrapper {
   }
 
   private resetIdleTimer(): void {
+    this.lastUsedAt = Date.now();
     if (!this._alive) {
       if (this.idleTimer) clearTimeout(this.idleTimer);
       return;
@@ -907,11 +912,42 @@ export class AgentSessionWrapper {
 
   onEvent(listener: EventListener): () => void {
     this.listeners.add(listener);
+    this.lastUsedAt = Date.now();
     for (const event of this.pendingUiRequests.values()) listener(event);
     for (const event of this.activeToolEvents.values()) listener(event);
     return () => {
-      this.listeners.delete(listener);
+      if (!this.listeners.delete(listener)) return;
+      this.lastUsedAt = Date.now();
+      if (this.listeners.size === 0) this.onUnwatchedCallback?.();
     };
+  }
+
+  onUnwatched(cb: () => void): void {
+    this.onUnwatchedCallback = cb;
+  }
+
+  /**
+   * This wrapper as a candidate for the idle-session cap (lib/idle-session-cap.ts),
+   * or null while anything still needs it loaded: a run (isRunning()), an SSE
+   * listener, a pending extension dialog, queued composer messages, an extension
+   * liveness provider, or use within the grace period. A session with no file on
+   * disk yet is never a candidate: shutting it down would lose it.
+   */
+  idleCapCandidate(now: number = Date.now()): IdleSessionCandidate | null {
+    if (!this.isAlive() || this.isRunning() || this.forceShutdownOnIdle) return null;
+    if (this.listeners.size > 0 || this.pendingUiRequests.size > 0 || this.activeCustomUis.size > 0) return null;
+    if (this.composerQueue.snapshot().length > 0) return null;
+    if (now - this.lastUsedAt < IDLE_SESSION_CAP_GRACE_MS) return null;
+    const sessionFile = this.sessionFile;
+    if (!sessionFile) return null;
+    let bytes: number;
+    try {
+      bytes = statSync(sessionFile).size;
+    } catch {
+      return null;
+    }
+    if (hasActiveSessionLivenessProvider({ sessionId: this.sessionId, sessionFile })) return null;
+    return { id: this.sessionId, idleSince: this.lastUsedAt, bytes };
   }
 
   onDestroy(cb: () => void): void {
@@ -2314,8 +2350,50 @@ function registerRpcWrapper(wrapper: AgentSessionWrapper): void {
     previous.onDestroy(() => {});
   }
   registry.set(sessionId, wrapper);
+  wrapper.onUnwatched(scheduleIdleSessionCap);
   wrapper.start();
   if (!wrapper.isChatOnly()) wrapper.beginExtensionBinding();
+  enforceIdleSessionCap();
+}
+
+let idleSessionCapTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Re-check the cap once a session that just lost its last listener is past the grace period. */
+function scheduleIdleSessionCap(): void {
+  if (idleSessionCapTimer) clearTimeout(idleSessionCapTimer);
+  idleSessionCapTimer = setTimeout(() => {
+    idleSessionCapTimer = null;
+    enforceIdleSessionCap();
+  }, IDLE_SESSION_CAP_GRACE_MS + 1_000);
+  idleSessionCapTimer.unref?.();
+}
+
+/**
+ * Shut down the oldest unwatched idle wrappers beyond the cap in
+ * lib/idle-session-cap.ts. PI_WEB_IDLE_TIMEOUT_MS=0 asks to keep sessions
+ * loaded, so it turns the cap off too. Returns the ids shut down.
+ */
+export function enforceIdleSessionCap(now: number = Date.now()): string[] {
+  if (SESSION_IDLE_TIMEOUT_MS === 0) return [];
+  const registry = getRegistry();
+  const candidates: IdleSessionCandidate[] = [];
+  const wrappers = new Map<string, AgentSessionWrapper>();
+  for (const [key, wrapper] of registry) {
+    // A wrapper registered before a hot reload may lack the method.
+    const candidate = typeof wrapper.idleCapCandidate === "function" ? wrapper.idleCapCandidate(now) : null;
+    if (!candidate) continue;
+    candidates.push({ ...candidate, id: key });
+    wrappers.set(key, wrapper);
+  }
+  const evicted: string[] = [];
+  for (const id of selectIdleSessionsToEvict(candidates)) {
+    const wrapper = wrappers.get(id)!;
+    evicted.push(id);
+    void wrapper.shutdown().catch((error) => {
+      console.error("[pi-web] failed to shut down capped idle session:", error instanceof Error ? error.message : error);
+    });
+  }
+  return evicted;
 }
 
 const SUBAGENT_CONTROLLER = createSubagentController({
