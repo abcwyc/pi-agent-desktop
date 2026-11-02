@@ -88,10 +88,12 @@ test("session listing returns a gzip-compressed response when the client accepts
     await rm(dir, { recursive: true, force: true });
   });
 
-  const firstMessage = "compressible session content ".repeat(500);
-  const manager = SessionManager.create(dir);
-  manager.appendMessage({ role: "user", content: firstMessage, timestamp: Date.now() });
-  manager.appendMessage({ role: "assistant", content: [{ type: "text", text: "done" }], timestamp: Date.now() });
+  const firstMessage = "compressible session content";
+  for (let index = 0; index < 8; index += 1) {
+    const manager = SessionManager.create(dir);
+    manager.appendMessage({ role: "user", content: firstMessage, timestamp: Date.now() });
+    manager.appendMessage({ role: "assistant", content: [{ type: "text", text: "done" }], timestamp: Date.now() });
+  }
   invalidateSessionListCache();
 
   const response = await getSessionList(new Request("http://localhost/api/sessions", {
@@ -103,6 +105,45 @@ test("session listing returns a gzip-compressed response when the client accepts
   assert.match(response.headers.get("Vary") ?? "", /(?:^|,\s*)Accept-Encoding(?:\s*,|$)/i);
   const payload = JSON.parse(gunzipSync(Buffer.from(await response.arrayBuffer())).toString("utf8"));
   assert.equal(payload.sessions[0].firstMessage, firstMessage);
+});
+
+test("session listing sends a bounded first-message title, not the whole first prompt", async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-web-list-title-"));
+  const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = dir;
+  invalidateSessionListCache();
+  t.after(async () => {
+    if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+    invalidateSessionListCache();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  // A pasted document: measured on a real ~/.pi, first messages were 84% of the list payload.
+  const pasted = SessionManager.create(dir);
+  pasted.appendMessage({ role: "user", content: `😀${"long pasted prompt ".repeat(1000)}`, timestamp: Date.now() });
+  pasted.appendMessage({ role: "assistant", content: [{ type: "text", text: "done" }], timestamp: Date.now() });
+  // An SDK skill expansion: the args the user typed come after the whole SKILL.md body.
+  const skill = SessionManager.create(dir);
+  const body = "Skill instructions. ".repeat(500);
+  skill.appendMessage({
+    role: "user",
+    content: `<skill name="eli5" location="/s/eli5/SKILL.md">\nReferences are relative to /s/eli5.\n\n${body}\n</skill>\n\nquantum tunnelling`,
+    timestamp: Date.now(),
+  });
+  skill.appendMessage({ role: "assistant", content: [{ type: "text", text: "done" }], timestamp: Date.now() });
+  invalidateSessionListCache();
+
+  for (const url of ["http://localhost/api/sessions", "http://localhost/api/sessions?summary=1"]) {
+    const { sessions } = await (await getSessionList(new Request(url))).json();
+    const byId = new Map(sessions.map((session) => [session.id, session]));
+    const pastedTitle = byId.get(pasted.getSessionId()).firstMessage;
+    assert.equal(Array.from(pastedTitle).length, 201, url);
+    assert.ok(pastedTitle.startsWith("😀long pasted prompt"), url);
+    assert.ok(pastedTitle.endsWith("…"), url);
+    assert.ok(!/[\uD800-\uDBFF]…$/.test(pastedTitle), "never ends on half a surrogate pair");
+    assert.equal(byId.get(skill.getSessionId()).firstMessage, "/skill:eli5 quantum tunnelling", url);
+  }
 });
 
 test("deleting an unpersisted session shuts down its runtime and invalidates caches", async (t) => {

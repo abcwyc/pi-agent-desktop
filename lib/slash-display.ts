@@ -20,3 +20,26 @@ export function skillExpansionToCommand(text: string): string | null {
   const [, name, , , args] = match;
   return args ? `/skill:${name} ${args}` : `/skill:${name}`;
 }
+
+/**
+ * Longest first message the session list sends. Every reader of the list shows
+ * one line of it (the sidebar title takes 50 characters), but the scanner keeps
+ * the whole first prompt: on a real ~/.pi, pasted documents and skill bodies
+ * were 84% of a 1 MB list that a cold start fetches three times.
+ */
+export const SESSION_LIST_FIRST_MESSAGE_CHARS = 200;
+
+/**
+ * A session list's first message: the compact `/skill:` command for a skill
+ * expansion (its args sit after the whole SKILL.md body, so it must be restored
+ * before cutting), then at most SESSION_LIST_FIRST_MESSAGE_CHARS code points.
+ */
+export function sessionListFirstMessage(text: string): string {
+  const display = skillExpansionToCommand(text) ?? text;
+  if (display.length <= SESSION_LIST_FIRST_MESSAGE_CHARS) return display;
+  // Twice the limit in UTF-16 units always holds the limit in code points.
+  const head = display.slice(0, SESSION_LIST_FIRST_MESSAGE_CHARS * 2);
+  const points = Array.from(head);
+  if (points.length <= SESSION_LIST_FIRST_MESSAGE_CHARS && head === display) return display;
+  return `${points.slice(0, SESSION_LIST_FIRST_MESSAGE_CHARS).join("")}…`;
+}
