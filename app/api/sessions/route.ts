@@ -16,6 +16,7 @@ import { startServerPerf } from "@/lib/perf";
 import { attachScheduledRelations } from "@/lib/scheduled-tasks/run-index";
 import { ensureChatWorkspace, pruneEmptyChatFolders } from "@/lib/chat-workspace";
 import { allowFileRoot } from "@/lib/file-access";
+import { sessionListFirstMessage } from "@/lib/slash-display";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,11 @@ export async function GET(req: Request) {
       void pruneEmptyChatFolders(undefined, { keep: inUse }).catch(() => undefined);
     }
     perf?.span("scan+projects");
-    const sessions = attachScheduledRelations(mergeSessionLists(persistedSessions, runtimeSessions));
+    const sessions = attachScheduledRelations(mergeSessionLists(persistedSessions, runtimeSessions))
+      .map((session) => {
+        const firstMessage = sessionListFirstMessage(session.firstMessage);
+        return firstMessage === session.firstMessage ? session : { ...session, firstMessage };
+      });
     const payload = {
       sessions,
       sessionListVersion,

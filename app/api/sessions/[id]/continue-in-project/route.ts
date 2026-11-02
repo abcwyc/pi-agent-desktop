@@ -1,9 +1,10 @@
-import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, rmSync, statSync } from "fs";
 import { resolve } from "path";
 import { NextResponse } from "next/server";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { isChatFolderPath, isChatWorkspacePath } from "@/lib/chat-workspace";
 import { allowFileRoot } from "@/lib/file-access";
+import { replaceFileAtomicSync } from "@/lib/atomic-file";
 import { getRpcSession } from "@/lib/rpc-manager";
 import {
   invalidateSessionListCache,
@@ -112,5 +113,5 @@ function forgetChatSystemPrompt(file: string): void {
   const rewritten = kept.map((entry) => (
     "parentId" in entry ? { ...entry, parentId: survivor(entry.parentId as string | null | undefined) } : entry
   ));
-  writeFileSync(file, `${rewritten.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
+  replaceFileAtomicSync(file, `${rewritten.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
 }
