@@ -7,8 +7,13 @@
  * Only wrappers that are not running, have no SSE listener and have been
  * unwatched for IDLE_SESSION_CAP_GRACE_MS count; the most recently left one is
  * always kept, so going back to the session just left is still instant.
+ *
+ * The byte budget is what bounds the heap; the count only stops many small
+ * sessions piling up. At 4 it evicted ordinary 1-5 MB sessions while the user
+ * cycled through a handful, and every switch back cold-started a wrapper
+ * (re-parsing the transcript and rebinding extensions) — 0.8.1's slow switches.
  */
-export const IDLE_SESSION_CAP_MAX_COUNT = 4;
+export const IDLE_SESSION_CAP_MAX_COUNT = 12;
 /** Session-file bytes, a proxy for the heap a loaded transcript holds. */
 export const IDLE_SESSION_CAP_MAX_BYTES = 256 * 1024 * 1024;
 /** An EventSource reconnect or a session switch briefly leaves zero listeners. */
