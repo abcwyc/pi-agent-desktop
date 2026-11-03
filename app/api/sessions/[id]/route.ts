@@ -192,15 +192,20 @@ export async function PATCH(
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    // Not flushed yet: appending to the file would strand the name in a stub
-    // the live runtime is about to write over. Let the runtime record it.
-    if (!existsSync(filePath)) {
-      const live = getRpcSession(id);
-      if (!live?.isAlive()) {
-        return NextResponse.json({ error: "Session not found" }, { status: 404 });
-      }
-      await live.send({ type: "set_session_name", name: name.trim() });
+    // A live session owns its file: a second manager appending behind its back
+    // leaves the live one (and GET, which reads it) on the old name, and hangs
+    // the entry off a leaf the live tree has moved past. Before the first flush
+    // the file is also a stub the runtime is about to write over. So whenever
+    // the session is live, let its own manager record the name. Unlike the
+    // set_session_name command this accepts "", which clears the title.
+    const live = getRpcSession(id);
+    if (live?.isAlive()) {
+      live.inner.setSessionName(name.trim());
+      invalidateSessionListCache();
       return NextResponse.json({ ok: true });
+    }
+    if (!existsSync(filePath)) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
     // PATCH writes via appendSessionInfo — open fresh, bypassing the cache.
