@@ -32,6 +32,8 @@ export const APP_PREF_KEYS = {
   pinnedChats: "pi-web:pinned-chats",
   /** Chat session ids hidden from the Chats section until "Show archived". */
   archivedChats: "pi-web:archived-chats",
+  /** Project session ids hidden from their project until "Show archived" (#200). */
+  archivedSessions: "pi-web:archived-sessions",
   updateSnooze: "pi-web:update-snooze",
   closeQuits: "pi-desktop-close-quits",
   notifyOnComplete: "pi-desktop-notify-on-complete",
