@@ -10294,3 +10294,50 @@ html.dark .artifacts-thumb[data-tone="data"] { --tone: #4fc1d6; }
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* Settings › General › Remote relay (components/RelaySection.tsx) */
+.relay-section .settings-option-list > .relay-note,
+.relay-section .settings-option-list > .relay-error {
+  padding: 0 14px 10px;
+}
+
+.relay-error { color: var(--danger); }
+
+.relay-pairing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 14px;
+  text-align: center;
+}
+
+.relay-qr {
+  width: min(240px, 100%);
+  padding: 8px;
+  border-radius: 10px;
+  /* QR codes need dark modules on light: keep it light in dark mode too. */
+  background: #ffffff;
+}
+
+.relay-qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.relay-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+  align-self: center;
+}
+
+.relay-devices {
+  display: flex;
+  flex-direction: column;
+}
+
+.relay-devices > .settings-option-hint {
+  padding: 10px 14px 0;
+}

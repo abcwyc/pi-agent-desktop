@@ -2,7 +2,8 @@ import { existsSync } from "fs";
 import { NextResponse } from "next/server";
 import { isChatFolderPath } from "@/lib/chat-workspace";
 import { isNetworkExposedServer } from "@/lib/chat-file-access";
-import { isFileManagerSupported, isLoopbackHost, launchFileManager } from "@/lib/open-in-file-manager";
+import { isFileManagerSupported, launchFileManager } from "@/lib/open-in-file-manager";
+import { isLocalRequest } from "@/lib/remote-access";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 import { getRpcSession } from "@/lib/rpc-manager";
 import { readSessionHeader, resolveSessionPath } from "@/lib/session-reader";
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
   if (!hasJsonContentType(request)) {
     return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 415 });
   }
-  if (isNetworkExposedServer() || !isLoopbackHost(request.headers.get("host"))) {
+  if (isNetworkExposedServer() || !isLocalRequest(request)) {
     return NextResponse.json({ error: "remote" }, { status: 403 });
   }
   if (!isFileManagerSupported(process.platform)) {

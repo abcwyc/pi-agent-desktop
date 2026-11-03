@@ -52,8 +52,9 @@
     "desktop:verify": "node scripts/verify-packaged-codemode.mjs && node scripts/verify-packaged-terminal.mjs",
     "test:release-tools": "node --test scripts/*.test.mjs",
     "check:deps": "node scripts/check-installed-deps.mjs",
+    "relay:shell": "node scripts/build-relay-shell.mjs",
     "pretest": "npm run check:deps",
-    "test": "node --experimental-strip-types --test --test-concurrency=4 \"app/**/*.test.mjs\" \"lib/**/*.test.mjs\" \"scripts/**/*.test.mjs\" \"components/**/*.test.mjs\" \"hooks/**/*.test.mjs\" \"public/**/*.test.mjs\"",
+    "test": "node --experimental-strip-types --test --test-concurrency=4 \"app/**/*.test.mjs\" \"lib/**/*.test.mjs\" \"scripts/**/*.test.mjs\" \"components/**/*.test.mjs\" \"hooks/**/*.test.mjs\" \"relay/**/*.test.mjs\" \"relay-shell/**/*.test.mjs\" \"public/**/*.test.mjs\"",
     "lint": "eslint . && npm run check:branding",
     "check:branding": "node --test lib/branding.test.mjs",
     "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public",
@@ -86,7 +87,8 @@
     "semver": "7.8.5",
     "undici": "8.11.0",
     "web-push": "^3.6.7",
-    "@radix-ui/react-select": "^2.3.8"
+    "@radix-ui/react-select": "^2.3.8",
+    "qrcode-generator": "2.0.4"
   },
   "devDependencies": {
     "@lobehub/streamdown": "1.4.1",
@@ -121,7 +123,8 @@
     "remark-math": "^6.0.0",
     "sucrase": "3.35.0",
     "tailwindcss": "^4.2.2",
-    "typescript": "^5"
+    "typescript": "^5",
+    "ws": "8.22.0"
   },
   "overrides": {
     "katex": "$katex",

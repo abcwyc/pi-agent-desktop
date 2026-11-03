@@ -4,6 +4,7 @@ import {
   DESKTOP_API_TOKEN_HEADER,
 } from "./desktop-api.ts";
 import { isApiRequestAllowed } from "./request-security.ts";
+import { hasRelayMark } from "./relay/mark.ts";
 
 function tokenDigest(value: string): Buffer {
   return createHash("sha256").update(value, "utf8").digest();
@@ -38,6 +39,8 @@ export function isDesktopApiRequestAllowed(
 ): boolean {
   if (!isApiRequestAllowed(request)) return false;
   if (!hasLoopbackHost(request)) return false;
+  // A phone's request replayed by the relay connector arrives from loopback too.
+  if (hasRelayMark(request)) return false;
 
   const expected = expectedToken?.trim();
   const provided = request.headers.get(DESKTOP_API_TOKEN_HEADER)?.trim();

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#1a1a1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pi">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss: ws:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="manifest" href="/__shell/manifest.webmanifest">
+<link rel="icon" href="/__shell/icon-192.png">
+<link rel="apple-touch-icon" href="/__shell/icon-192.png">
+<title>Pi</title>
+<style>
+  :root { --bg: #ffffff; --text: #1d1d1f; --muted: #6e6e73; --panel: #f2f2f4; --border: #d2d2d7; --accent: #0a84ff; --ok: #30a46c; --warn: #d08a1b; --bad: #d93838; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1a1a1a; --text: #f5f5f7; --muted: #a1a1a6; --panel: #2a2a2c; --border: #3a3a3c; } }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  .screen { min-height: 100%; display: flex; align-items: center; justify-content: center; padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom)); }
+  .card { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 14px; }
+  h1 { margin: 0; font-size: 22px; }
+  p { margin: 0; color: var(--muted); }
+  label { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 13px; }
+  input { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 11px 12px; }
+  button.primary { font: inherit; font-weight: 600; color: #fff; background: var(--accent); border: 0; border-radius: 10px; padding: 12px; }
+  button.primary:disabled { opacity: .5; }
+  label.replace { color: var(--bad); font-size: 14px; }
+  label.replace[hidden] { display: none; }
+  label.replace input { width: auto; padding: 0; margin-right: 6px; vertical-align: -2px; }
+  #screen-app { position: fixed; inset: 0; padding: 0; display: block; }
+  #screen-app[hidden], .screen[hidden] { display: none; }
+  #app-frame { border: 0; width: 100%; height: 100%; display: block; background: var(--bg); }
+  #status { position: fixed; z-index: 10; right: max(10px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); font-size: 12px; opacity: .92; }
+  #status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+  #status[data-state="open"]::before { background: var(--ok); }
+  #status[data-state="offline"]::before { background: var(--bad); }
+  #status[data-state="open"] #status-text { display: none; }
+  #menu { position: fixed; z-index: 11; right: max(10px, env(safe-area-inset-right)); bottom: calc(max(10px, env(safe-area-inset-bottom)) + 38px); display: flex; flex-direction: column; min-width: 200px; padding: 4px; border-radius: 12px; border: 1px solid var(--border); background: var(--panel); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+  #menu[hidden] { display: none; }
+  #menu button { font: inherit; text-align: left; color: var(--text); background: none; border: 0; border-radius: 8px; padding: 10px 12px; }
+  #menu button.danger { color: var(--bad); }
+</style>
+</head>
+<body>
+  <section id="screen-pair" class="screen" hidden>
+    <div class="card">
+      <h1>Pair with your computer</h1>
+      <p>Everything between this phone and your computer is end-to-end encrypted. The relay only passes it on.</p>
+      <label>Name for this phone<input id="pair-name" maxlength="60" autocomplete="off"></label>
+      <label id="pair-replace" class="replace" hidden><span><input id="pair-replace-check" type="checkbox"> This phone is already paired with a computer. Replace that pairing.</span></label>
+      <button id="pair-button" class="primary" type="button">Pair</button>
+      <p id="pair-status" role="status"></p>
+    </div>
+  </section>
+  <section id="screen-unpaired" class="screen" hidden>
+    <div class="card">
+      <h1>Pi</h1>
+      <p>This phone is not paired yet. On your computer, open Settings › General › Remote relay, choose “Pair a phone”, and scan the QR code.</p>
+    </div>
+  </section>
+  <section id="screen-message" class="screen" hidden>
+    <div class="card"><h1>Pi</h1><p id="message-text"></p></div>
+  </section>
+  <section id="screen-app" hidden>
+    <iframe id="app-frame" title="Pi"></iframe>
+  </section>
+  <button id="status" type="button" hidden data-state="connecting" aria-label="Connection"><span id="status-text">Connecting…</span></button>
+  <div id="menu" hidden>
+    <button id="reconnect-button" type="button">Reconnect</button>
+    <button id="forget-button" class="danger" type="button">Unpair this phone</button>
+  </div>
+  <script type="module" src="/__shell/shell.js"></script>
+</body>
+</html>

@@ -7,6 +7,7 @@ import { enLocale } from "./i18n/messages/en";
 import { zhCNLocale } from "./i18n/messages/zh-CN";
 import { getAgentDir } from "./session-reader";
 import { isTailscaleLoginAllowed } from "./remote-access";
+import { isRelayDevicePaired } from "./relay/runtime";
 
 export interface PushSubscriptionRecord {
   endpoint: string;
@@ -14,6 +15,8 @@ export interface PushSubscriptionRecord {
   locale: string;
   /** The Tailscale login that subscribed through Settings › Remote access; absent for this computer's own browser. */
   login?: string;
+  /** The relay device that subscribed through the encrypted relay; absent otherwise. */
+  relayDevice?: string;
 }
 
 interface PushStateFile {
@@ -33,6 +36,8 @@ interface WebPushEnvironment {
   listSessionNames: () => Promise<Map<string, string>>;
   /** Whether a remote subscriber's login is still let in; a revoked phone stops getting titles and prompts. */
   isLoginAllowed?: (login: string) => boolean;
+  /** Whether a relay device is still paired; a revoked phone stops getting pushes. */
+  isRelayDevicePaired?: (deviceId: string) => boolean;
 }
 
 /** What happened in a session: a run finished, failed, or is waiting on a dialog. */
@@ -107,6 +112,7 @@ function getDefaultEnvironment(): WebPushEnvironment {
     },
     generateVapidKeys: () => webpush.generateVAPIDKeys(),
     isLoginAllowed: (login) => isTailscaleLoginAllowed(login),
+    isRelayDevicePaired: (deviceId) => isRelayDevicePaired(deviceId),
     async listSessionNames() {
       const names = new Map<string, string>();
       try {
@@ -249,7 +255,8 @@ export function createWebPushNotifier(environment: WebPushEnvironment): WebPushN
   };
 
   const deliverable = (subscription: PushSubscriptionRecord) =>
-    !subscription.login || (environment.isLoginAllowed?.(subscription.login) ?? false);
+    (!subscription.login || (environment.isLoginAllowed?.(subscription.login) ?? false))
+    && (!subscription.relayDevice || (environment.isRelayDevicePaired?.(subscription.relayDevice) ?? false));
 
   const notifySessionEvent = async (sessionId: string, event: SessionPushEvent, knownName?: string | null) => {
     const recipients = state.subscriptions.filter(deliverable);

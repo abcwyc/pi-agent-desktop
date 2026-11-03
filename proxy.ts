@@ -14,6 +14,7 @@ import {
   isRemoteAccessRequestAuthorized,
   readRemoteAccessConfig,
 } from "@/lib/remote-access";
+import { readRelayMark } from "@/lib/relay/mark";
 import {
   isValidWebSessionToken,
   isValidBasicAuthorization,
@@ -46,6 +47,18 @@ export function proxy(request: NextRequest) {
       headers: { "Cache-Control": "no-store" },
     });
   }
+
+  // A paired phone's request, replayed from 127.0.0.1 by the relay connector after
+  // its Noise session authenticated the device key. Host and Origin are the
+  // connector's own, and device keys take the place of the web password. A mark
+  // this process did not issue is refused outright.
+  const relayMark = readRelayMark(request);
+  if (relayMark === "forged") {
+    return isApiRequest
+      ? NextResponse.json({ error: "Untrusted relay request" }, { status: 403 })
+      : new NextResponse("Untrusted relay request", { status: 403 });
+  }
+  if (relayMark) return NextResponse.next();
 
   if (!isTrustedRequest) {
     // The tailnet name from Settings › Remote access, reached without a Tailscale user:

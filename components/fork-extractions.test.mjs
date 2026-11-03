@@ -364,6 +364,48 @@ const FORK_FEATURES = [
     markers: ["onAttentionNeeded", "getRpcTaskSnapshots", "recordRecentRunOutcome", "event.aborted === true", "notifySessionEvent("],
   },
   {
+    name: "Relay: proxy admits only this process's relay mark",
+    file: "proxy.ts",
+    markers: ["readRelayMark(request)", 'relayMark === "forged"'],
+  },
+  {
+    name: "Relay: connector starts at boot",
+    file: "instrumentation-node.ts",
+    markers: ["restartRelayFromConfig()"],
+  },
+  {
+    name: "Relay: desktop-token routes refuse relayed requests",
+    file: "lib/desktop-api-auth.ts",
+    markers: ["hasRelayMark(request)"],
+  },
+  {
+    name: "Relay: Settings section",
+    file: "components/SettingsPanel.tsx",
+    markers: ["<RelaySection />"],
+  },
+  {
+    name: "Relay: no app service worker inside the phone shell",
+    file: "components/PwaRegistration.tsx",
+    markers: ["window.self !== window.top"],
+  },
+  {
+    name: "Relay: revoked phones get no pushes",
+    file: "lib/web-push.ts",
+    markers: ["isRelayDevicePaired", "subscription.relayDevice"],
+  },
+  {
+    name: "Relay: push subscriptions record the relay device",
+    file: "app/api/push/subscribe/route.ts",
+    markers: ["readRelayMark(req)", "relayDevice"],
+  },
+  {
+    name: "Local-only file manager routes ask isLocalRequest",
+    file: "app/api/open-in-explorer/route.ts",
+    // A loopback Host proves nothing: the relay connector and Tailscale Serve both forward one.
+    markers: ["isLocalRequest(request)"],
+    forbiddenMarkers: ["isLoopbackHost(request"],
+  },
+  {
     name: "Artifacts entry in the sidebar",
     file: "components/SessionSidebar.tsx",
     markers: ["ArtifactsSidebarRow", "onOpenArtifacts"],
