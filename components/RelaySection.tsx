@@ -17,6 +17,11 @@ interface RelayResponse {
   pending: PendingPairing[];
 }
 
+function isRelayResponse(value: unknown): value is RelayResponse {
+  const body = value as Partial<RelayResponse> | null;
+  return Boolean(body?.status) && Array.isArray(body?.devices) && Array.isArray(body?.pending);
+}
+
 interface Pairing {
   url: string;
   expiresAt: number;
@@ -57,7 +62,9 @@ export function RelaySection() {
     try {
       const response = await fetch("/api/relay", { cache: "no-store" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const next = await response.json() as RelayResponse;
+      const next: unknown = await response.json();
+      // An older server (or one without the relay routes) answers with something else.
+      if (!isRelayResponse(next)) throw new Error("Unexpected response");
       setData(next);
       setLoadFailed(false);
       if (initial && next.config) {
@@ -108,7 +115,8 @@ export function RelaySection() {
       body: JSON.stringify({ url, entryUrl, enabled, ...(adminToken.trim() ? { adminToken: adminToken.trim() } : {}) }),
     }) as RelayResponse | null;
     if (result) {
-      setData(result);
+      if (isRelayResponse(result)) setData(result);
+      else await load();
       setAdminToken("");
       if (!enabled) setPairing(null);
     }
