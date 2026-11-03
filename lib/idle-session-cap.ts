@@ -7,8 +7,13 @@
  * Only wrappers that are not running, have no SSE listener and have been
  * unwatched for IDLE_SESSION_CAP_GRACE_MS count; the most recently left one is
  * always kept, so going back to the session just left is still instant.
+ *
+ * Only bytes are capped, never the number of sessions: small transcripts cost
+ * little heap, and 0.8.1's count of 4 evicted ordinary 1-5 MB sessions while
+ * the user switched among a handful, so every switch back cold-started a
+ * wrapper (re-parsing the transcript and rebinding extensions). The 10-minute
+ * idle timeout still releases them all.
  */
-export const IDLE_SESSION_CAP_MAX_COUNT = 4;
 /** Session-file bytes, a proxy for the heap a loaded transcript holds. */
 export const IDLE_SESSION_CAP_MAX_BYTES = 256 * 1024 * 1024;
 /** An EventSource reconnect or a session switch briefly leaves zero listeners. */
@@ -22,28 +27,25 @@ export interface IdleSessionCandidate {
 }
 
 export interface IdleSessionCapLimits {
-  maxCount?: number;
   maxBytes?: number;
 }
 
 /**
  * Ids to shut down, oldest first. Walking from the most recently left session,
- * each one is kept if it still fits the count and the byte budget; the newest
- * is kept even when it alone is over budget.
+ * each one is kept if it still fits the byte budget; the newest is kept even
+ * when it alone is over budget.
  */
 export function selectIdleSessionsToEvict(
   candidates: readonly IdleSessionCandidate[],
-  { maxCount = IDLE_SESSION_CAP_MAX_COUNT, maxBytes = IDLE_SESSION_CAP_MAX_BYTES }: IdleSessionCapLimits = {},
+  { maxBytes = IDLE_SESSION_CAP_MAX_BYTES }: IdleSessionCapLimits = {},
 ): string[] {
   const newestFirst = [...candidates].sort((a, b) => b.idleSince - a.idleSince);
   const evict: string[] = [];
-  let keptCount = 0;
+  let keptAny = false;
   let keptBytes = 0;
   for (const candidate of newestFirst) {
-    const fits = keptCount === 0
-      || (keptCount < maxCount && keptBytes + candidate.bytes <= maxBytes);
-    if (fits) {
-      keptCount += 1;
+    if (!keptAny || keptBytes + candidate.bytes <= maxBytes) {
+      keptAny = true;
       keptBytes += candidate.bytes;
     } else {
       evict.push(candidate.id);

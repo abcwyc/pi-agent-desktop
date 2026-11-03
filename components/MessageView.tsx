@@ -931,16 +931,6 @@ function AssistantMessageView({
       <div className="message-assistant-footer" style={{
         display: "flex", alignItems: "center", gap: 8, marginTop: 4,
       }}>
-        {message.usage && !isStreaming && (() => {
-          const usage = formatUsage(message.usage);
-          // Cost only at rest; token counts appear while the footer is hovered.
-          return (
-            <div className="message-meta" style={{ fontSize: "var(--fs-micro)", color: "var(--text-dim)" }} title={usage.full}>
-              <span className="message-meta-summary">{usage.summary}</span>
-              {usage.detail && <span className="message-meta-detail"> · {usage.detail}</span>}
-            </div>
-          );
-        })()}
         {textContent && !isStreaming && (
           <button
             onClick={copyContent}
@@ -2147,27 +2137,6 @@ function getToolPreview(block: ToolCallContent): string {
 
   const first = input[keys[0]];
   return String(first).slice(0, 120);
-}
-
-function formatUsage(usage: {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-  cost: { total: number };
-}): { summary: string; detail: string; full: string } {
-  const parts: string[] = [];
-  if (usage.input) parts.push(`${usage.input.toLocaleString()} in`);
-  if (usage.output) parts.push(`${usage.output.toLocaleString()} out`);
-  if (usage.cacheRead) parts.push(`${usage.cacheRead.toLocaleString()} cache R`);
-  if (usage.cacheWrite) parts.push(`${usage.cacheWrite.toLocaleString()} cache W`);
-  const cost = usage.cost?.total ? `$${usage.cost.total.toFixed(4)}` : "";
-  const tokens = parts.join(" · ");
-  return {
-    summary: cost || tokens,
-    detail: cost ? tokens : "",
-    full: [tokens, cost].filter(Boolean).join(" · "),
-  };
 }
 
 function BashExecutionView({ message, sessionId }: { message: BashExecutionMessage; sessionId?: string }) {

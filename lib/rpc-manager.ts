@@ -20,7 +20,7 @@ import type { AgentRunOutcome, AgentTaskSnapshot } from "./types";
 export type { AgentRunOutcome, AgentTaskSnapshot } from "./types";
 import { isVerboseLogging } from "../bin/pi-web-options.js";
 import { hasActiveSessionLivenessProvider } from "./session-liveness";
-import { IDLE_SESSION_CAP_GRACE_MS, selectIdleSessionsToEvict, type IdleSessionCandidate } from "./idle-session-cap";
+import { IDLE_SESSION_CAP_GRACE_MS, selectIdleSessionsToEvict, type IdleSessionCandidate, type IdleSessionCapLimits } from "./idle-session-cap";
 import type { AgentSession, LoadExtensionsResult, SlashCommandInfo } from "@earendil-works/pi-coding-agent";
 import { PRODUCT_NAME } from "./branding";
 import type { AgentSessionLike, ExtensionUiContextLike, NavigateTreeOptions, ToolInfo } from "./pi-types";
@@ -2408,7 +2408,7 @@ function scheduleIdleSessionCap(): void {
  * lib/idle-session-cap.ts. PI_WEB_IDLE_TIMEOUT_MS=0 asks to keep sessions
  * loaded, so it turns the cap off too. Returns the ids shut down.
  */
-export function enforceIdleSessionCap(now: number = Date.now()): string[] {
+export function enforceIdleSessionCap(now: number = Date.now(), limits?: IdleSessionCapLimits): string[] {
   if (SESSION_IDLE_TIMEOUT_MS === 0) return [];
   const registry = getRegistry();
   const candidates: IdleSessionCandidate[] = [];
@@ -2421,7 +2421,7 @@ export function enforceIdleSessionCap(now: number = Date.now()): string[] {
     wrappers.set(key, wrapper);
   }
   const evicted: string[] = [];
-  for (const id of selectIdleSessionsToEvict(candidates)) {
+  for (const id of selectIdleSessionsToEvict(candidates, limits)) {
     const wrapper = wrappers.get(id)!;
     evicted.push(id);
     void wrapper.shutdown().catch((error) => {
