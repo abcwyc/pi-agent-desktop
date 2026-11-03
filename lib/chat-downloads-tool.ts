@@ -1,5 +1,5 @@
 import { realpathSync } from "node:fs";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { defineTool, type InlineExtension } from "@earendil-works/pi-coding-agent";
 import {
   chatDownloadsDir,

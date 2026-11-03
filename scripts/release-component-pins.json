@@ -1,7 +1,7 @@
 {
   "pi": {
-    "version": "1.4.0",
-    "reason": "Upgrade the bundled SDK to pi 1.4.0; typecheck, the unit suite and packaged Code mode (desktop:verify) pass with no source changes needed."
+    "version": "1.5.0",
+    "reason": "Upgrade the bundled SDK to pi 1.5.0; checked against its changelog (pi-schema tool validation, TypeBox no longer re-exported from pi-ai)."
   },
   "pi-web": {
     "version": "0.10.0",

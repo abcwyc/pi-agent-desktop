@@ -63,10 +63,11 @@
     "test:e2e": "node e2e/conversation-navigator.mjs && node e2e/chat-prompt-anchor.mjs && node e2e/composer-outbox.mjs && node e2e/option-controls.mjs && node e2e/appearance.mjs && node e2e/settings-controls.mjs && node e2e/fonts.mjs && node e2e/terminal-theme.mjs && node e2e/terminal-settings.mjs && node e2e/session-delete.mjs && node e2e/sidebar-menu-placement.mjs && node e2e/streaming-markdown.mjs && node e2e/title-feedback.mjs && node e2e/run.mjs"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "^1.4.0",
-    "@earendil-works/pi-ai": "^1.4.0",
-    "@earendil-works/pi-coding-agent": "^1.4.0",
-    "@earendil-works/pi-tui": "^1.4.0",
+    "@earendil-works/pi-agent-core": "^1.5.0",
+    "@earendil-works/pi-ai": "^1.5.0",
+    "@earendil-works/pi-coding-agent": "^1.5.0",
+    "@earendil-works/pi-tui": "^1.5.0",
+    "@radix-ui/react-select": "^2.3.8",
     "@tauri-apps/api": "^2.12.1",
     "@tauri-apps/plugin-autostart": "^2.7.0",
     "@tauri-apps/plugin-clipboard-manager": "^2.4.1",
@@ -82,13 +83,13 @@
     "next": "16.3.8",
     "node-pty": "1.2.0-beta.15",
     "proper-lockfile": "4.1.2",
+    "qrcode-generator": "2.0.4",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "semver": "7.8.5",
+    "typebox": "1.3.27",
     "undici": "8.11.0",
-    "web-push": "^3.6.7",
-    "@radix-ui/react-select": "^2.3.8",
-    "qrcode-generator": "2.0.4"
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@lobehub/streamdown": "1.4.1",
