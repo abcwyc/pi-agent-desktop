@@ -10,6 +10,8 @@ It never silently switches providers. A synchronous per-session guard prevents
 duplicate submissions; results refresh the sidebar but only update the active
 header when they still belong to that conversation.
 
+Settings › General › "Name sessions automatically" (`autoTitle` in Pi Web's `settings.json`, `lib/session-title-settings.ts`, `/api/session-title/settings`; off by default because it is one more request to the session's model) has the server run the same generator once: `AgentSessionWrapper.autoTitleAfterRun()` fires from `notifyAgentRunCompleteIfIdle()` after the first run that ends `done`, and only for a session with no name. It never renames a named session, re-checks the name before writing (the user may have renamed it meanwhile), and skips wrappers with suppressed completion notifications (subagents). A failure is logged and retried after the next run. The rename goes out as `session_info_changed`, which refreshes every sidebar and the topbar.
+
 ## Editable composer outbox
 
 `lib/composer-queue.ts` owns individually identified pending composer messages, including images.

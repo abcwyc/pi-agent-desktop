@@ -21,7 +21,7 @@ export type { AgentRunOutcome, AgentTaskSnapshot } from "./types";
 import { isVerboseLogging } from "../bin/pi-web-options.js";
 import { hasActiveSessionLivenessProvider } from "./session-liveness";
 import { IDLE_SESSION_CAP_GRACE_MS, selectIdleSessionsToEvict, type IdleSessionCandidate } from "./idle-session-cap";
-import type { LoadExtensionsResult, SlashCommandInfo } from "@earendil-works/pi-coding-agent";
+import type { AgentSession, LoadExtensionsResult, SlashCommandInfo } from "@earendil-works/pi-coding-agent";
 import { PRODUCT_NAME } from "./branding";
 import type { AgentSessionLike, ExtensionUiContextLike, NavigateTreeOptions, ToolInfo } from "./pi-types";
 import type {
@@ -54,6 +54,8 @@ import {
 } from "./subagents";
 import { createSubagentController } from "./subagent-runtime";
 import { isBuiltInSubagentsEnabled } from "./subagent-settings";
+import { generateSessionTitle } from "./session-title";
+import { isAutoTitleEnabled } from "./session-title-settings";
 import { resolveShellTools } from "./powershell-settings";
 import { CHAT_ONLY_RESOURCE_LOADER_OPTIONS, contextFilesSystemPrompt } from "./chat-only";
 import { createExactSystemPromptExtension } from "./exact-system-prompt";
@@ -397,6 +399,8 @@ export class AgentSessionWrapper {
   // Overwritten by every `agent_end`, so an auto-retry that recovers reports success.
   private lastRunOutcome: AgentRunOutcome = { status: "done" };
   private runStartedAt: number | null = null;
+  // Set once this wrapper has named the session, or found it already named.
+  private autoTitleSettled = false;
   private retrying = false;
   private lastFinishedRun: AgentTaskSnapshot["lastRun"] = null;
   private readonly mcpHost?: Pick<McpHost, "prepareForPrompt" | "dispose">;
@@ -637,12 +641,43 @@ export class AgentSessionWrapper {
     this.retrying = false;
     this.lastFinishedRun = { outcome: this.lastRunOutcome, finishedAt: Date.now() };
     if (this.suppressCompletionNotifications) return;
+    this.autoTitleAfterRun();
     recordRecentRunOutcome(this.sessionId, this.lastFinishedRun);
     try {
       this.onAgentRunComplete?.(this.sessionId, this.lastRunOutcome);
     } catch (error) {
       console.error("[pi-web] completion listener failed:", error instanceof Error ? error.message : error);
     }
+  }
+
+  /**
+   * Settings › General › "Name sessions automatically" (#201): after the first
+   * run that ends well, title a session that has no name yet. Once named it is
+   * never renamed here; "Generate title" in the topbar stays the way to redo it.
+   * A failure is logged and retried after the next run.
+   */
+  private autoTitleAfterRun(): void {
+    if (this.autoTitleSettled || this.lastRunOutcome.status !== "done" || !isAutoTitleEnabled()) return;
+    // Completion bookkeeping runs after this; a naming problem must not break it.
+    let named: boolean;
+    try {
+      named = Boolean(this.inner.sessionManager.getSessionName());
+    } catch {
+      return;
+    }
+    this.autoTitleSettled = true;
+    if (named) return;
+    void generateSessionTitle(this.inner as unknown as AgentSession)
+      .then(({ title }) => {
+        // The user may have renamed it, or closed it, while the request ran.
+        if (!this.isAlive() || this.inner.sessionManager.getSessionName()) return;
+        this.inner.setSessionName(title);
+        invalidateSessionListCache();
+      })
+      .catch((error) => {
+        this.autoTitleSettled = false;
+        console.warn("[pi-web] automatic session title failed:", error instanceof Error ? error.message : error);
+      });
   }
 
   getTaskSnapshot(): AgentTaskSnapshot {

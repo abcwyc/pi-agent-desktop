@@ -313,6 +313,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [pinnedChats, setPinnedChats] = useState<Set<string>>(() => readIdSetPref(APP_PREF_KEYS.pinnedChats));
   const [archivedChats, setArchivedChats] = useState<Set<string>>(() => readIdSetPref(APP_PREF_KEYS.archivedChats));
   const [showArchivedChats, setShowArchivedChats] = useState(false);
+  // Project sessions archived one by one (#200). They leave their project's
+  // list for a "Show archived" fold at its end; a search still finds them.
+  const [archivedSessions, setArchivedSessions] = useState<Set<string>>(() => readIdSetPref(APP_PREF_KEYS.archivedSessions));
+  const [projectsShowingArchived, setProjectsShowingArchived] = useState<Set<string>>(() => new Set());
   const [chatsMenuOpen, setChatsMenuOpen] = useState(false);
   const [chatsMenuPos, setChatsMenuPos] = useState<{ top: number; left: number } | null>(null);
   const chatsMenuRef = useRef<HTMLDivElement>(null);
@@ -610,6 +614,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     if (archivedChats.size === 0) removePref(APP_PREF_KEYS.archivedChats);
     else setPrefJson(APP_PREF_KEYS.archivedChats, [...archivedChats]);
   }, [archivedChats]);
+
+  useEffect(() => {
+    if (archivedSessions.size === 0) removePref(APP_PREF_KEYS.archivedSessions);
+    else setPrefJson(APP_PREF_KEYS.archivedSessions, [...archivedSessions]);
+  }, [archivedSessions]);
 
   useEffect(() => {
     if (chatSessionPages === 0) removePref(APP_PREF_KEYS.chatSessionPages);
@@ -1342,7 +1351,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const canCollapseAllProjects = activeProjects.some((group) => !collapsedProjects.has(group.projectRoot));
   const canExpandAllProjects = activeProjects.some((group) => collapsedProjects.has(group.projectRoot));
   const timelineFamilies = projectViewMode === "timeline"
-    ? sessionFamilies.filter((family) => (
+    ? sessionFamilies.filter((family) => (trimmedSessionQuery || !archivedSessions.has(family.root.id)) && (
         !archivedProjectRoots.has(family.root.projectRoot ?? family.root.cwd)
       )).sort((a, b) => b.root.modified.localeCompare(a.root.modified))
     : [];
@@ -1414,6 +1423,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     );
   };
 
+  const sessionArchiveActions = (id: string): SessionArchiveActions => ({
+    archived: archivedSessions.has(id),
+    onToggleArchive: () => setArchivedSessions((current) => toggleId(current, id)),
+  });
+
   const renderProjectGroup = (group: ReturnType<typeof groupByProject>[number], archived = false) => {
     // Archived projects open folded and unfold only for this visit.
     const isCollapsed = !trimmedSessionQuery && (archived
@@ -1422,7 +1436,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     const isActive = group.projectRoot === projectRootFor(selectedCwd);
     const runningCount = group.runningIds.size;
     const unreadCount = group.unreadIds.size;
-    const groupTree = buildSessionTree(group.sessions);
+    const fullGroupTree = buildSessionTree(group.sessions);
+    const archivedGroupTree = trimmedSessionQuery
+      ? []
+      : fullGroupTree.filter((node) => archivedSessions.has(node.session.id));
+    const groupTree = archivedGroupTree.length > 0
+      ? fullGroupTree.filter((node) => !archivedSessions.has(node.session.id))
+      : fullGroupTree;
+    const showingArchived = projectsShowingArchived.has(group.projectRoot);
     const extraPages = projectSessionPages[group.projectRoot] ?? 0;
     const visibleSessionLimit = MAX_VISIBLE_PROJECT_SESSIONS * (extraPages + 1);
     let visibleGroupTree = trimmedSessionQuery
@@ -1586,6 +1607,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 unreadSessionIds={unreadSessionIds}
                 onSelectSession={handleSelectSessionFromList}
                 onRenamed={loadSessions}
+                archiveActions={sessionArchiveActions(node.session.id)}
                 onSessionDeleted={(id) => {
                   onSessionDeleted?.(id);
                   loadSessions();
@@ -1607,6 +1629,42 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 })}
               </button>
             )}
+            {archivedGroupTree.length > 0 && (
+              <button
+                type="button"
+                className="sidebar-project-tree-show-more sidebar-chats-archived-toggle"
+                aria-expanded={showingArchived}
+                onClick={() => setProjectsShowingArchived((current) => toggleId(current, group.projectRoot))}
+              >
+                {t(showingArchived ? "sidebar.hideArchivedChats" : "sidebar.showArchivedChats", {
+                  count: archivedGroupTree.length,
+                })}
+              </button>
+            )}
+            {showingArchived && archivedGroupTree
+              // The selected session is already listed above when it is archived.
+              .filter((node) => !visibleGroupTree.includes(node))
+              .map((node) => {
+                const nodeFamily = sessionFamilies.find((family) => family.root.id === node.session.id);
+                return (
+                  <div key={node.session.id} className="sidebar-chats-archived-row">
+                    <SessionFamilyItem
+                      node={node}
+                      familySessions={nodeFamily ? [nodeFamily.root, ...nodeFamily.subagents] : undefined}
+                      selectedSessionId={selectedSessionId}
+                      runningSessionIds={runningSessionIds}
+                      unreadSessionIds={unreadSessionIds}
+                      onSelectSession={handleSelectSessionFromList}
+                      onRenamed={loadSessions}
+                      archiveActions={sessionArchiveActions(node.session.id)}
+                      onSessionDeleted={(id) => {
+                        onSessionDeleted?.(id);
+                        loadSessions();
+                      }}
+                    />
+                  </div>
+                );
+              })}
           </div>
         )}
       </div>
@@ -1628,6 +1686,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             node={node}
             familySessions={familySessions}
             subtitle={projectName}
+            archiveActions={sessionArchiveActions(family.root.id)}
             selectedSessionId={selectedSessionId}
             runningSessionIds={runningSessionIds}
             unreadSessionIds={unreadSessionIds}
@@ -2215,6 +2274,7 @@ function SessionFamilyItem({
   onSessionDeleted,
   onContinueInProject,
   chatActions,
+  archiveActions,
   familySessions,
   subtitle,
 }: {
@@ -2231,6 +2291,8 @@ function SessionFamilyItem({
   onContinueInProject?: (session: SessionInfo) => void;
   /** Chats only: pin and archive, which the row menu offers beside the other actions. */
   chatActions?: ChatRowActions;
+  /** Project sessions: archive or restore this session (#200). */
+  archiveActions?: SessionArchiveActions;
   /** Cross-project context, shown by the chronological sidebar view. */
   subtitle?: string;
 }) {
@@ -2260,6 +2322,7 @@ function SessionFamilyItem({
           onDeleted={(id) => onSessionDeleted?.(id)}
           onContinueInProject={depth === 0 ? onContinueInProject : undefined}
           chatActions={depth === 0 ? chatActions : undefined}
+          archiveActions={depth === 0 ? archiveActions : undefined}
           hasChildren={hasChildren}
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((v) => !v)}
@@ -2304,23 +2367,13 @@ function RunningSessionIndicator() {
         color: "var(--accent)",
       }}
     >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
-        <g>
-          <path
-            d="M21 12a9 9 0 1 1-3.8-7.4"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <animateTransform
-            attributeName="transform"
-            type="rotate"
-            from="0 12 12"
-            to="360 12 12"
-            dur="0.9s"
-            repeatCount="indefinite"
-          />
-        </g>
+      <svg className="session-running-spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
+        <path
+          d="M21 12a9 9 0 1 1-3.8-7.4"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
       </svg>
     </span>
   );
@@ -2344,10 +2397,7 @@ function UnreadSessionIndicator() {
     >
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
         <circle cx="7" cy="7" r="2.5" fill="currentColor" />
-        <circle cx="7" cy="7" r="3" stroke="currentColor" strokeWidth="1.4" opacity="0.32">
-          <animate attributeName="r" values="3;6;3" dur="1.6s" repeatCount="indefinite" />
-          <animate attributeName="opacity" values="0.32;0;0.32" dur="1.6s" repeatCount="indefinite" />
-        </circle>
+        <circle className="session-unread-ring" cx="7" cy="7" r="3" stroke="currentColor" strokeWidth="1.4" opacity="0.32" />
       </svg>
     </span>
   );
@@ -2373,11 +2423,8 @@ function showProjectActivity(
           aria-label={`${t("sidebar.agentRunning")} (${activity.running})`}
           style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: "var(--fs-micro)", fontFamily: "var(--font-mono)" }}
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
-            <g>
-              <path d="M21 12a9 9 0 1 1-3.8-7.4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.9s" repeatCount="indefinite" />
-            </g>
+          <svg className="session-running-spinner" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
+            <path d="M21 12a9 9 0 1 1-3.8-7.4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
           {activity.running}
         </span>
@@ -2396,11 +2443,14 @@ function showProjectActivity(
   );
 }
 
-interface ChatRowActions {
-  pinned: boolean;
+interface SessionArchiveActions {
   archived: boolean;
-  onTogglePin: () => void;
   onToggleArchive: () => void;
+}
+
+interface ChatRowActions extends SessionArchiveActions {
+  pinned: boolean;
+  onTogglePin: () => void;
 }
 
 function SessionItem({
@@ -2413,6 +2463,7 @@ function SessionItem({
   onDeleted,
   onContinueInProject,
   chatActions,
+  archiveActions,
   hasChildren = false,
   collapsed = false,
   onToggleCollapse,
@@ -2428,6 +2479,7 @@ function SessionItem({
   onDeleted?: (id: string) => void;
   onContinueInProject?: (session: SessionInfo) => void;
   chatActions?: ChatRowActions;
+  archiveActions?: SessionArchiveActions;
   hasChildren?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -2542,6 +2594,8 @@ function SessionItem({
     }
   }, [session.id, session.transient, onDeleted, reportActionError, t, confirmDelete, folderDeleteOpen]);
 
+  const archive: SessionArchiveActions | undefined = chatActions ?? archiveActions;
+
   // "…" menu: fixed-position portal so the sidebar's overflow/backdrop-filter can't clip it
   const MENU_WIDTH = 190;
   // Desktop shell: the same actions as the DOM menu below, as a native popup.
@@ -2558,8 +2612,8 @@ function SessionItem({
       ...(onContinueInProject
         ? [{ label: t("sidebar.continueInProject"), onSelect: () => onContinueInProject(session) }]
         : []),
-      ...(chatActions
-        ? [{ label: t(chatActions.archived ? "sidebar.unarchiveChat" : "sidebar.archiveChat"), onSelect: chatActions.onToggleArchive }]
+      ...(archive
+        ? [{ label: t(archive.archived ? "sidebar.unarchiveChat" : "sidebar.archiveChat"), onSelect: archive.onToggleArchive }]
         : []),
       { label: t("sidebar.delete"), onSelect: beginDeleteConfirmation },
       { kind: "separator" },
@@ -2574,7 +2628,7 @@ function SessionItem({
     ], at);
     setMenuOpen(false);
     return shown;
-  }, [beginDeleteConfirmation, chatActions, onContinueInProject, session, locale, startRename, t]);
+  }, [archive, beginDeleteConfirmation, chatActions, onContinueInProject, session, locale, startRename, t]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const handled = dispatchSessionRowContextMenu({
@@ -2902,10 +2956,10 @@ function SessionItem({
                   {t("sidebar.continueInProject")}
                 </button>
               )}
-              {chatActions && (
+              {archive && (
                 <button
                   role="menuitem"
-                  onClick={() => { setMenuOpen(false); chatActions.onToggleArchive(); }}
+                  onClick={() => { setMenuOpen(false); archive.onToggleArchive(); }}
                   style={{
                     display: "flex", alignItems: "center", gap: 8,
                     width: "100%", height: 30, padding: "0 8px",
@@ -2918,7 +2972,7 @@ function SessionItem({
                     <rect x="3" y="4" width="18" height="4" rx="1" />
                     <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" />
                   </svg>
-                  {t(chatActions.archived ? "sidebar.unarchiveChat" : "sidebar.archiveChat")}
+                  {t(archive.archived ? "sidebar.unarchiveChat" : "sidebar.archiveChat")}
                 </button>
               )}
               <button

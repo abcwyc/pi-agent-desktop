@@ -1867,8 +1867,33 @@ pre, code {
   background: var(--bg-panel) !important;
   background: var(--canvas-background) !important;
   border-right: var(--hairline) solid var(--separator) !important;
-  -webkit-backdrop-filter: saturate(130%) blur(24px);
-  backdrop-filter: saturate(130%) blur(24px);
+  /* No backdrop-filter: the sidebar paints an opaque background, so a blur
+     shows nothing, yet every repaint inside the sidebar (running spinners,
+     unread pulses, live counts) re-runs it over the full height. On Windows
+     that kept the GPU busy for as long as an agent ran (#199). */
+}
+
+/* Sidebar activity indicators animate transform/opacity only, so they stay on
+   the compositor. They were SVG SMIL animations (`animateTransform`, an
+   animated `r`), which repaint on the main thread every frame (#199). */
+.session-running-spinner {
+  animation: spin 0.9s linear infinite;
+}
+
+.session-unread-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: session-unread-ring 1.6s ease-in-out infinite;
+}
+
+@keyframes session-unread-ring {
+  0%, 100% { transform: scale(1); opacity: 0.32; }
+  50% { transform: scale(2); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-running-spinner,
+  .session-unread-ring { animation: none; }
 }
 
 /* No top padding: the header opens with the 48px .sidebar-controls-row, which

@@ -222,7 +222,21 @@ test("chats can be pinned and archived, ordered by recency with no date groups",
   // Row menu: only chat rows (depth 0) get the actions, in both the native and DOM menus.
   assert.match(source, /chatActions=\{depth === 0 \? chatActions : undefined\}/);
   assert.match(source, /t\(chatActions\.pinned \? "sidebar\.unpinChat" : "sidebar\.pinChat"\)/);
-  assert.match(source, /t\(chatActions\.archived \? "sidebar\.unarchiveChat" : "sidebar\.archiveChat"\)/);
+  // Archive is shared with project sessions: chats bring it with their actions.
+  assert.match(source, /const archive: SessionArchiveActions \| undefined = chatActions \?\? archiveActions;/);
+  assert.match(source, /t\(archive\.archived \? "sidebar\.unarchiveChat" : "sidebar\.archiveChat"\)/);
+});
+
+test("project sessions can be archived one by one (#200)", () => {
+  assert.match(source, /APP_PREF_KEYS\.archivedSessions/);
+  // Only top-level rows get the action, in the project tree and the chronological view.
+  assert.match(source, /archiveActions=\{depth === 0 \? archiveActions : undefined\}/);
+  assert.match(source, /archiveActions=\{sessionArchiveActions\(node\.session\.id\)\}/);
+  assert.match(source, /archiveActions=\{sessionArchiveActions\(family\.root\.id\)\}/);
+  // Archived roots leave the list for a per-project fold; a search lists them in place.
+  assert.match(source, /const archivedGroupTree = trimmedSessionQuery\s*\? \[\]\s*: fullGroupTree\.filter\(\(node\) => archivedSessions\.has\(node\.session\.id\)\)/);
+  assert.match(source, /trimmedSessionQuery \|\| !archivedSessions\.has\(family\.root\.id\)/);
+  assert.match(source, /setProjectsShowingArchived\(\(current\) => toggleId\(current, group\.projectRoot\)\)/);
 });
 
 test("a chat's row menu can continue it in a project", () => {
