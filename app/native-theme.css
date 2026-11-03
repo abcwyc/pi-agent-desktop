@@ -10096,11 +10096,7 @@ html.dark .terminal-panel {
   .new-session-welcome-subtitle { font-size: var(--fs-body); }
 }
 
-/* Token counts are diagnostics: cost at rest, the full line while the cost
-   itself is hovered (hovering the whole footer would shove Copy sideways). */
 .message-meta { cursor: default; }
-.message-meta-detail { display: none; }
-.message-meta:hover .message-meta-detail { display: inline; }
 
 /* Upstream fades the whole button to 0.28, so the prose shows through it. */
 .chat-scroll-to-bottom.is-visible {
