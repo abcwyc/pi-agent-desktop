@@ -114,49 +114,49 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.8.1
+            ## Pi Agent Desktop 0.8.2
 
             ### New
 
-            - **Follow and drive your sessions from a phone.** Settings › General › Remote access sets up access through your own Tailscale network: Pi keeps listening only on this computer, and only the Tailscale accounts you allow can reach it. Turn on **Notify this device** on the phone to get a push when a run finishes, fails, or is waiting for you.
-            - **Tasks page.** A new sidebar row lists every session that is waiting for you (with the question it is asking), running (with its current step) or recently finished or failed. Tap a row to open the session.
-            - **Project archive.** Right-click a project, or use its "…" menu, and choose "Move to archive" to move it to a folded Archive group at the bottom of the sidebar. Archived sessions stay readable; restore the project before starting new work in it.
+            - **Archive single sessions.** Right-click a project session, or use its "…" menu, and choose "Archive". It moves out of the project's list into a "Show archived (n)" fold under that project; search still finds it, and "Unarchive" brings it back.
+            - **Name sessions automatically.** Settings › General › "Name sessions automatically" (off by default). After the first reply, the session's model writes a title for an unnamed session, at the cost of one extra short request per session.
 
             ### Improved
 
-            - **A tidier topbar.** Branches and Full history moved into the `···` More menu, and branch switching is now blocked on desktop while a session runs.
-            - **Faster start-up and lower memory.** The session list sends only the first line of each prompt (about 60–75% less data on a cold start), and once more than 4 unused sessions are loaded, the oldest are released.
+            - **Session switching is fast again.** 0.8.1 released loaded sessions once more than 4 were idle, so switching back to one had to load it from scratch. Idle sessions are now released only when they add up to more than 256 MiB.
+            - **Lower GPU use in the sidebar**, most noticeable on Windows: the sidebar no longer blurs its (opaque) background, and the running and unread indicators use lighter animations that stop when reduced motion is on.
+            - **pi 1.5.0.** Adds GPT-6.1 Terra (OpenAI, Azure OpenAI and OpenAI Codex), handles large streamed tool calls with far less CPU and memory, lets tool search find tools from Chinese and other non-English queries, and signs in to more MCP servers that use OAuth.
+            - **A quieter chat.** Assistant messages no longer show their cost and token counts, and the new-session screen no longer shows starter suggestion chips.
 
             ### Fixed
 
-            - A render error now shows the message, stack and a **Copy details** button instead of a blank "This page couldn't load" screen.
-            - Credential files such as `~/.ssh` keys and `~/.pi/agent/auth.json` can no longer be opened from the file viewer, even when a session runs in the home folder.
-            - Settings, credentials, skills and session files are now rewritten atomically, so a crash mid-write can no longer leave them half-written.
+            - A scheduled task's time limit now covers the whole run, so a run whose session never starts or whose prompt is never accepted can no longer hold a scheduler slot forever.
+            - Renaming a session while it is open now updates its title right away and keeps it in the session's history.
 
-            Bundled components: pi 1.4.0, pi-web 0.10.0.
+            Bundled components: pi 1.5.0, pi-web 0.10.0.
 
             ---
 
-            ## Pi Agent Desktop 0.8.1
+            ## Pi Agent Desktop 0.8.2
 
             ### 新增
 
-            - **在手机上查看和操作会话。** 在“设置 › 通用 › 远程访问”中通过你自己的 Tailscale 网络开启访问：Pi 仍只在本机监听，只有你允许的 Tailscale 账号能连上。在手机上打开“通知这台设备”，运行完成、失败或需要你处理时会收到推送。
-            - **任务页面。** 侧栏新增一行，集中显示正在等待你（并显示它的提问）、正在运行（并显示当前步骤）以及最近完成或失败的会话，点按即可打开对应会话。
-            - **项目存档。** 右键项目或点它的“…”菜单，选择“移到存档”，项目会移到侧栏底部默认折叠的“存档”分组。存档项目的会话仍可查看；要在其中开始新工作，需先“还原到项目列表”。
+            - **单个会话也能归档。** 右键项目里的会话或点它的“…”菜单，选择“归档”，会话会从项目列表移到该项目下的“显示已归档（n）”折叠区；搜索仍能找到它，选择“取消归档”即可恢复。
+            - **自动命名会话。** “设置 › 通用 › 自动命名会话”（默认关闭）。第一轮回复结束后，用当前会话的模型为未命名的会话生成标题，每个会话多一次简短请求。
 
             ### 改进
 
-            - **顶栏更简洁。** “分支”和“完整历史”移入 `···` 更多菜单；会话运行期间，桌面端也不能切换分支了。
-            - **启动更快、内存更省。** 会话列表只发送每条提示的第一行（冷启动数据量减少约 60–75%）；加载的闲置会话超过 4 个时，会释放最早的那些。
+            - **切换会话重新变快。** 0.8.1 在闲置会话超过 4 个时就会释放它们，切回去时需要重新加载。现在只有闲置会话合计超过 256 MiB 时才会释放。
+            - **侧栏 GPU 占用更低**，Windows 上最明显：侧栏不再对（不透明的）背景做模糊，运行中和未读标记改用更轻的动画，开启“减少动态效果”时会停止。
+            - **pi 1.5.0。** 新增 GPT-6.1 Terra（OpenAI、Azure OpenAI 和 OpenAI Codex）；流式输出大型工具调用时 CPU 和内存占用大幅降低；工具搜索支持中文等非英文查询；可以登录更多使用 OAuth 的 MCP 服务器。
+            - **对话界面更清爽。** 助手消息下方不再显示费用和 token 数，新会话页面也不再显示建议提示。
 
             ### 修复
 
-            - 页面渲染出错时，现在会显示错误信息、调用栈和“Copy details”按钮，而不是空白的“This page couldn't load”页面。
-            - 即使会话运行在主目录下，文件查看器也不能再打开 `~/.ssh` 密钥、`~/.pi/agent/auth.json` 等凭据文件。
-            - 设置、凭据、技能和会话文件改为原子写入，写到一半崩溃也不会留下损坏的文件。
+            - 定时任务的时间限制现在覆盖整个运行过程：会话始终没有启动、或提示始终没有被接收的运行，不会再一直占用调度名额。
+            - 会话打开时重命名，标题会立即更新，并正确记录在会话历史中。
 
-            内置组件版本：pi 1.4.0、pi-web 0.10.0。
+            内置组件版本：pi 1.5.0、pi-web 0.10.0。
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
