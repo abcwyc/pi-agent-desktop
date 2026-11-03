@@ -6,14 +6,9 @@ import { useI18n } from "@/hooks/useI18n";
 interface Props {
   /** Folder the new session will run in; its last segment names the project. */
   cwd?: string | null;
-  /** Chats have no project, so they get the chat subtitle and suggestions. */
+  /** Chats have no project, so they get the chat subtitle. */
   isChat: boolean;
-  /** Puts a suggestion into the composer without sending it. */
-  onSuggestion: (prompt: string) => void;
 }
-
-const PROJECT_SUGGESTIONS = ["explain", "bug", "review", "tests"] as const;
-const CHAT_SUGGESTIONS = ["research", "write", "compare", "plan"] as const;
 
 function greetingKey(hour: number): string {
   if (hour < 5) return "welcome.evening";
@@ -24,17 +19,16 @@ function greetingKey(hour: number): string {
 
 /**
  * Empty new-session state above the centred composer: a greeting, where the
- * session will run, and a few starting prompts. Carries no product branding
+ * session will run. Carries no product branding
  * (the fork removed upstream's icon + name header on purpose).
  */
-export function NewSessionWelcome({ cwd, isChat, onSuggestion }: Props) {
+export function NewSessionWelcome({ cwd, isChat }: Props) {
   const { t } = useI18n();
   // The hour is read after mount so server and client render the same markup.
   const [hour, setHour] = useState<number | null>(null);
   useEffect(() => setHour(new Date().getHours()), []);
 
   const project = cwd?.split(/[\\/]/).filter(Boolean).pop();
-  const keys = isChat ? CHAT_SUGGESTIONS : PROJECT_SUGGESTIONS;
 
   return (
     <div className="new-session-welcome">
@@ -46,18 +40,6 @@ export function NewSessionWelcome({ cwd, isChat, onSuggestion }: Props) {
           ? t("welcome.subtitleChat")
           : t("welcome.subtitleProject", { project })}
       </p>
-      <div className="new-session-welcome-suggestions">
-        {keys.map((key) => (
-          <button
-            key={key}
-            type="button"
-            className="new-session-welcome-chip"
-            onClick={() => onSuggestion(t(`welcome.prompt.${key}`))}
-          >
-            {t(`welcome.label.${key}`)}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }
