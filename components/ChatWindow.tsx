@@ -1769,7 +1769,6 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
           <NewSessionWelcome
             cwd={newSessionCwd}
             isChat={chatOnly}
-            onSuggestion={(prompt) => chatInputRef?.current?.insertIfEmpty(prompt)}
           />
         )}
         {chatInputElement}

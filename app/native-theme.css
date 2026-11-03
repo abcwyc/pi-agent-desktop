@@ -10056,41 +10056,6 @@ html.dark .terminal-panel {
   line-height: 1.5;
 }
 
-.new-session-welcome-suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 16px;
-}
-
-.new-session-welcome-chip {
-  height: var(--control-h-lg);
-  padding: 0 14px;
-  border: var(--hairline) solid var(--border);
-  border-radius: 999px;
-  background: var(--bg);
-  color: var(--text-muted);
-  font-size: var(--fs-body);
-  box-shadow: var(--shadow-control);
-  cursor: pointer;
-  transition:
-    color var(--dur-fast) var(--ease-native),
-    background var(--dur-fast) var(--ease-native),
-    border-color var(--dur-fast) var(--ease-native);
-}
-
-.new-session-welcome-chip:hover {
-  border-color: color-mix(in srgb, var(--text) 18%, transparent);
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-.new-session-welcome-chip:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
 @media (max-width: 640px) {
   .new-session-welcome-title { font-size: 22px; }
   .new-session-welcome-subtitle { font-size: var(--fs-body); }
