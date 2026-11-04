@@ -4,7 +4,7 @@ import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, useMe
 import type { BuiltinSlashCommandResult, CompactResultInfo, QueuedMessages, SlashCommandInfo } from "@/hooks/useAgentSession";
 import type { SkillsResponse } from "@/lib/api-types";
 import type { ModelScopeWarning } from "@/lib/model-scope-warnings";
-import type { UnavailableWorkspace } from "@/lib/workspace-availability";
+import type { UnavailableWorkspaceNotice } from "@/lib/workspace-availability";
 import type { TextContent, UserMessage } from "@/lib/types";
 import {
   clearDraft,
@@ -85,7 +85,7 @@ interface Props {
   modelList?: { id: string; name: string; provider: string; input?: string[] }[];
   modelError?: string | null;
   /** The cwd can no longer host a run (deleted, replaced by a file, unreadable): sending is blocked and the draft stays. */
-  workspaceUnavailable?: UnavailableWorkspace | null;
+  workspaceUnavailable?: UnavailableWorkspaceNotice | null;
   /** Probe the cwd again, e.g. after the folder was restored. */
   onRecheckWorkspace?: () => void;
   /** Diagnostics from resolving `enabledModels`, e.g. a pattern that matched nothing. */
@@ -685,9 +685,10 @@ function ModelNoticeBanner({ tone, title, body, action, onClose, dismissLabel }:
 }
 
 /** Shown instead of the model error that a missing cwd would otherwise cause (#1061). */
-export function WorkspaceUnavailableBanner({ workspace, onRecheck }: { workspace?: UnavailableWorkspace | null; onRecheck?: () => void }) {
+export function WorkspaceUnavailableBanner({ workspace, onRecheck }: { workspace?: UnavailableWorkspaceNotice | null; onRecheck?: () => void }) {
   const { t } = useI18n();
   if (!workspace) return null;
+  const checking = workspace.recheck === "checking";
   const body = workspace.availability === "missing"
     ? t("chat.workspaceMissing", { cwd: workspace.cwd })
     : workspace.availability === "not-directory"
@@ -700,9 +701,12 @@ export function WorkspaceUnavailableBanner({ workspace, onRecheck }: { workspace
         title={t("chat.workspaceUnavailable")}
         body={body}
         action={onRecheck ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
           <button
             type="button"
             onClick={onRecheck}
+            disabled={checking}
+            aria-busy={checking}
             style={{
               flexShrink: 0,
               padding: "2px 8px",
@@ -710,14 +714,19 @@ export function WorkspaceUnavailableBanner({ workspace, onRecheck }: { workspace
               borderRadius: "var(--radius-sm)",
               background: "transparent",
               color: "inherit",
-              cursor: "pointer",
+              cursor: checking ? "default" : "pointer",
+              opacity: checking ? 0.6 : 1,
               fontSize: "var(--fs-micro)",
               lineHeight: 1.4,
               whiteSpace: "nowrap",
             }}
           >
-            {t("chat.workspaceRecheck")}
+            {checking ? t("chat.workspaceRechecking") : t("chat.workspaceRecheck")}
           </button>
+          {workspace.recheck === "unchanged" && (
+            <span role="status">{t("chat.workspaceRecheckUnchanged")}</span>
+          )}
+          </div>
         ) : undefined}
       />
     </div>
