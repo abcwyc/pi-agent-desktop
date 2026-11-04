@@ -18,6 +18,14 @@ export interface UnavailableWorkspace {
   availability: Exclude<WorkspaceAvailability, "available">;
 }
 
+/** "unchanged": the user asked to check again and the folder is still unusable. */
+export type WorkspaceRecheckState = "checking" | "unchanged";
+
+/** The composer notice: the unavailable workspace plus the state of a manual recheck. */
+export interface UnavailableWorkspaceNotice extends UnavailableWorkspace {
+  recheck?: WorkspaceRecheckState;
+}
+
 export type WorkspaceStatusResult =
   | { ok: true; availability: WorkspaceAvailability }
   | { ok: false };

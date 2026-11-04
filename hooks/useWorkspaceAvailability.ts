@@ -5,7 +5,7 @@
 // only calls this.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import type { UnavailableWorkspace, WorkspaceAvailability } from "@/lib/workspace-availability";
+import type { UnavailableWorkspaceNotice, WorkspaceAvailability, WorkspaceRecheckState } from "@/lib/workspace-availability";
 
 export function useWorkspaceAvailability(
   cwd: string | null,
@@ -15,6 +15,9 @@ export function useWorkspaceAvailability(
   const [workspaceStatus, setWorkspaceStatus] = useState<{ cwd: string; availability: WorkspaceAvailability | "unknown" } | null>(null);
   const workspaceStatusRef = useRef(workspaceStatus);
   const [workspaceStatusCheck, setWorkspaceStatusCheck] = useState(0);
+  // A recheck that finds the same answer changes nothing on screen, so the button
+  // looked dead. Track it so the banner can say "checking" and "still unavailable".
+  const [recheck, setRecheck] = useState<{ cwd: string; state: WorkspaceRecheckState } | null>(null);
 
   // A workspace deleted outside the app keeps its history, but every cwd-scoped
   // request then fails and the composer reported it as a model error (#1061).
@@ -38,6 +41,11 @@ export function useWorkspaceAvailability(
           && previous.availability !== "unknown";
         workspaceStatusRef.current = { cwd: probedCwd, availability };
         setWorkspaceStatus({ cwd: probedCwd, availability });
+        setRecheck((current) => (
+          current?.cwd === probedCwd && current.state === "checking"
+            ? (availability === "available" || availability === "unknown" ? null : { cwd: probedCwd, state: "unchanged" })
+            : current
+        ));
         // The model list loaded while the folder was gone only holds its error.
         if (recovered) setModelsRefreshKey((key) => key + 1);
       });
@@ -47,12 +55,17 @@ export function useWorkspaceAvailability(
   const workspaceAvailability = cwd && workspaceStatus?.cwd === cwd
     ? workspaceStatus.availability
     : null;
-  const unavailableWorkspace = useMemo<UnavailableWorkspace | null>(() => (
+  const recheckState = cwd && recheck?.cwd === cwd ? recheck.state : undefined;
+  const unavailableWorkspace = useMemo<UnavailableWorkspaceNotice | null>(() => (
     cwd && workspaceAvailability && workspaceAvailability !== "available" && workspaceAvailability !== "unknown"
-      ? { cwd, availability: workspaceAvailability }
+      ? { cwd, availability: workspaceAvailability, recheck: recheckState }
       : null
-  ), [cwd, workspaceAvailability]);
-  const recheckWorkspace = useCallback(() => setWorkspaceStatusCheck((check) => check + 1), []);
+  ), [cwd, workspaceAvailability, recheckState]);
+  const recheckWorkspace = useCallback(() => {
+    if (!cwd) return;
+    setRecheck({ cwd, state: "checking" });
+    setWorkspaceStatusCheck((check) => check + 1);
+  }, [cwd]);
 
   return { workspaceAvailability, unavailableWorkspace, recheckWorkspace };
 }
