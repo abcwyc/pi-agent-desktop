@@ -53,7 +53,7 @@ On mount `useAgentSession` loads the history, then `GET /api/sessions/[id]/state
 - Every SSE (re)connection is gated on `sessionHookMountedRef`. Under React Strict Mode (`next dev`) the mount-only effect's cleanup clears it and restores it only after the warm-session effect re-runs, so that effect must re-assert it before `maintainEventsConnected()`, or a dev tab never opens its stream.
 
 ## Exported session HTML
-- `/api/sessions/[id]/export` delegates to pi's export helper, then makes the generated HTML's recursive tree helpers iterative, so very deep linear sessions do not overflow the browser call stack.
+- `/api/sessions/[id]/export` delegates to pi's export helper and returns its HTML unmodified. Since pi 1.5.0 the template walks the session tree iteratively, so very deep linear sessions no longer overflow the browser call stack; do not bring back string patches on the generated HTML, they turn every export into a 500 when the template changes. `app/api/sessions/[id]/export/route.test.mjs` pins this.
 
 ## Submitted sessions in the sidebar
 The RPC wrapper advertises a pending prompt preview before MCP preparation or SDK
