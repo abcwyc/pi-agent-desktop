@@ -3,7 +3,7 @@
   "versions": {
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "sucrase": "3.35.0",
+    "sucrase": "3.35.1",
     "@tailwindcss/browser": "4.2.2"
   },
   "files": {
