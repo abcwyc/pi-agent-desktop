@@ -39,6 +39,63 @@ try {
   console.error("[Pi Agent] compile cache unavailable:", cacheError);
 }
 
+// Proxy-bypass guard. Next skips middleware (proxy.ts: the password gate and
+// the Host/Origin/Fetch-Metadata checks) for any request whose
+// `x-prerender-revalidate` header equals the build's `previewModeId`, which sits
+// in `.next-desktop/prerender-manifest.json` — the same value in every copy of
+// a release, readable by anyone who downloads the installer. Two layers close
+// it: the header is stripped from every request before Next sees it (the app
+// never uses on-demand revalidation), and the preview secrets are rewritten
+// with fresh random values on each start so the shipped ones are worthless
+// even if the strip is ever bypassed. Installed before the startup-timing hook
+// below so that hook, when it unwraps itself, restores this one.
+const PRERENDER_REVALIDATE_HEADERS = ["x-prerender-revalidate", "x-prerender-revalidate-if-generated"];
+{
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const http = require("node:http");
+  const emitWithRevalidateHeaders = http.Server.prototype.emit;
+  http.Server.prototype.emit = function emitWithoutRevalidateHeaders(event, ...args) {
+    if (event === "request") {
+      const headers = args[0]?.headers;
+      if (headers) {
+        for (const name of PRERENDER_REVALIDATE_HEADERS) delete headers[name];
+      }
+    }
+    return emitWithRevalidateHeaders.call(this, event, ...args);
+  };
+}
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const crypto = require("node:crypto");
+  const nextDir = path.join(__dirname, ".next-desktop");
+  const manifestPath = path.join(nextDir, "prerender-manifest.json");
+  if (fs.existsSync(manifestPath)) {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    if (!manifest || typeof manifest.preview !== "object" || manifest.preview === null) {
+      throw new Error("prerender-manifest.json has no preview block");
+    }
+    manifest.preview = {
+      ...manifest.preview,
+      // Lengths mirror what Next generates at build time.
+      previewModeId: crypto.randomBytes(16).toString("hex"),
+      previewModeSigningKey: crypto.randomBytes(32).toString("hex"),
+      previewModeEncryptionKey: crypto.randomBytes(32).toString("hex"),
+    };
+    // Temp file + rename so the server never reads a half-written manifest.
+    const tempPath = `${manifestPath}.${process.pid}.tmp`;
+    try {
+      fs.writeFileSync(tempPath, JSON.stringify(manifest));
+      fs.renameSync(tempPath, manifestPath);
+    } catch (writeError) {
+      fs.rmSync(tempPath, { force: true });
+      throw writeError;
+    }
+  }
+} catch (rotateError) {
+  // The header strip above still blocks the bypass; this only loses the second layer.
+  console.error("[Pi Agent] could not rotate preview-mode secrets:", rotateError);
+}
+
 // Startup diagnostics (#157). On some Windows logins the shell's identity
 // probe goes unanswered for over a minute after Next prints "Ready", and the
 // log showed nothing in between. These lines say which it was: the probe never
