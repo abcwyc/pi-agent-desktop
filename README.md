@@ -98,7 +98,9 @@ The full sync, signing, and release configuration is described in [Desktop updat
 
 ## HTTP Proxy
 
-Server-side model and API requests honor the standard `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` environment variables. For example, when starting the dev server from a terminal:
+Turn on **Settings › General › Network proxy** and enter an address such as `http://127.0.0.1:7890` to send this app's outbound requests through an HTTP(S) proxy: model APIs, model lists, sign-in, update checks, and commands the agent or a terminal starts afterwards. Other apps keep their direct connection, so no TUN mode is needed. The change applies immediately; `localhost` and `127.0.0.1` always bypass the proxy, and **Test connection** reports whether the proxy works. The setting is stored in `~/.pi/agent/pi-web/settings.json` (`networkProxy`).
+
+When the switch is off, the standard `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` environment variables still apply, then `httpProxy` from pi's `settings.json`. For example, when starting the dev server from a terminal:
 
 ```bash
 HTTP_PROXY=http://127.0.0.1:7890 \
