@@ -97,7 +97,9 @@ Pi Agent 最多每七天检查一次以下仓库的最新稳定 Release：
 
 ## HTTP 代理
 
-Pi Agent 的服务端模型和 API 请求支持标准的 `HTTP_PROXY`、`HTTPS_PROXY` 和 `NO_PROXY` 环境变量。例如从终端启动开发服务时：
+在 **设置 › 常规 › 网络代理** 中打开开关，填入 `http://127.0.0.1:7890` 这样的地址，本应用的出站请求就会经由 HTTP(S) 代理发出：模型 API、模型列表、登录鉴权、更新检查，以及之后由 Agent 或终端启动的命令。其他软件保持直连，不需要开启 TUN 模式。修改立即生效；`localhost` 和 `127.0.0.1` 始终不走代理；**测试连接** 会直接告诉你代理是否可用。设置保存在 `~/.pi/agent/pi-web/settings.json` 的 `networkProxy` 中。
+
+开关关闭时，仍然使用标准的 `HTTP_PROXY`、`HTTPS_PROXY` 和 `NO_PROXY` 环境变量，其次是 pi `settings.json` 里的 `httpProxy`。例如从终端启动开发服务时：
 
 ```bash
 HTTP_PROXY=http://127.0.0.1:7890 \

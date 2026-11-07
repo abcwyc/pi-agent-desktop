@@ -40,6 +40,7 @@ import { ConfigButton, ConfigSwitch } from "./SettingsUi";
 import { ArtifactsSettingRow, AutoTitleSettingRow } from "./ArtifactsSettingRow";
 import { RemoteAccessSection } from "./RemoteAccessSection";
 import { RelaySection } from "./RelaySection";
+import { NetworkProxySection } from "./NetworkProxySection";
 import { ChatsSettingsSection } from "./ChatsSettingsSection";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { TerminalSettingsSection } from "./TerminalSettingsSection";
@@ -352,6 +353,8 @@ function GeneralSettings({
           </section>
 
           <DesktopAppSection />
+
+          <NetworkProxySection />
 
           <RelaySection />
 

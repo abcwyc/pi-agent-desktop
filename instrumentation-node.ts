@@ -1,9 +1,17 @@
 import { configureHttpDispatcher } from "@/lib/http-dispatcher";
+import { initializeNetworkProxy } from "@/lib/network-proxy";
 import { closeAllAgentEventStreams } from "@/lib/agent-event-stream";
 import { startScheduler } from "@/lib/scheduled-tasks";
 import { restartRelayFromConfig } from "@/lib/relay/runtime";
 
 export function registerNodeInstrumentation(): void {
+  // The proxy from Settings › General goes into process.env before the
+  // dispatcher reads it; see lib/network-proxy.ts.
+  try {
+    initializeNetworkProxy();
+  } catch (error) {
+    console.error("[network-proxy] could not apply the saved proxy:", error instanceof Error ? error.message : error);
+  }
   configureHttpDispatcher();
 
   // Scheduled tasks must fire without anyone having opened a page, and the
