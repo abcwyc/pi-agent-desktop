@@ -22,8 +22,15 @@ const appLinkSchemes = [
 ];
 const appLinkPattern = new RegExp(`^(?:${appLinkSchemes.join("|")}):`, "i");
 
+// The anti-clobber prefix the sanitizer puts in front of every `id` in
+// rendered content, so untrusted Markdown cannot shadow the page's own
+// elements. The fragment-link fix below must use the identical value, so the
+// schema that produces the prefixed ids pins the same constant.
+const markdownClobberPrefix = defaultSchema.clobberPrefix ?? "user-content-";
+
 const markdownSanitizeSchema = {
   ...defaultSchema,
+  clobberPrefix: markdownClobberPrefix,
   attributes: {
     ...defaultSchema.attributes,
     code: [["className", /^language-./, "math-inline", "math-display"]],
@@ -50,6 +57,45 @@ export function markdownUrlTransform(value: string): string {
 /** A link that leaves the page: it names a scheme or another host. */
 export function isExternalMarkdownHref(href: string | undefined): boolean {
   return Boolean(href && /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(href));
+}
+
+interface MarkdownFragmentClick {
+  defaultPrevented: boolean;
+  button: number;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+  currentTarget: Pick<Element, "getAttribute" | "closest">;
+  preventDefault(): void;
+}
+
+/**
+ * A click on a `#fragment` link in rendered Markdown: brings the element it
+ * names into view within the same rendered document (the closest
+ * `.markdown-body`), as the Skills reader does with its headings. The browser's
+ * own jump searches the whole page, where every chat message with a footnote
+ * has its own `user-content-user-content-fn-1` and the file preview sits beside
+ * the chat, so it could land in another message; it would also put the
+ * fragment in the app's URL as a history entry. Modified clicks stay the
+ * browser's.
+ */
+export function jumpToMarkdownFragment(event: MarkdownFragmentClick): void {
+  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  const href = event.currentTarget.getAttribute("href");
+  if (!href?.startsWith("#")) return;
+  event.preventDefault();
+  let id = href.slice(1);
+  if (!id) return;
+  try {
+    id = decodeURIComponent(id);
+  } catch {
+    // A malformed escape is matched as written.
+  }
+  const name = CSS.escape(id);
+  event.currentTarget.closest(".markdown-body")
+    ?.querySelector(`[id="${name}"], a[name="${name}"]`)
+    ?.scrollIntoView({ block: "start" });
 }
 
 /**
@@ -597,6 +643,20 @@ export function remarkGithubAlerts() {
   };
 }
 
+// Drive letters otherwise look like unknown URL schemes to the sanitizer.
+// Rewrite only Markdown link destinations, before rehype and URL filtering.
+function remarkWindowsFileLinks() {
+  return (tree: Root): void => {
+    const walk = (node: Root | Content): void => {
+      if ((node.type === "link" || node.type === "definition") && /^\/?[A-Za-z]:\//.test(node.url)) {
+        node.url = `file:///${node.url.replace(/^\//, "")}`;
+      }
+      if ("children" in node) node.children.forEach(walk);
+    };
+    walk(tree);
+  };
+}
+
 export const markdownRemarkPlugins: ReactMarkdownOptions["remarkPlugins"] = [
   [remarkFrontmatter, ["yaml"]],
   remarkFrontmatterAsCode,
@@ -605,6 +665,7 @@ export const markdownRemarkPlugins: ReactMarkdownOptions["remarkPlugins"] = [
   remarkSplitAutolinkLiterals,
   remarkCurrencySafeMath,
   remarkGithubAlerts,
+  remarkWindowsFileLinks,
 ];
 
 // User messages keep every typed line break, as the TUI shows them (#680). The
@@ -615,7 +676,7 @@ export const markdownRemarkPlugins: ReactMarkdownOptions["remarkPlugins"] = [
 // remark-rehype turns into a bare <br> through `data.hName`, not an mdast
 // `break`: remark-rehype follows that <br> with a "\n" text node, which the
 // pre-wrap rule renders as a second break, so hard breaks are swapped too. Code,
-// inline code, math and raw HTML are other node types and keep their text.
+// inline code and math are other node types and keep their text.
 interface MarkdownTreeNode {
   type: string;
   value?: string;
@@ -624,26 +685,33 @@ interface MarkdownTreeNode {
 }
 
 const LINE_ENDING = /[ \t]*(?:\r\n|\r|\n)[ \t]*/;
-const PHRASING_BLOCK_TYPES = new Set(["paragraph", "heading", "tableCell"]);
-// Raw-text elements take everything up to their closing tag as text, and
-// rehype-raw leaves that state at the next element, so a <br> placed after an
-// unclosed `<textarea>` or `<script>` garbles or drops the rest of the block.
-const RAW_TEXT_OPEN_TAG = /^<(?:iframe|noembed|noframes|noscript|plaintext|script|style|textarea|title|xmp)(?=[\s/>]|$)/i;
-
-function opensRawTextElement(node: MarkdownTreeNode): boolean {
-  if (node.type === "html") return RAW_TEXT_OPEN_TAG.test(node.value ?? "");
-  return node.children?.some(opensRawTextElement) ?? false;
-}
+// Containers whose children are blocks: an HTML block there becomes a paragraph.
+const BLOCK_CONTAINER_TYPES = new Set(["root", "blockquote", "listItem", "footnoteDefinition"]);
 
 function lineBreakNode(): MarkdownTreeNode {
   return { type: "lineBreak", data: { hName: "br" } };
 }
 
+// pi's TUI prints a user message's HTML as the characters typed (pi-tui's
+// Markdown, `case "html"`), so a pasted `<TableOperator v-model="x" />` or
+// `<textarea>` reads as written instead of being parsed by rehype-raw and
+// stripped by the sanitizer (#1407). Runs before the line breaks are kept, so
+// a multi-line tag breaks like any text.
+function htmlAsText(parent: MarkdownTreeNode): void {
+  if (!parent.children) return;
+  const blockParent = BLOCK_CONTAINER_TYPES.has(parent.type);
+  parent.children = parent.children.map((node) => {
+    if (node.type !== "html") {
+      htmlAsText(node);
+      return node;
+    }
+    const text = { type: "text", value: node.value ?? "" };
+    return blockParent ? { type: "paragraph", children: [text] } : text;
+  });
+}
+
 function keepLineBreaks(parent: MarkdownTreeNode): void {
   if (!parent.children) return;
-  // Such a block keeps the default rendering: its paragraph newlines still
-  // show through the pre-wrap rule.
-  if (PHRASING_BLOCK_TYPES.has(parent.type) && opensRawTextElement(parent)) return;
   parent.children = parent.children.flatMap((node) => {
     if (node.type === "break") return [lineBreakNode()];
     if (node.type !== "text" || !node.value) {
@@ -657,13 +725,16 @@ function keepLineBreaks(parent: MarkdownTreeNode): void {
   });
 }
 
-function remarkKeepLineBreaks() {
-  return (tree: MarkdownTreeNode) => keepLineBreaks(tree);
+function remarkUserText() {
+  return (tree: MarkdownTreeNode) => {
+    htmlAsText(tree);
+    keepLineBreaks(tree);
+  };
 }
 
 export const markdownUserRemarkPlugins: ReactMarkdownOptions["remarkPlugins"] = [
   ...(markdownRemarkPlugins ?? []),
-  remarkKeepLineBreaks,
+  remarkUserText,
 ];
 export const markdownPreviewRemarkPlugins: ReactMarkdownOptions["remarkPlugins"] = [
   [remarkFrontmatter, ["yaml"]],
@@ -671,17 +742,91 @@ export const markdownPreviewRemarkPlugins: ReactMarkdownOptions["remarkPlugins"]
   remarkCjkFriendly,
   remarkSplitAutolinkLiterals,
   remarkCurrencySafeMath,
+  remarkWindowsFileLinks,
 ];
 
-export const markdownRehypePlugins: ReactMarkdownOptions["rehypePlugins"] = [
-  rehypeRaw,
-  [rehypeSanitize, markdownSanitizeSchema],
-  [rehypeKatex, { throwOnError: false, strict: false }],
-];
+interface SanitizedNode {
+  type?: string;
+  properties?: Record<string, unknown>;
+  children?: SanitizedNode[];
+}
+
+/**
+ * GitHub rewrites both sides of a content anchor. cmark-gfm prefixes rendered
+ * `id`s with `user-content-` (anti-clobber) and rewrites same-document fragment
+ * links to match, so a hand-written pair like `<a id="toc"></a>` with
+ * `[ToC](#toc)` still lands after rendering. `rehype-sanitize` copies only the
+ * `id` half of that — `defaultSchema`'s `clobber` + `clobberPrefix` — which on
+ * its own breaks every in-document anchor pair: the element gains the prefix
+ * and the link pointing at it does not.
+ *
+ * This plugin runs after sanitizing and prefixes fragment links exactly as
+ * unconditionally as sanitizing prefixes ids, so an id and an href that matched
+ * before sanitizing still match afterwards. Footnote references need it for the
+ * same reason: `mdast-util-to-hast` generates both their sides already prefixed
+ * and sanitizing prefixes the id once more, so an unprefixed href would strand
+ * the footnote link behind the doubled prefix.
+ *
+ * Links to page elements keep being unreachable from Markdown — that is the
+ * clobber protection doing its job, not this plugin. A bare `#` has no fragment
+ * to pair and stays as written.
+ */
+function rehypeMatchClobberedIds(): (tree: unknown) => void {
+  return (tree: unknown): void => {
+    const visit = (node: SanitizedNode): void => {
+      if (!node || typeof node !== "object") return;
+      const href = node.properties?.href;
+      if (node.type === "element" && typeof href === "string" && href.startsWith("#") && href.length > 1) {
+        node.properties!.href = `#${markdownClobberPrefix}${href.slice(1)}`;
+      }
+      for (const child of node.children ?? []) visit(child);
+    };
+    visit(tree as SanitizedNode);
+  };
+}
 
 function hastText(node: HastContent): string {
   return node.type === "text" ? node.value : node.type === "element" ? node.children.map(hastText).join("") : "";
 }
+
+/**
+ * Display math (`$$…$$`, a ```math fence: `<pre><code class="language-math">`)
+ * goes into a `<div data-math-source>` holding its LaTeX, which MarkdownBody
+ * gives a Copy button (#1380). KaTeX then renders the formula inside the div;
+ * its glyphs are no source to copy. Runs after sanitizing, so the attribute is
+ * never one a user's own HTML could carry (the schema drops `data-*`), and
+ * inline math (no `<pre>`) stays as it is.
+ */
+function rehypeDisplayMathSource() {
+  return (tree: HastRoot): void => {
+    const visit = (parent: HastRoot | HastElement): void => {
+      parent.children = parent.children.map((child) => {
+        if (child.type !== "element") return child;
+        const code = child.tagName === "pre" && child.children.length === 1 ? child.children[0] : null;
+        const classes = code?.type === "element" && code.tagName === "code" ? code.properties.className : null;
+        if (Array.isArray(classes) && classes.includes("language-math")) {
+          return {
+            type: "element",
+            tagName: "div",
+            properties: { className: ["markdown-math-display"], dataMathSource: hastText(child).replace(/\n$/, "") },
+            children: [child],
+          };
+        }
+        visit(child);
+        return child;
+      });
+    };
+    visit(tree);
+  };
+}
+
+export const markdownRehypePlugins: ReactMarkdownOptions["rehypePlugins"] = [
+  rehypeRaw,
+  [rehypeSanitize, markdownSanitizeSchema],
+  rehypeMatchClobberedIds,
+  rehypeDisplayMathSource,
+  [rehypeKatex, { throwOnError: false, strict: false }],
+];
 
 /** GitHub's heading slugs for `#fragment` links, as a data attribute: two rendered documents never share an id. */
 function markdownHeadingAnchors() {
@@ -712,11 +857,13 @@ export const markdownDocumentRehypePlugins: ReactMarkdownOptions["rehypePlugins"
   rehypeRaw,
   [rehypeSanitize, markdownSanitizeSchema],
   markdownHeadingAnchors,
+  rehypeDisplayMathSource,
   [rehypeKatex, { throwOnError: false, strict: false }],
 ];
 
 export const markdownPreviewRehypePlugins: ReactMarkdownOptions["rehypePlugins"] = [
   rehypeRaw,
   [rehypeSanitize, markdownSanitizeSchema],
+  rehypeMatchClobberedIds,
   [rehypeKatex, { throwOnError: false, strict: false }],
 ];

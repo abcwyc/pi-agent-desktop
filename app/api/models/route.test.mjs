@@ -96,6 +96,9 @@ test("a missing folder that is not a removed worktree of a repo is refused as be
   const gone = await models(missing);
   assert.equal(gone.status, 400);
   assert.equal(gone.body.error, `Directory does not exist: ${missing}`);
+  // Typed, so the composer does not call it a model error (#1422).
+  assert.equal(gone.body.reason, "cwd-missing");
+  assert.equal(gone.body.cwd, missing);
 
   // The `-worktrees` name alone is not enough: there has to be a repo to fall back to.
   const orphan = await models(join(`${root}-worktrees`, "orphan"));

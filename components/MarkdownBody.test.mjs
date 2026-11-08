@@ -417,19 +417,11 @@ test("leaves code and math line endings alone when keeping line breaks", () => {
   assert.match(emphasis, /<em>one<br\/>two<\/em>/);
 });
 
-test("keeps a block that opens a raw-text tag as it renders without line breaks", () => {
-  // A <br> after an unclosed <textarea> or <script> ends rehype-raw's raw-text
-  // state, which glued the lines together or dropped the rest of the block.
-  for (const markdown of [
-    "Use a <textarea> here\nand a button\nplease",
-    "Set <title>My\nPage</title> first\nthen deploy",
-    "add <script>a()\nb()</script> to the page\nthen reload",
-    "some *<style>x\ny</style>* then\nnext",
-  ]) {
-    assert.equal(renderMarkdown(markdown, { keepLineBreaks: true }), renderMarkdown(markdown));
-  }
-
-  assert.match(renderMarkdown("normal <kbd>Ctrl</kbd>\nline two", { keepLineBreaks: true }), /<\/kbd><br\/>line two/);
+test("a user message shows raw-text tags as typed and keeps its line breaks (#1407)", () => {
+  // User messages print their HTML as the characters typed, as pi's TUI does, so a
+  // pasted <textarea> or <script> neither swallows the rest of the block nor vanishes.
+  assert.match(renderMarkdown("Use a <textarea> here\nand a button", { keepLineBreaks: true }), /<p>Use a &lt;textarea&gt; here<br\/>and a button<\/p>/);
+  assert.match(renderMarkdown("add <script>a()\nb()</script> to the page", { keepLineBreaks: true }), /&lt;script&gt;a\(\)<br\/>b\(\)&lt;\/script&gt; to the page/);
   const list = renderMarkdown("- item <textarea>\n  more\n- two\n  lines", { keepLineBreaks: true });
   assert.match(list, /<li>two<br\/>lines<\/li>/);
 });

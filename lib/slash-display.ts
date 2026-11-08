@@ -43,3 +43,16 @@ export function sessionListFirstMessage(text: string): string {
   if (points.length <= SESSION_LIST_FIRST_MESSAGE_CHARS && head === display) return display;
   return `${points.slice(0, SESSION_LIST_FIRST_MESSAGE_CHARS).join("")}…`;
 }
+
+/**
+ * The text inside a complete SDK skill expansion's envelope (the reference
+ * line and the skill body), what pi's TUI shows for an expanded skill
+ * invocation; the arguments after it are the command's.
+ */
+export function skillExpansionContent(text: string): string | null {
+  const match = text.match(SKILL_EXPANSION_RE);
+  if (!match) return null;
+  const args = match[4];
+  const tail = args === undefined ? "\n</skill>".length : "\n</skill>\n\n".length + args.length;
+  return text.slice(text.indexOf("\n") + 1, text.length - tail);
+}

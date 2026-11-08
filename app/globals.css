@@ -394,7 +394,6 @@ html.dark {
 @supports (animation-timeline: scroll()) {
   .session-tree-scroll,
   .sidebar-files-scroll,
-  .markdown-code-block > pre,
   .markdown-table-wrap {
     animation-name: scroll-fade-start, scroll-fade-end;
     animation-duration: auto;
@@ -417,8 +416,7 @@ html.dark {
     mask-size: calc(100% - var(--scroll-fade-gutter)) 100%, var(--scroll-fade-gutter) 100%;
     mask-position: left top, right top;
   }
-  /* Code and tables that scroll sideways. */
-  .markdown-code-block > pre,
+  /* Tables that scroll sideways (code fences wrap instead). */
   .markdown-table-wrap {
     --scroll-fade-size: 28px;
     animation-timeline: scroll(self inline);
@@ -809,6 +807,16 @@ html[data-keyboard-open] .terminal-extra-keys {
   }
 }
 
+/* The file panel's tab strip hides its scrollbar: a scrollbar takes its height
+   out of the 36px bar and squeezes the tabs (#1225). A wheel, a swipe or the
+   arrow keys scroll it, and TabBar keeps the active tab in view. */
+.tabbar-scroll {
+  scrollbar-width: none;
+}
+.tabbar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 /* The terminal picks its surface apart from the app theme, so --text-dim
    could disappear against it. */
 .terminal-xterm .xterm-viewport::-webkit-scrollbar-thumb {
@@ -1127,6 +1135,10 @@ pre, code {
 }
 .markdown-body p { margin: 0 0 8px; }
 .markdown-body p:last-child { margin-bottom: 0; }
+/* A reply ending in a list, code block or table kept that block's bottom
+   margin, so its stats line sat further down than under a paragraph. */
+.markdown-body > :last-child,
+.markdown-body > :is(ul, ol):last-child > li:last-child { margin-bottom: 0; }
 .markdown-body h1, .markdown-body h2, .markdown-body h3,
 .markdown-body h4, .markdown-body h5, .markdown-body h6 {
   font-weight: 600;
@@ -1171,6 +1183,28 @@ pre, code {
   display: block;
   max-width: 100%;
   height: auto;
+  margin: 8px 0;
+  border-radius: 6px;
+}
+/* Firefox draws its audio controls without a background (bare buttons on the
+   page), Chrome inside a grey pill: both get the same frame from the theme. */
+.markdown-body audio {
+  display: block;
+  width: min(360px, 100%);
+  height: 36px;
+  margin: 8px 0;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  clip-path: inset(0 round 18px);
+}
+.markdown-body audio::-webkit-media-controls-enclosure {
+  background: transparent;
+}
+.markdown-body video {
+  display: block;
+  max-width: min(640px, 100%);
+  max-height: 360px;
   margin: 8px 0;
   border-radius: 6px;
 }
@@ -1279,6 +1313,26 @@ pre, code {
 .markdown-body .katex {
   font-size: 1.05em;
 }
+/* A display formula's Copy button (MarkdownBody's MathDisplay): on hover or
+   keyboard focus where the pointer can hover, always shown on touch screens. */
+.markdown-math-display {
+  position: relative;
+}
+.markdown-math-copy {
+  position: absolute;
+  top: 2px;
+  right: 0;
+}
+@media (hover: hover) {
+  .markdown-math-copy {
+    opacity: 0;
+    transition: opacity 0.12s ease;
+  }
+  .markdown-math-display:hover .markdown-math-copy,
+  .markdown-math-copy:focus-visible {
+    opacity: 1;
+  }
+}
 .markdown-user-message p {
   white-space: pre-wrap;
 }
@@ -1386,6 +1440,25 @@ pre, code {
   background: var(--bg);
   box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 42%, transparent);
 }
+/* Code fences wrap long lines, as pi's TUI does: a line is a row of its number
+   and its text (CodeBlock's renderer), so a wrapped line goes on under its
+   text, and `anywhere` breaks a URL or path that has no space to break at. */
+.markdown-code-line {
+  display: flex;
+}
+/* A zero basis: an `auto` one measures every line's unwrapped width first,
+   which nearly doubled the layout of a reply's fences. */
+.markdown-code-line-text {
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* An extension dialog measures its fences unwrapped (ChatWindow), so it still
+   grows to show them whole where the screen allows. */
+.extension-dialog-measuring .markdown-code-line-text {
+  white-space: pre;
+}
 .markdown-code-header {
   padding: 5px 10px;
   background: var(--bg-panel);
@@ -1465,6 +1538,31 @@ pre, code {
 .mermaid-preview-button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
+}
+
+/* A ```svg fence's <img> (components/SvgBlock.tsx). An SVG with neither a
+   viewBox nor a width and height has no size of its own: is-unsized gives it one. */
+.svg-block-image,
+.svg-zoom-image {
+  display: block;
+  height: auto;
+}
+/* An SVG with only a viewBox has a ratio but no size, so it would fill the
+   column: cap its height like a diagram's. */
+.svg-block-image {
+  width: auto;
+  max-width: 100%;
+  max-height: min(360px, 50dvh);
+}
+.svg-block-image.is-unsized {
+  width: 100%;
+  height: 240px;
+}
+.svg-zoom-image {
+  width: 100%;
+}
+.svg-zoom-image.is-unsized {
+  aspect-ratio: 2 / 1;
 }
 
 .image-preview-dialog {
@@ -2731,8 +2829,13 @@ span.token.table {
    touch screens opt in too; tablets keep their controls because the keyboard
    leaves them enough height. */
 @media (max-width: 640px), (pointer: coarse) and (max-height: 500px) {
-  html[data-keyboard-open] .chat-input-controls,
   html[data-keyboard-open] .extension-status-shelf {
+    display: none !important;
+  }
+  /* Except while its model picker is open: the picker's filter is the field
+     the keyboard is for, and hiding its row would hide the picker (#1271).
+     Its own rule, so a browser without :has() drops only this one. */
+  html[data-keyboard-open] .chat-input-controls:not(:has(.model-selector [role="listbox"])) {
     display: none !important;
   }
   html[data-keyboard-open] .chat-content {

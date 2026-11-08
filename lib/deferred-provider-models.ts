@@ -6,7 +6,7 @@ import { resolveVisibleModels, selectInitialModelScope, type InitialModelScopeOp
 type RuntimeModel = Awaited<ReturnType<ModelRuntime["getAvailable"]>>[number];
 
 /**
- * Models of every provider seen in any ModelRuntime of this process, by provider.
+ * Extension provider and virtual models seen in any ModelRuntime of this process, by provider.
  *
  * pi-web builds a runtime per `/api/models` load, and the Models panel's routes share one that
  * `lib/model-runtime.ts` builds again after a plugin change, a reload or its expiry. Some
@@ -25,10 +25,16 @@ function catalog(): Map<string, RuntimeModel[]> {
   return globalThis.__piWebProviderModelCatalog;
 }
 
-/** Record what a runtime offers, so later runtimes can show a provider they have not registered yet. */
+/** Record extension providers and virtual models for runtimes that have not registered them yet. */
 export async function rememberProviderModels(runtime: ModelRuntime): Promise<void> {
+  const extensionProviders = new Set(runtime.getRegisteredProviderIds());
   const byProvider = new Map<string, RuntimeModel[]>();
   for (const model of await runtime.getAvailable()) {
+    // Only current virtual models qualify without a provider registration.
+    // A concurrent refresh may have removed a physical model while availability loaded.
+    if (!extensionProviders.has(model.provider)) {
+      if (!runtime.getModel(model.provider, model.id) || runtime.getPhysicalModel(model.provider, model.id)) continue;
+    }
     byProvider.set(model.provider, [...(byProvider.get(model.provider) ?? []), model]);
   }
   const added = [...byProvider.keys()].some((provider) => !catalog().has(provider));
@@ -87,8 +93,7 @@ export async function findDeferredStartupModel(
   try {
     selected = selectInitialModelScope(await resolveVisibleModels(withDeferredProviderModels(runtime), enabledModels), options);
   } catch {
-    // A requested model out of scope, or an entry ambiguous only once deferred models count
-    // (a bare id two providers share).
+    // A requested model out of scope.
     return undefined;
   }
   const model = selected.model && findDeferredModel(runtime, selected.model.provider, selected.model.id);

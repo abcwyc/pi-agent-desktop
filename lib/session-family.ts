@@ -78,3 +78,31 @@ export function getSessionFamily(
     || family.subagents.some((session) => session.id === sessionId)
   )) ?? null;
 }
+
+/** Subagents of a family that the sidebar's running poll lists. */
+export function countRunningSubagents(
+  subagents: readonly SessionInfo[],
+  runningSessionIds: ReadonlySet<string>,
+): number {
+  return subagents.filter((session) => runningSessionIds.has(session.id)).length;
+}
+
+/** The top bar's Agents badge: how many run while any does, else how many there are. */
+export function getAgentsBadge(
+  subagents: readonly SessionInfo[],
+  runningSessionIds: ReadonlySet<string>,
+): { count: number; running: boolean } {
+  const running = countRunningSubagents(subagents, runningSessionIds);
+  return running > 0 ? { count: running, running: true } : { count: subagents.length, running: false };
+}
+
+/**
+ * The badge a narrow phone's folded More button carries in place of the
+ * Agents button it hides: only while subagents run, never once it is open.
+ */
+export function getFoldedMoreAgentsBadge(
+  badge: { count: number; running: boolean } | null,
+  moreOpen: boolean,
+): { count: number; running: true } | null {
+  return badge?.running && !moreOpen ? { count: badge.count, running: true } : null;
+}

@@ -76,3 +76,27 @@ test("JSX gets its tags colored and an ambiguous extension stays plain", async (
   assert.equal(await languageOf("analysis.R"), "r");
   assert.equal(await languageOf("plot.m"), "text");
 });
+
+test("a binary file without a preview answers binary, never its bytes as text (#1401)", async () => {
+  async function read(name, bytes) {
+    const filePath = path.join(root, name);
+    fs.writeFileSync(filePath, bytes);
+    const segments = filePath.replace(/\\/g, "/").split("/").filter(Boolean);
+    return GET(
+      new NextRequest("http://localhost/api/files/x?type=read"),
+      { params: Promise.resolve({ path: segments }) },
+    );
+  }
+  const zip = await (await read("archive.zip", Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00]))).json();
+  assert.equal(zip.binary, true);
+  assert.equal(zip.content, "");
+  assert.equal(zip.size, 8);
+
+  const text = await (await read("notes.unknownext", "plain\n")).json();
+  assert.equal(text.binary, false);
+  assert.equal(text.content, "plain\n");
+
+  // Previewed media is streamed before any text sniffing.
+  const png = await read("pixel.png", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]));
+  assert.equal(png.headers.get("content-type"), "image/png");
+});

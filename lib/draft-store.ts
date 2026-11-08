@@ -35,6 +35,11 @@ const MAX_PERSISTED_DRAFTS = 40;
 let hydrated = false;
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** Where a fresh composer's draft waits once the page leaves it; the next fresh composer in that cwd takes it back. */
+export function parkedNewSessionDraftKey(cwd: string): string {
+  return `parked-new:${cwd}`;
+}
+
 function cloneDraft(draft: ChatDraft): ChatDraft {
   return {
     value: draft.value,

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { ModelsConfigReadError, readModelsConfig, writeModelsConfig } from "@/lib/models-config-store";
 import { mergeStoredLiteralApiKeys, redactModelsJson } from "@/lib/models-config-redaction";
 import { ContextWindowError, normalizeContextWindowOverrides } from "@/lib/model-context";
+import { checkProviderEntries, ProviderEntryError } from "@/lib/model-provider-check";
+import { checkImageMaxBytes, ImageMaxBytesError } from "@/lib/model-image-limits";
 
 export const dynamic = "force-dynamic";
 
@@ -28,13 +30,16 @@ export async function PUT(req: Request) {
     // incoming provider that omits the field must keep the stored value while
     // the user edits unrelated settings. An explicit apiKey (even "") wins.
     // Context-window overrides are checked and normalized as upstream does (Settings › Models).
-    writeModelsConfig(normalizeContextWindowOverrides({
+    const config = normalizeContextWindowOverrides({
       ...body,
       providers: mergeStoredLiteralApiKeys(incomingProviders, existingProviders),
-    }));
+    });
+    checkProviderEntries(config);
+    checkImageMaxBytes(config);
+    writeModelsConfig(config);
     return NextResponse.json({ success: true });
   } catch (error) {
-    if (error instanceof ContextWindowError) {
+    if (error instanceof ContextWindowError || error instanceof ProviderEntryError || error instanceof ImageMaxBytesError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     if (error instanceof ModelsConfigReadError) {
