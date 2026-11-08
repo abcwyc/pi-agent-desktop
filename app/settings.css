@@ -1537,8 +1537,83 @@
   transform: scale(1.25);
 }
 
-.settings-mobile-section-picker {
-  display: none;
+/* A phone's Back button and list of sections (SettingsPanel); desktops never render them. */
+.settings-phone-back {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  height: 44px;
+  padding: 0 6px 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.settings-phone-back span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-phone-home {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  /* The first row meets the header's line: each row draws only its bottom line. */
+  padding: 0 0 8px;
+  overflow-y: auto;
+}
+
+.settings-phone-home-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px 0 18px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 15px;
+  text-align: left;
+}
+
+.settings-phone-home-item:active:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.settings-phone-home-item:disabled {
+  color: var(--text-dim);
+  cursor: default;
+}
+
+.settings-phone-home-item .settings-section-icon {
+  color: var(--text-muted);
+}
+
+.settings-phone-home-label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-phone-home-note {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.settings-phone-home-chevron {
+  flex-shrink: 0;
+  color: var(--text-dim);
 }
 
 .settings-dialog-close {
@@ -1967,9 +2042,36 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* A phone shows Settings, and a config panel opened on its own, full
+     screen: the page's own colour under the safe areas, no frame. iOS
+     standalone's fallback insets (end of file) still pad the root. */
+  .settings-dialog-backdrop,
+  .config-panel-root.is-modal {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    background: var(--bg);
+  }
+
+  .config-close-button {
+    width: 44px;
+    height: 44px;
+    font-size: 24px;
+  }
+
+  .settings-dialog-close {
+    position: static;
+    grid-column: 3;
+    justify-self: end;
+  }
+
+  .settings-dialog-surface,
   .config-panel-root.is-modal > .config-panel-surface {
-    width: calc(100vw - 16px);
-    height: calc(100dvh - 16px);
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .config-split-view {
@@ -1998,28 +2100,62 @@
     padding: 14px;
   }
 
-  .settings-dialog-surface {
-    width: calc(100vw - 12px);
-    height: calc(100dvh - 12px);
-  }
-
   .settings-section-tabs {
     display: none;
   }
 
-  .settings-mobile-section-picker {
-    display: block;
-    width: 100%;
-    max-width: 210px;
-    min-width: 0;
-    height: 32px;
-    margin-left: 14px;
-    padding: 0 9px;
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    background: var(--bg-panel);
-    color: var(--text);
+  /* Back, title, close: equal side columns keep the title in the middle
+     whatever Back says; a long title is cut short in its own column. */
+  .settings-dialog-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.8fr) minmax(0, 1fr);
+    align-items: center;
+    padding: 0 4px;
+  }
+
+  .settings-phone-back {
+    grid-column: 1;
+    justify-self: start;
+  }
+
+  .settings-dialog-title {
+    grid-column: 2;
+    overflow: hidden;
     font-size: 16px;
+    text-align: center;
+    text-overflow: ellipsis;
+  }
+
+  /* Inside Settings a split view shows one pane at a time (ConfigSplitView's
+     data-pane): the list fills the screen with rows for a finger, and a row
+     opens its detail in its place. */
+  .config-split-view[data-pane] > .config-sidebar {
+    flex: 1 1 auto;
+    height: auto;
+    border-bottom: 0;
+  }
+
+  .config-split-view[data-pane="list"] > .config-detail,
+  .config-split-view[data-pane="detail"] > .config-sidebar {
+    display: none;
+  }
+
+  .config-split-view[data-pane] .config-sidebar-item,
+  .config-split-view[data-pane] .config-list-action-button {
+    height: 44px;
+    min-height: 44px;
+    font-size: 14px;
+  }
+
+  .config-split-view[data-pane] .config-sidebar-group-label {
+    padding-top: 10px;
+    font-size: 11px;
+  }
+
+  /* A section's settings above its list (Models' enabledModels, Sub-agents'
+     switch) belong to the list level, not to each row's detail. */
+  .settings-section-host[data-phone-level="detail"] :is(.enabled-models-banner, .agents-feature-setting) {
+    display: none;
   }
 }
 

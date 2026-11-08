@@ -3766,7 +3766,16 @@ html.dark {
 /* Keep the mobile-only section picker hidden on desktop after replacing select. */
 .settings-mobile-section-picker.app-select-trigger { display: none; }
 @media (max-width: 640px) {
-  .settings-mobile-section-picker.app-select-trigger { display: inline-flex; }
+  /* Upstream's settings.css dropped this rule for its phone drill-down
+     (v0.14.2); the fork's section picker keeps its own size here. */
+  .settings-mobile-section-picker.app-select-trigger {
+    display: inline-flex;
+    width: 100%;
+    max-width: 210px;
+    min-width: 0;
+    height: 32px;
+    margin-left: 14px;
+  }
 }
 
 .app-menu-copy {

@@ -1100,6 +1100,21 @@ button.extension-widget-trigger:focus-visible {
   }
 }
 
+/* The chat's top bar, the sidebar's toolbar row and the file panel's tab bar
+   share one height, so they read as one bar. A phone or touch screen gets a
+   finger's 44px; its icon buttons stay square. The file tree's rows
+   (FileExplorer) grow to 36px there, their row buttons with them. */
+:root {
+  --top-bar-height: 36px;
+  --file-row-height: 24px;
+}
+@media (max-width: 640px), (pointer: coarse) {
+  :root {
+    --top-bar-height: 44px;
+    --file-row-height: 36px;
+  }
+}
+
 :root {
   --font-ui-default: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono-default: var(--font-noto-mono), 'JetBrains Mono', 'Fira Code', 'Consolas', ui-monospace, 'PingFang SC', 'Microsoft YaHei', monospace;
@@ -1337,10 +1352,34 @@ pre, code {
   white-space: pre-wrap;
 }
 
+/* The page's mono font ships Latin and Cyrillic only, so arrows, box drawing and
+   blocks fell back to glyphs 12-17px wide in a 7.8px column. These faces take
+   those characters from a system mono font, sized to the 0.6em column. */
+@font-face {
+  font-family: "Terminal Drawing";
+  src: local("Menlo Regular"), local("Menlo-Regular"), local("DejaVu Sans Mono");
+  unicode-range: U+2190-21FF, U+2500-259F;
+  size-adjust: 99.67%;
+}
+@font-face {
+  font-family: "Terminal Drawing Windows";
+  src: local("Consolas");
+  unicode-range: U+2190-21FF, U+2500-259F;
+  size-adjust: 109.09%;
+}
+
+/* Monospace with kept spaces, as an extension's text is laid out for pi's TUI:
+   a status box and its bars only line up in columns. */
 .markdown-custom-message {
+  font-family: "Terminal Drawing", "Terminal Drawing Windows", var(--font-mono);
+  font-size: calc(13px + var(--chat-font-size-offset, 0px));
   line-height: 1.32;
 }
-.markdown-custom-message p { margin: 0; }
+.markdown-custom-message p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.markdown-custom-message p + p { margin-top: 1.32em; }
 .markdown-custom-message h1,
 .markdown-custom-message h2,
 .markdown-custom-message h3,
@@ -1863,6 +1902,14 @@ pre, code {
   background: var(--bg-panel);
   box-shadow: 0 3px 12px color-mix(in srgb, var(--text) 18%, transparent);
   pointer-events: auto;
+}
+
+/* Below about 370px the labels of a message's actions push its timestamp onto a
+   second line, and its Copy button past the left edge. Every button keeps its title. */
+@media (max-width: 380px) {
+  .message-action-label {
+    display: none;
+  }
 }
 
 .chat-scroll-to-bottom {
@@ -2729,8 +2776,8 @@ span.token.table {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+  width: var(--top-bar-height);
+  height: var(--top-bar-height);
   padding: 0;
   background: var(--bg-selected);
   border: none;
@@ -2817,6 +2864,18 @@ span.token.table {
   }
   .chat-input-textarea {
     font-size: max(16px, var(--chat-content-font-size, 14px)) !important;
+  }
+}
+
+/* A composer too narrow for the run's button labels, with a panel open beside
+   it: icons only, so the draft keeps the width. A stacked composer has its own
+   row for them and is not a container. */
+.chat-composer-row {
+  container-type: inline-size;
+}
+@container (max-width: 480px) {
+  .chat-composer-run-label {
+    display: none;
   }
 }
 
