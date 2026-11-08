@@ -1,7 +1,7 @@
 /**
  * Remembers which tool-call cards the user has expanded, keyed by toolCallId.
  *
- * A streaming assistant message is rendered from `streamState`, then re-rendered
+ * A streaming assistant message is rendered from the streaming store, then re-rendered
  * from `messages` after `message_end`, and re-keyed again once `entryIds` arrive
  * from the session file. Each of those hops remounts `ToolCallBlock`, so plain
  * component state would collapse a card the user just opened. Keeping the set

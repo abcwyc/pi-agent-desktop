@@ -625,6 +625,30 @@ export function familiesToArchive(
   return ids;
 }
 
+/**
+ * A project group's "Delete all sessions": root ids of every family of
+ * `projectKey` that has a file, pinned and archived ones included (the
+ * server deletes their subagent sessions with them), and how many families
+ * it keeps because they run or wait for input: deleting one would stop its
+ * run. Transient families have no file to delete.
+ */
+export function familiesToDelete(
+  input: Pick<SessionTreeInput, "sessions" | "runningIds" | "awaitingIds">,
+  projectKey: string,
+): { ids: string[]; running: number } {
+  const ids: string[] = [];
+  let running = 0;
+  for (const family of listSessionFamilies(input.sessions)) {
+    if (familyProjectKey(family) !== projectKey || family.root.transient) continue;
+    if (anyMemberIn(family, input.runningIds) || (input.awaitingIds && anyMemberIn(family, input.awaitingIds))) {
+      running++;
+      continue;
+    }
+    ids.push(family.root.id);
+  }
+  return { ids, running };
+}
+
 /** Prefix sums of row heights: length rows.length + 1, offsets[0] = 0. */
 export function getRowOffsets(rows: readonly SidebarRow[], layout: SidebarLayout): number[] {
   const heights = SIDEBAR_ROW_HEIGHTS[layout];

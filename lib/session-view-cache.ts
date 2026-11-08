@@ -49,13 +49,24 @@ function cache(): Map<string, SessionViewSnapshot> {
 	return globalThis.__piSessionViewCache;
 }
 
+// A snapshot's size, measured once when it is stored: its messages are never
+// mutated in place. Summing stored sizes replaced a JSON.stringify of every
+// cached session (up to 32 MB) on each store, which ran at every run's end,
+// compaction and session switch.
+const snapshotSizes = new WeakMap<SessionViewSnapshot, number>();
+
 function snapshotBytes(snapshot: SessionViewSnapshot): number {
+	const known = snapshotSizes.get(snapshot);
+	if (known !== undefined) return known;
+	let bytes: number;
 	try {
-		return JSON.stringify(snapshot).length;
+		bytes = JSON.stringify(snapshot).length;
 	} catch {
 		// Circular or non-serializable payload — treat as oversize.
-		return Number.MAX_SAFE_INTEGER;
+		bytes = Number.MAX_SAFE_INTEGER;
 	}
+	snapshotSizes.set(snapshot, bytes);
+	return bytes;
 }
 
 function evictToFit(): void {

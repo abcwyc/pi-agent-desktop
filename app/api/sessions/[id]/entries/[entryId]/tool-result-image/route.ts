@@ -76,7 +76,11 @@ export async function GET(
       headers: {
         "Content-Type": image.mime,
         "Content-Length": String(bytes.byteLength),
-        "Cache-Control": "private, no-cache",
+        // A session's entry id and block index name these bytes for good: pi
+        // only appends, a migration's rewrite keeps every entry, and a context
+        // edit leaves raw history alone. Revalidating re-sent multi-MB images
+        // and decoded their base64 again on each view.
+        "Cache-Control": "private, max-age=31536000, immutable",
         "X-Content-Type-Options": "nosniff",
       },
     });

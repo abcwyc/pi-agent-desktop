@@ -90,6 +90,7 @@ function agentTypeDescription(profiles: readonly SubagentProfile[]): string {
   return available.map((profile) => {
     const details = [`Tools: ${profile.tools.length > 0 ? profile.tools.join(", ") : "none"}`];
     if (profile.model) details.push(`Model: ${profile.model}`);
+    if (profile.thinking) details.push(`Thinking: ${profile.thinking}`);
     return `- ${profile.name}: ${profile.description} (${details.join("; ")})`;
   }).join("\n");
 }
@@ -180,7 +181,7 @@ export function createSubagentExtension(
           })),
           description: Type.String({ description: "Short activity label shown in the UI." }),
           run_in_background: Type.Optional(Type.Boolean({ description: "Return immediately and notify this session when complete." })),
-          model: Type.Optional(Type.String({ description: "Optional provider/modelId override." })),
+          model: Type.Optional(Type.String({ description: 'Optional provider/modelId override. Append ":<level>" (off, minimal, low, medium, high, xhigh, max) to also set the thinking level for this run, e.g. "provider/model:high".' })),
           isolation: Type.Optional(Type.String({ description: 'Set to "worktree" to run the subagent in an isolated git worktree.' })),
         }),
         async execute(toolCallId, params, signal, onUpdate, ctx) {

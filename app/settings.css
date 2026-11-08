@@ -1075,6 +1075,23 @@
   line-height: 1.5;
 }
 
+.skill-instructions {
+  font-size: 13px;
+}
+
+.skill-instructions > :first-child { margin-top: 0; }
+.skill-instructions > :last-child { margin-bottom: 0; }
+
+.skill-instructions-status {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.skill-instructions-status.is-error {
+  color: #ef4444;
+  overflow-wrap: anywhere;
+}
+
 .skill-update-indicator {
   flex-shrink: 0;
   font-size: 13px;
@@ -2006,9 +2023,9 @@
   color: #d97706;
 }
 
+/* Secondary lines keep the pane's one text size; only the color steps back. */
 .mcp-config-line.is-dim {
   color: var(--text-dim);
-  font-size: 11px;
 }
 
 .mcp-config-line.is-error {
@@ -2043,6 +2060,8 @@
   min-width: 0;
 }
 
+/* Literal text (names, a URL or command line, a path) is one mono size across
+   the pane, whether in a chip or a row of its own (.mcp-config-code). */
 .mcp-config-chip {
   max-width: 100%;
   padding: 0 5px;
@@ -2076,12 +2095,17 @@
   white-space: pre-wrap;
 }
 
+.config-detail-grid-value.mcp-config-code {
+  font-size: 11px;
+}
+
+/* Under the Tools row's choice: a little apart from its explanation. */
 .mcp-test-tools {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
-  margin: 0;
+  margin: 4px 0 0;
   padding: 0;
   list-style: none;
 }
@@ -2095,7 +2119,7 @@
 
 .mcp-test-tool-tag {
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 18px;
   white-space: nowrap;
 }
@@ -2134,9 +2158,11 @@
   min-width: 0;
 }
 
+/* Its options are words, not literal text: the interface font, not .mcp-add-input's mono. */
 .mcp-add-input.mcp-exposure-select {
   width: auto;
   max-width: 100%;
+  font-family: inherit;
 }
 
 /* The add pane (components/McpAddServer.tsx). Notes, fields and the failure

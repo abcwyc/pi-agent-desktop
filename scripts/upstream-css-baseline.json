@@ -1,8 +1,8 @@
 {
   "note": "sha256 (LF-normalized) of the pi-web stylesheets as shipped by upstreamRef. Fork styling goes in app/native-theme.css; refresh with `node scripts/upstream-css-baseline.mjs update <upstream-ref>` after a merge.",
-  "upstreamRef": "e7837219",
+  "upstreamRef": "894e1a28",
   "files": {
-    "app/globals.css": "7dc55bc0c9395680e64da8067a2dc95fecfd378ba91c5d236b17a0a1a578479d",
-    "app/settings.css": "b6b6dcbb510f6b4872cdaea5057cc64e86de2aed1638a1a84558d48eac80798e"
+    "app/globals.css": "825d91494f59f41f1f9d5f3d260e24e7f1d74b3a95b45b75e67fdfae2cf94b6e",
+    "app/settings.css": "722648fd04015362389e1c69f23f09a47f0e405d2c2890005c168ee911aa3791"
   }
 }

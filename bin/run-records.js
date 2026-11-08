@@ -97,14 +97,18 @@ function removeRunRecord(dir, pid) {
   fs.rmSync(recordPath(dir, pid), { force: true });
 }
 
-// Any HTTP answer counts (a password-protected server answers 401).
+// Any HTTP answer counts (a password-protected server answers 401). Only the
+// status matters, so the body is dropped: its connection is released now
+// instead of being left mid-response when the CLI exits (#1174).
 async function isServerAnswering(url, fetchImpl = fetch) {
+  let response;
   try {
-    await fetchImpl(url, { redirect: "manual", signal: AbortSignal.timeout(2_000) });
-    return true;
+    response = await fetchImpl(url, { redirect: "manual", signal: AbortSignal.timeout(2_000) });
   } catch {
     return false;
   }
+  await response.body?.cancel().catch(() => {});
+  return true;
 }
 
 function isValidPid(pid) {

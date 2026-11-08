@@ -70,7 +70,11 @@ extension that registers `/mcp`, `codemode`, or `tool_search` all behave as in
 the CLI. Chat-only sessions do not load them. Subagent profiles can now select
 `codemode: inherit | on | off` (missing means `off`): they load only the Code mode factory, retain their
 profile tool allow-list, and save the resolved choice in their resource snapshot.
-They still do not load the normal session's MCP host or tool-search.
+Profiles can also select `mcp: on | off` (missing means `off`): the child then
+loads `tool-search` and `mcp` with an MCP host of its own, so it connects the
+servers in `mcp.json` under the same trust rules. A child whose built-in tools are
+read-only blocks MCP tools without `readOnlyHint`, and an allowlist admits only
+pi's MCP tools and the ones the profile selected.
 
 ### Pi Web decides which MCP servers a session connects
 
@@ -400,8 +404,9 @@ restores the branch's tool set from its transcript.
 - **P3.** Registry search, resolving `github.com/mcp` by-name links, editing an
   existing entry, TOML and YAML paste, per-tool exposure, the same
   fresh-folder fix for Plugins and Skills.
-- **P4.** Per-session switches, MCP for subagents, and dropping the internals
-  adapter once upstream exports what it needs.
+- **P4.** Per-session switches, MCP for subagents (`mcp: on` is in place;
+  `inherit` and choosing servers per profile are not), and dropping the
+  internals adapter once upstream exports what it needs.
 
 ## Consequences
 

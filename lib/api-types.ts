@@ -110,6 +110,10 @@ export interface SkillsResponse {
   projectResourcesLoaded: boolean;
 }
 
+export interface SkillContentResponse {
+  content: string;
+}
+
 /** One file of a bulk `PATCH /api/skills`; `error` means it was left as it was. */
 export interface SkillToggleResult {
   filePath: string;

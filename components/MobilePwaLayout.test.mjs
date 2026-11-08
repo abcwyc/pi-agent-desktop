@@ -116,11 +116,12 @@ test("keeps Settings › MCP usable in the 190px phone sidebar", () => {
   assert.match(cssRule(settingsCssSource, ".mcp-add-input"), /width: 100%;[\s\S]*?min-width: 0;/);
   assert.match(cssRule(settingsCssSource, ".mcp-add-note"), /overflow-wrap: anywhere;/);
   assert.match(cssRule(settingsCssSource, ".config-add-source-input.is-multiline"), /resize: vertical;[\s\S]*?overflow: auto;/);
-  // Every .mcp-* rule targets a class the panel (its Sign-in row, its add pane) renders, and every
-  // class it renders has a rule, so a rename cannot leave a phone rule silently dead.
+  // Every .mcp-* class the panel (its Sign-in row, its add pane) renders has a rule, so a rename
+  // cannot leave a class unstyled. app/settings.css is upstream's byte for byte and may also style
+  // classes of upstream's own MCP detail layout, which the fork does not ship.
   const styled = new Set([...settingsCssSource.matchAll(/\.(mcp-[a-z-]+)/g)].map((match) => match[1]));
   const rendered = new Set([...`${mcpConfigSource}\n${mcpSignInSource}\n${mcpAddSource}`.matchAll(/className=(?:"([^"]*)"|\{`([^`]*)`\})/g)]
     .flatMap((match) => (match[1] ?? match[2]).split(/\s+/))
     .filter((name) => name.startsWith("mcp-")));
-  assert.deepEqual([...styled].sort(), [...rendered].sort());
+  assert.deepEqual([...rendered].filter((name) => !styled.has(name)).sort(), []);
 });

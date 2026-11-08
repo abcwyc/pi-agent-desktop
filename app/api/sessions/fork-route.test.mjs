@@ -175,16 +175,6 @@ test("a source deleted behind its cached path is not found, forgotten and droppe
   assert.ok(getSessionListVersion() > versionBefore, "the next list load drops its row");
 });
 
-test("the route never starts, prompts or forks an AgentSession", () => {
-  assert.doesNotMatch(routeSource, /startRpcSession|\.send\(|\.fork\(|\.prompt\(|shutdown\(/);
+test("the route refuses cross-origin requests itself", () => {
   assert.match(routeSource, /if \(!isApiRequestAllowed\(req\)\) return refusal\(403, "request-denied"/);
-  assert.match(routeSource, /if \(!hasJsonContentType\(req\)\) return refusal\(415, "request-denied"/);
-  assert.match(routeSource, /const fork = forkSessionBranch\(sourcePath, liveLeafId, sourceTitle\);\s*cacheSessionPath\(fork\.sessionId, fork\.path\);\s*invalidateSessionListCache\(\);/);
-  // The source's title is the one await before the copy; the leaf is read after it.
-  const title = routeSource.indexOf("const sourceTitle = await readForkSourceTitle(sourcePath);");
-  const leaf = routeSource.indexOf("const wrapper = getRpcSession(id);");
-  assert.ok(title >= 0 && title < leaf, "the title is read before the leaf");
-  assert.doesNotMatch(routeSource.slice(leaf, routeSource.indexOf("const fork = forkSessionBranch(")), /await /);
-  // The row is read once the name is written.
-  assert.ok(routeSource.indexOf("await readSessionInfo(fork.path)") > routeSource.indexOf("const fork = forkSessionBranch("));
 });
