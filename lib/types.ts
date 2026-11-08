@@ -78,7 +78,10 @@ export interface AssistantMessage {
   responseModel?: string;
   stopReason?: string;
   errorMessage?: string;
+  /** When the request started. */
   timestamp?: number;
+  /** From `timestamp` until the response ended, measured by pi (pi 1.1); absent for older messages. */
+  durationMs?: number;
   usage?: AgentUsage;
 }
 
@@ -90,6 +93,8 @@ export interface ToolResultMessage {
   isError?: boolean;
   details?: unknown;
   timestamp?: number;
+  /** How long the tool ran, measured by pi with a monotonic clock (pi 1.1); absent for older results. */
+  durationMs?: number;
   usage?: AgentUsage;
 }
 

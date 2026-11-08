@@ -128,6 +128,10 @@ export interface McpOAuthSettings {
   callbackPort?: number;
   callbackUrl?: string;
   scope?: string;
+  clientName?: string;
+  /** How pi identifies itself without `clientId`: dynamic registration, or its Client ID Metadata Document (pi 1.0.1). */
+  clientRegistration?: "dcr" | "cimd";
+  authServerMetadataUrl?: URL;
 }
 
 /** The part of pi-mcp's `McpClient` that pi-web reads. */
@@ -193,9 +197,11 @@ export interface McpSignInOptions {
   settings: McpOAuthSettings;
   challenge?: McpOAuthChallenge;
   prompt: McpSignInPrompt;
+  /** Stops the sign-in at any step with `McpSignInCancelledError` (pi 1.1). */
+  signal?: AbortSignal;
 }
 
-/** The settings `/mcp` changes; `enabled: true` and `exposure: "codemode"` remove the key. */
+/** The settings `/mcp` changes; `enabled: true` and `exposure: "codemode"` remove the key, except in an override. */
 export interface McpServerConfigPatch {
   enabled?: boolean;
   exposure?: McpExposure;
@@ -211,7 +217,8 @@ export interface PiSdkInternals {
   loadMcpConfig: (options: { agentDir: string; cwd: string; projectTrusted: boolean }) => LoadedMcpConfig;
   /** Returns true when an entry with the same name was replaced. */
   addMcpServerConfig: (path: string, name: string, config: McpServerConfig) => boolean;
-  updateMcpServerConfig: (path: string, name: string, patch: McpServerConfigPatch) => void;
+  /** With `override`, a missing entry is added as a project override (pi 1.0.1). */
+  updateMcpServerConfig: (path: string, name: string, patch: McpServerConfigPatch, options?: { override?: boolean }) => void;
   /** Returns false when the file does not define the server. */
   removeMcpServerConfig: (path: string, name: string) => boolean;
   /** Returns the config, or an error message. */

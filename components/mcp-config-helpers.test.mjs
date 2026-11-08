@@ -38,6 +38,7 @@ const {
   mcpGroupEmptyKey,
   mcpGroupSwitchChecked,
   mcpGroupSwitchTargets,
+  mcpInProjectView,
   mcpOverviewUrl,
   mcpProjectServersLoad,
   mcpProjectTrustable,
@@ -144,8 +145,41 @@ test("a row's state follows the file, the most important reason first", () => {
   const shadowed = server({ shadowedByProject: true });
   assert.equal(mcpServerRowState(shadowed, on), "replaced");
   assert.equal(mcpServerRowState(shadowed, { mcpAvailable: true, projectServersLoad: false }), "on");
+  // One the project's override changes, likewise; the override itself reads as any project entry.
+  const overridden = server({ overriddenByProject: true });
+  assert.equal(mcpServerRowState(overridden, on), "overridden");
+  assert.equal(mcpServerRowState(overridden, { mcpAvailable: true, projectServersLoad: false }), "on");
+  assert.equal(mcpServerRowState(server({ scope: "project", override: { keys: ["enabled"] }, enabled: false }), on), "disabled");
   assert.equal(mcpServerRowState(server(), { mcpAvailable: false, projectServersLoad: true }), "mcp-off");
   assert.deepEqual([...MCP_SERVER_ROW_STATES].sort(), Object.keys(MCP_ROW_STATE_LABEL_KEYS).sort());
+});
+
+test("a global server's \"This project\" row: a switch where the trusted project has no entry of its name, else the override's link", () => {
+  const trust = { requiresTrust: true, trusted: true, decision: true, decisionPath: "/repo", inherited: false };
+  const files = [
+    { scope: "global", path: "/agent/mcp.json", exists: true, problems: [] },
+    { scope: "project", path: "/repo/.pi/mcp.json", exists: true, problems: [] },
+  ];
+  const lint = server({ name: "lint" });
+  const data = (servers, extra = {}) => ({ project: { cwd: "/repo", trust }, files, servers: [lint, ...servers], ...extra });
+  assert.deepEqual(mcpInProjectView(lint, data([])), { kind: "switch" });
+  const override = server({ name: "lint", scope: "project", sourcePath: "/repo/.pi/mcp.json", override: { keys: ["enabled", "exposure"] } });
+  assert.deepEqual(mcpInProjectView({ ...lint, overriddenByProject: true }, data([override])), {
+    kind: "override",
+    key: mcpServerKey(override),
+    keys: ["enabled", "exposure"],
+    applies: true,
+  });
+  assert.equal(mcpInProjectView(lint, data([{ ...override, invalidError: "x" }])).applies, false);
+  // The project's own server of the name replaces it, or pi refuses it: no row.
+  assert.equal(mcpInProjectView(lint, data([server({ name: "lint", scope: "project", sourcePath: "/repo/.pi/mcp.json" })])), undefined);
+  // Only a loaded global server, in a project whose file sessions read and the panel could list.
+  assert.equal(mcpInProjectView({ ...lint, invalidError: "x" }, data([])), undefined);
+  assert.equal(mcpInProjectView(override, data([])), undefined);
+  assert.equal(mcpInProjectView(lint, data([], { project: { cwd: "/repo", trust: { ...trust, decision: null } } })), undefined);
+  assert.equal(mcpInProjectView(lint, data([], { project: undefined })), undefined);
+  assert.equal(mcpInProjectView(lint, data([], { files: [files[0], { ...files[1], problems: [{ reason: "unparsable", error: "x" }] }] })), undefined);
+  assert.deepEqual(mcpInProjectView(lint, data([], { files: [files[0], { ...files[1], problems: [{ reason: "auto-enable-codemode-invalid", error: "x" }] }] })), { kind: "switch" });
 });
 
 test("project servers load only under a trust decision, as the MCP host reads it", () => {

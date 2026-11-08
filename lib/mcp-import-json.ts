@@ -432,6 +432,11 @@ function mapOAuth(draft: ServerDraft, oauth: Record<string, unknown>, value: Val
         if (typeof raw === "string" && raw.trim()) draft.oauth.clientName = value(raw, false);
         else draft.note("oauth-option-dropped", { key: `${prefix}${key}` });
         break;
+      case "clientRegistration":
+        // pi's own key: "dcr" (its default) or "cimd"; validation says when "cimd" cannot work with the rest.
+        if (raw === "dcr" || raw === "cimd") draft.oauth.clientRegistration = raw;
+        else draft.note("oauth-option-dropped", { key: `${prefix}${key}` });
+        break;
       case "authServerMetadataUrl":
         // pi checks it is https (or http on a loopback host); validation says so when it is not.
         if (typeof raw === "string" && raw !== "") draft.oauth.authServerMetadataUrl = value(raw, false);

@@ -178,6 +178,8 @@ export type McpTrustFolderInfo =
 
 export type McpScope = "global" | "project";
 export type McpTransportKind = "stdio" | "http";
+/** What a project entry may change of the global server of its name (the SDK's `OVERRIDE_KEYS`). */
+export type McpOverrideKey = "enabled" | "exposure" | "toolExposure";
 
 /** A value the SDK resolves before it connects: a stdio `env` value, an HTTP header, or `oauth.clientSecret`. */
 export interface McpConfigFieldRef {
@@ -306,6 +308,16 @@ export interface McpServerInfo {
   shadowedByProject?: boolean;
   /** The project entry that replaces a global entry of its name while the project is trusted; the counterpart of `shadowedByProject`. */
   replacesGlobal?: boolean;
+  /**
+   * A project entry without `command`, `url` or `type`: it changes only
+   * `enabled`, `exposure` and `toolExposure` of the global server of its name
+   * (pi 1.0.1), and `keys` are the ones it sets. While pi loads it, the fields
+   * above describe the global server with those changes, which is what
+   * sessions in the project connect.
+   */
+  override?: { keys: McpOverrideKey[] };
+  /** A global entry the project's override changes while the project is trusted; the counterpart of `override`. */
+  overriddenByProject?: boolean;
   /**
    * The last known connection state, from a test or an open session
    * (`lib/mcp-status.ts`): only while it was recorded for this entry as the

@@ -190,6 +190,11 @@ export type BuiltinSlashCommandResult =
   | { handled: false }
   | { handled: true; message?: string; error?: string; action?: "openSessionStats" | "openSettings" };
 
+/** How a run ended, for completion feedback: `aborted` when it was stopped rather than finished. */
+export interface AgentEndInfo {
+  aborted: boolean;
+}
+
 export interface UseAgentSessionOptions {
   session: SessionInfo | null;
   sessionRunning?: boolean;
@@ -197,7 +202,8 @@ export interface UseAgentSessionOptions {
   newSessionDraftKey: string | null;
   /** Hidden model-only workspace: always no tools and no shell commands. */
   chatWorkspace?: boolean;
-  onAgentEnd?: () => void;
+  /** A run ended; `aborted` when it was stopped rather than finished (pi's `agent_settled.aborted`). */
+  onAgentEnd?: (end: AgentEndInfo) => void;
   onAttentionNeeded?: (request: BlockingExtensionUiRequest) => void;
   onSessionCreated?: (session: SessionInfo, sourceDraftKey: string) => void;
   onSessionForked?: (newSessionId: string) => void;
@@ -1351,10 +1357,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     return wasRunning;
   }, []);
 
-  const notifyPromptStage = useCallback((runId: number) => {
+  const notifyPromptStage = useCallback((runId: number, aborted = false) => {
     if (notifiedPromptRunIdRef.current === runId) return false;
     notifiedPromptRunIdRef.current = runId;
-    onAgentEnd?.();
+    onAgentEnd?.({ aborted });
     return true;
   }, [onAgentEnd]);
 
@@ -1438,7 +1444,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (promptWasPending) {
         notifyPromptStage(runId);
       } else if (agentWasActive && wasRunning) {
-        onAgentEnd?.();
+        onAgentEnd?.({ aborted: false });
       }
       if (sid) scheduleEventStreamClose(sid);
     }
@@ -1656,7 +1662,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           void loadSession(sid);
           scheduleEventStreamClose(sid);
         }
-        if (wasRunning) onAgentEnd?.();
+        if (wasRunning) onAgentEnd?.({ aborted: event.aborted === true });
         break;
       }
       case "prompt_done":
@@ -1665,7 +1671,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           const promptWasPending = rpcPromptPendingRef.current;
           rpcPromptPendingRef.current = false;
           optimisticUserMessageKeyRef.current = null;
-          const firstNotification = notifyPromptStage(runId);
+          const firstNotification = notifyPromptStage(runId, event.aborted === true);
           if (!promptWasPending && !firstNotification) break;
 
           const sid = sessionIdRef.current;

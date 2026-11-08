@@ -58,14 +58,14 @@ export { guardedCredentialStore, mcpOAuthUrl, McpSignedOutError, mcpSignInKey, t
 //   both fail. A second start joins the flow under way; a new flow of a server
 //   whose previous run is still unwinding (cancelled or expired, its network
 //   request not answered yet) waits for that run.
-// - **A time limit.** The SDK's loopback callback gives up after 5 minutes and
-//   `signInMcpServer()` takes no AbortSignal: the flow expires at the same
-//   5 minutes (counted from its start, so it ends first), and the only way to
-//   stop the SDK is to answer its prompt with "" (McpSignInCancelledError).
-//   A cancel that arrives before the prompt is asked is kept and applied the
-//   moment it is; before the sign-in started at all, it never starts. A flow
-//   that already has its code when the limit comes gets one grace period to
-//   finish, since the SDK exchanges the code whatever Pi Web does.
+// - **A time limit.** The SDK's loopback callback gives up after 5 minutes:
+//   the flow expires at the same 5 minutes (counted from its start, so it
+//   ends first). Its end aborts the signal `signInMcpServer()` is given (pi
+//   1.1), which stops the SDK at any step with McpSignInCancelledError, a
+//   request to the authorization server included; a prompt still waiting is
+//   also answered with "". Before the sign-in started at all, it never
+//   starts. A flow that already has its code when the limit comes gets one
+//   grace period to finish the exchange.
 // - **A pasted address is checked first.** The SDK ends the whole sign-in on
 //   a paste that is not a URL, carries another sign-in's `state`, or has no
 //   `code`. `pasteMcpSignInRedirect()` refuses those (and an `error` answer)
@@ -495,6 +495,7 @@ async function runFlow(flow: Flow, deps: McpSignInDeps): Promise<void> {
           showAuthorizationUrl: (url) => showAuthorizationUrl(flow, url),
           promptForRedirectUrl: (signal) => askForRedirect(flow, signal),
         },
+        signal: flow.controller.signal,
       });
     } catch (error) {
       if (isEnded(flow)) return;

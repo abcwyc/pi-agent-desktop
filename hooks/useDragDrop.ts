@@ -20,6 +20,7 @@ export function useDragDrop(onDrop: (files: File[]) => void) {
   const handleDragOver = useCallback((e: React.DragEvent) => {
     if (!hasDraggedFiles(e)) return;
     e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
   }, []);
 
   const handleDragLeave = useCallback(() => {

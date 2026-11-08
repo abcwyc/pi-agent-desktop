@@ -1540,3 +1540,52 @@ test("the container starts, polls, pastes into and cancels a sign-in, and signs 
   assert.match(unmount, /mountedRef\.current = false;/);
   assert.doesNotMatch(unmount, /SignIn|signIns/);
 });
+
+test("a project override is listed as the global server it changes, which offers a switch for the project alone", () => {
+  const cwd = "/Users/me/repo";
+  const project = { cwd, trust: trusted };
+  const lint = server({ ...stdioServer, exposure: "codemode" });
+  const pressed = [];
+  const shown = (servers, selected) => view({
+    cwd,
+    selected,
+    load: { state: "loaded", data: overview({ files: [globalFile, projectFile], project, servers }) },
+    onServerSwitchInProject: (target, enabled) => pressed.push([target.name, enabled]),
+  });
+
+  // No project entry of the name: a switch for the project alone, with one short line under it.
+  const follows = text(shown([lint], "global\0lint"));
+  assert.match(follows, /This project Turn off in this project Only for this project; saved in its \.pi\/mcp\.json\. File/);
+  assert.match(text(shown([{ ...lint, enabled: false }], "global\0lint")), /Turn on in this project/);
+
+  // Overridden: the global row reads as changed here, and links to the override.
+  const override = server({
+    ...lint,
+    scope: "project",
+    sourcePath: projectFile.path,
+    enabled: false,
+    override: { keys: ["enabled"] },
+  });
+  const globalRow = shown([{ ...lint, overriddenByProject: true }, override], "global\0lint");
+  // Both groups list a lint: the project's first, turned off by its override, then the global one it changes.
+  assert.deepEqual(
+    [...decode(globalRow).matchAll(/aria-label="(lint: [^"]*)"/g)].map((match) => match[1]),
+    ["lint: Turned off in the file", "lint: Changed by the project's override"],
+  );
+  assert.match(text(globalRow), /This project's \.pi\/mcp\.json changes its enabled\. Show/);
+  assert.doesNotMatch(text(globalRow), /Turn off in this project/);
+
+  // The override's own row: the global server's command, its own file, and what it changes.
+  const overrideRow = text(shown([{ ...lint, overriddenByProject: true }, override], "project\0lint"));
+  assert.match(overrideRow, /Command npx -y @acme\/lint-mcp/);
+  assert.match(overrideRow, /Changes only enabled of your global server of the same name while this project is trusted\./);
+  assert.match(overrideRow, /File ~?\/?.*repo\/\.pi\/mcp\.json/);
+  assert.doesNotMatch(overrideRow, /This project/);
+  // Untrusted, the global row has no switch for the project.
+  const untrustedRow = text(view({
+    cwd,
+    selected: "global\0lint",
+    load: { state: "loaded", data: overview({ files: [globalFile, projectFile], project: { cwd, trust: untrusted }, servers: [lint] }) },
+  }));
+  assert.doesNotMatch(untrustedRow, /Turn off in this project/);
+});

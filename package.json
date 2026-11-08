@@ -1,6 +1,6 @@
 {
   "name": "@agegr/pi-web",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Web UI for the pi coding agent",
   "homepage": "https://github.com/agegr/pi-web#readme",
   "repository": {
@@ -119,6 +119,7 @@
     "rehype-katex": "^7.0.1",
     "rehype-raw": "^7.0.0",
     "rehype-sanitize": "^6.0.0",
+    "remark-cjk-friendly": "^2.3.2",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",

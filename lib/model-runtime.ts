@@ -4,6 +4,7 @@ import {
   ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
 import { join } from "node:path";
+import { rememberProviderModels } from "./deferred-provider-models";
 
 /**
  * ModelRuntime that also includes providers registered by extensions (an
@@ -32,5 +33,6 @@ export async function createModelRuntimeWithExtensions(
     modelRuntime: runtime,
     resourceLoaderOptions: { noPromptTemplates: true, noThemes: true },
   });
+  await rememberProviderModels(services.modelRuntime);
   return services.modelRuntime;
 }

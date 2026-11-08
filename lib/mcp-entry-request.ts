@@ -5,8 +5,7 @@ import { getAgentDir, type McpServerConfig } from "@earendil-works/pi-coding-age
 import type { McpErrorResponse, McpRefusalReason, McpScope } from "./api-types";
 import { isMcpDisabledByOperator, MCP_DISABLE_VARIABLE } from "./builtin-extensions";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "./file-access";
-import { mcpEntryConfigKey } from "./mcp-config-key";
-import { readMcpServerConfigs, readMcpServerEntry } from "./mcp-config-read";
+import { readMcpServerDefinition, readMcpServerEntry } from "./mcp-config-read";
 import { findWebPasswordField } from "./mcp-transport";
 import { loadPiSdkInternals, type PiSdkInternals } from "./pi-sdk-internals";
 import { getProjectTrustStatus } from "./project-trust";
@@ -37,9 +36,9 @@ export interface McpConnectableEntry {
   internals: PiSdkInternals;
   /** The configured path of its file, as `McpServerInfo.sourcePath` names it. */
   sourcePath: string;
-  /** `mcpEntryConfigKey()` of the entry, as GET reports it. */
+  /** The `configKey` GET reports for the entry. */
   configKey: string;
-  /** The entry as the SDK's validator returned it. */
+  /** The entry as the SDK's validator returned it; for a project override, the global entry with its keys. */
   config: McpServerConfig;
   /**
    * The folder the connection runs in: the panel's project when it has one,
@@ -68,6 +67,30 @@ export function mcpEntryRefusal(
 
 export function isMcpEntryRefusal(value: unknown): value is McpEntryRefusal {
   return isRecord(value) && typeof value.status === "number" && isRecord(value.body);
+}
+
+/**
+ * What a session would connect for entry `name` of `scope`, read as the
+ * listing reads it: the validator's copy, or for a project override the
+ * global entry with the override's keys, and the `configKey` GET reports for
+ * it. A string says why pi refuses it: the validator's reason, or what
+ * `loadMcpConfig()` skips beyond it (a name another entry's namespace already
+ * has, `auth` in a project file, whose provider token would otherwise go to a
+ * URL the repository chose, or an override with nothing to override).
+ */
+export function readMcpServerConfig(options: {
+  agentDir: string;
+  project?: McpRequestProject;
+  internals: PiSdkInternals;
+  scope: McpScope;
+  name: string;
+}): { config: McpServerConfig; configKey: string } | string {
+  const { agentDir, project, internals, scope, name } = options;
+  const listed = readMcpServerDefinition({ agentDir, project, internals, scope, name });
+  if (!listed) return `MCP server "${name}" is not listed`;
+  if (listed.info.invalidError !== undefined) return listed.info.invalidError;
+  if (!listed.config) return `MCP server "${name}" cannot be read`;
+  return { config: listed.config, configKey: listed.info.configKey };
 }
 
 /**
@@ -189,14 +212,9 @@ export async function readConnectableMcpEntry(req: Request): Promise<McpConnecta
     if (!isRecord(read.value)) {
       return mcpEntryRefusal(409, "entry-not-object", `${read.sourcePath} defines MCP server "${name}" as something other than an object`, { name });
     }
-    const config = internals.validateMcpServerConfig(name, read.value);
-    if (typeof config === "string") return mcpEntryRefusal(409, "server-invalid", config, { name });
-    // What `loadMcpConfig()` refuses beyond the validator, as the listing reports it: a name
-    // another entry's namespace already has, and `auth` in a project file, whose provider
-    // token a Test would otherwise send to a URL the repository chose.
-    const listed = readMcpServerConfigs({ agentDir, project, internals }).servers
-      .find((server) => server.scope === scope && server.name === name);
-    if (listed?.invalidError) return mcpEntryRefusal(409, "server-invalid", listed.invalidError, { name });
+    const resolved = readMcpServerConfig({ agentDir, project, internals, scope, name });
+    if (typeof resolved === "string") return mcpEntryRefusal(409, "server-invalid", resolved, { name });
+    const { config, configKey } = resolved;
     if (findWebPasswordField(config, internals)) {
       return mcpEntryRefusal(409, "web-password", `"${name}" references PI_WEB_PASSWORD, so Pi Web does not connect it`, { name });
     }
@@ -207,7 +225,7 @@ export async function readConnectableMcpEntry(req: Request): Promise<McpConnecta
       agentDir,
       internals,
       sourcePath: read.sourcePath,
-      configKey: mcpEntryConfigKey(read.value, config),
+      configKey,
       config,
       cwd: project?.cwd ?? homedir(),
     };

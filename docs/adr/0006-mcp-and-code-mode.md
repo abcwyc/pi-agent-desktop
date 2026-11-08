@@ -149,6 +149,12 @@ pane with Sign in, Test, Remove, a switch, and the server's exposure, and an
   is keyed for its status, as `codemode`, and is no longer offered. The manager re-registers the tools in place; Pi
   Web can only register the changed entry again, so open sessions reconnect
   the server at their next message. Per-tool exposure stays in P3.
+- **A global server can be turned on or off for one project**, as pi 1.0.1's
+  `/mcp` does: an override in the project's `.pi/mcp.json`, an entry without
+  `command`, `url` or `type` that may set only `enabled`, `exposure` and
+  `toolExposure`. The panel lists it in the Project group as the global server
+  with those changes, which is what the project's sessions connect, and its
+  switch, exposure and Remove edit the override.
 
 - `GET /api/mcp` reads files only. It never spawns a process, opens a network
   connection, or runs a `!command` value. The two obvious sources of its

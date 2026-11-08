@@ -35,6 +35,7 @@ import {
 import { getGlobalSettingsPath } from "./global-settings-file";
 import { mcpConfigKey, mcpEntryConfigKey } from "./mcp-config-key";
 import { jsonErrorMessage } from "./mcp-json-error";
+import { isMcpOverrideEntry, MCP_OVERRIDE_KEYS, mcpOverrideRefusal } from "./mcp-override";
 import { maskArgs, maskCommand, maskUrl } from "./mcp-secrets";
 import { mcpOAuthStoreKeys } from "./mcp-sign-out";
 import { readMcpHostInactive, withMcpStatuses } from "./mcp-status";
@@ -54,7 +55,9 @@ import { freshFolderTrustBreadth, getProjectTrustStatus, hasTrustRelevantEntries
 // The SDK's `loadMcpConfig()` cannot serve: it reads the project file only once
 // the project is trusted, and merges by name, so a project entry hides the
 // global one it replaces. Each file is read and parsed here as the SDK reads
-// it, and each entry checked with the SDK's own validator.
+// it, and each entry checked with the SDK's own validator. A project entry
+// without `command`, `url` or `type` is an override of the global server of
+// its name (pi 1.0.1), listed as the global server with its changes.
 
 export type McpConfigReadInternals = Pick<
   PiSdkInternals,
@@ -72,6 +75,8 @@ export function projectMcpConfigPath(cwd: string): string {
 // `configKey`, which statuses are compared against: an HMAC of the entry's
 // canonical JSON, never the JSON (`lib/mcp-config-key.ts`).
 export { mcpConfigKey };
+// How a project entry overrides a global server (`lib/mcp-override.ts`).
+export { isMcpOverrideEntry, MCP_OVERRIDE_KEYS, mcpOverrideRefusal };
 // The parser's message without the text it quotes (`lib/mcp-json-error.ts`).
 export { jsonErrorMessage };
 
@@ -384,6 +389,10 @@ interface DescribedServer {
   loads: boolean;
   /** The entry has a `url` and a truthy `auth`, which `loadMcpConfig()` refuses in a project file. */
   sendsProviderToken: boolean;
+  /** What was described: the entry as written, or for a project override the global entry with its keys. */
+  value: unknown;
+  /** The validator's copy of `value`; absent without the validator or when it refuses. */
+  config?: McpServerConfig;
 }
 
 const TEMPLATE_REFERENCE = /\$(?:[$!]|\{([^}]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g;
@@ -505,11 +514,47 @@ function describeServer(
   if (webPasswordField) info.webPasswordField = fieldRef(webPasswordField);
 
   const sendsProviderToken = "url" in config && Boolean(config.auth);
+  const described = {
+    info,
+    sendsProviderToken,
+    value,
+    ...(validation !== undefined && typeof validation !== "string" ? { config: validation as McpServerConfig } : {}),
+  };
   if (keyError !== undefined) {
     info.invalidError ??= keyError;
-    return { info, loads: false, sendsProviderToken };
+    return { ...described, loads: false };
   }
-  return { info, loads: internals ? typeof validation !== "string" : isRecord(value), sendsProviderToken };
+  return { ...described, loads: internals ? typeof validation !== "string" : isRecord(value) };
+}
+
+/**
+ * A project entry that overrides the global server of its name, read as
+ * `loadMcpConfig()` reads one: it needs a global entry that loads (`base`)
+ * and may set only `MCP_OVERRIDE_KEYS`; the global entry as the validator
+ * returned it, with the override's keys in place of its own, is then
+ * validated again and is what connects, so that is what the row describes.
+ * Its command, arguments and URL are the user's own global entry's, masked as
+ * that entry's are, whether or not the project is trusted.
+ */
+function describeOverride(
+  name: string,
+  value: Record<string, unknown>,
+  base: DescribedServer | undefined,
+  sourcePath: string,
+  context: DescribeContext,
+): DescribedServer {
+  const keys = MCP_OVERRIDE_KEYS.filter((key) => Object.hasOwn(value, key));
+  const refused = mcpOverrideRefusal(name, value, base !== undefined);
+  if (refused !== undefined || base === undefined) {
+    const described = describeServer(name, value, "project", sourcePath, context);
+    described.info.invalidError = refused;
+    described.info.override = { keys };
+    return { ...described, loads: false };
+  }
+  const merged = { ...(base.config ?? (isRecord(base.value) ? base.value : {})), ...value };
+  const described = describeServer(name, merged, "project", sourcePath, { ...context, revealProjectCommands: false });
+  described.info.override = { keys };
+  return described;
 }
 
 /** The namespace pi gives a server's tools (`mcpNamespace()`): `mcp__<name>`, `-` as `_`. */
@@ -523,12 +568,14 @@ function mcpNamespace(name: string): string {
  * loaded entry already has (`a-b` beside `a_b`; the later one is skipped),
  * and `auth` in the project file, which would let a repository pick where a
  * provider's token goes. Each is listed as an entry pi refuses, with its
- * words, so it never connects and never replaces a global entry.
+ * words, so it never connects and never replaces a global entry. A project
+ * override is checked by neither: it keeps the global entry's name, and its
+ * `auth` is the global entry's.
  */
 function refuseAsLoaderDoes(described: DescribedServer[]): void {
   const loaded = new Set<string>();
   for (const server of described) {
-    if (!server.loads) continue;
+    if (!server.loads || server.info.override) continue;
     const { info } = server;
     const clash = [...loaded].find((other) => other !== info.name && mcpNamespace(other) === mcpNamespace(info.name));
     if (clash !== undefined) {
@@ -565,8 +612,7 @@ export interface McpConfigRead {
   servers: McpServerInfo[];
 }
 
-/** The servers of the global and the project file, each described from the file alone. */
-export function readMcpServerConfigs(options: McpConfigReadOptions): McpConfigRead {
+function describeConfigs(options: McpConfigReadOptions): { files: McpConfigFileInfo[]; described: DescribedServer[] } {
   const context: DescribeContext = {
     internals: options.internals,
     authState: readAuthState(options.agentDir),
@@ -574,32 +620,72 @@ export function readMcpServerConfigs(options: McpConfigReadOptions): McpConfigRe
   };
   const files: McpConfigFileInfo[] = [];
   const described: DescribedServer[] = [];
-  const sources = [readGlobalFile(options.agentDir)];
-  if (options.project) sources.push(readProjectFile(options.project.cwd, options.project.allowedRoots));
-  for (const { info, text } of sources) {
-    files.push(info);
-    if (text === undefined) continue;
-    for (const [name, value] of parseConfigText(info, text)) {
-      described.push(describeServer(name, value, info.scope, info.path, context));
+  const global = readGlobalFile(options.agentDir);
+  files.push(global.info);
+  if (global.text !== undefined) {
+    for (const [name, value] of parseConfigText(global.info, global.text)) {
+      described.push(describeServer(name, value, "global", global.info.path, context));
     }
   }
   if (options.internals) refuseAsLoaderDoes(described);
+  if (options.project) {
+    // The global entries the SDK loaded before it reads the project file: what an override changes.
+    const loadedGlobals = new Map(described.filter((server) => server.loads).map((server) => [server.info.name, server]));
+    const project = readProjectFile(options.project.cwd, options.project.allowedRoots);
+    files.push(project.info);
+    if (project.text !== undefined) {
+      for (const [name, value] of parseConfigText(project.info, project.text)) {
+        described.push(isRecord(value) && isMcpOverrideEntry(value)
+          ? describeOverride(name, value, loadedGlobals.get(name), project.info.path, context)
+          : describeServer(name, value, "project", project.info.path, context));
+      }
+    }
+    if (options.internals) refuseAsLoaderDoes(described);
+  }
   // A project entry the SDK loads replaces the global one of its name once the
-  // project is trusted; an invalid one is skipped and leaves the global in place.
-  const projectNames = new Set(
-    described.filter(({ info, loads }) => info.scope === "project" && loads).map(({ info }) => info.name),
-  );
+  // project is trusted, or with an override changes it; an invalid one is
+  // skipped and leaves the global in place.
+  const projectEntries = described.filter(({ info, loads }) => info.scope === "project" && loads);
+  const projectNames = new Set(projectEntries.filter(({ info }) => !info.override).map(({ info }) => info.name));
+  const overrideNames = new Set(projectEntries.filter(({ info }) => info.override).map(({ info }) => info.name));
   const shadowedNames = new Set<string>();
   for (const { info } of described) {
-    if (info.scope === "global" && projectNames.has(info.name)) {
+    if (info.scope !== "global") continue;
+    if (projectNames.has(info.name)) {
       info.shadowedByProject = true;
       shadowedNames.add(info.name);
     }
+    if (overrideNames.has(info.name)) info.overriddenByProject = true;
   }
   for (const { info } of described) {
     if (info.scope === "project" && shadowedNames.has(info.name)) info.replacesGlobal = true;
   }
+  return { files, described };
+}
+
+/** The servers of the global and the project file, each described from the files alone. */
+export function readMcpServerConfigs(options: McpConfigReadOptions): McpConfigRead {
+  const { files, described } = describeConfigs(options);
   return { files, servers: described.map(({ info }) => info) };
+}
+
+/** A listed entry with what a session would connect for it; for a route, never for the browser. */
+export interface McpServerDefinition {
+  info: McpServerInfo;
+  /**
+   * What `loadMcpConfig()` hands a session: the validator's copy of the entry,
+   * or for a project override of the global entry with the override's keys.
+   * Absent when pi refuses it (`info.invalidError` says why).
+   */
+  config?: McpServerConfig;
+}
+
+/** Entry `name` of `scope` as the listing reads it, with the config a session would connect; undefined when not listed. */
+export function readMcpServerDefinition(options: McpConfigReadOptions & { scope: McpScope; name: string }): McpServerDefinition | undefined {
+  const found = describeConfigs(options).described
+    .find(({ info }) => info.scope === options.scope && info.name === options.name);
+  if (!found) return undefined;
+  return found.info.invalidError === undefined && found.config ? { info: found.info, config: found.config } : { info: found.info };
 }
 
 /** One entry as its file holds it, for a route that connects it; never sent to the browser. */

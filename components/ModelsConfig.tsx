@@ -330,11 +330,6 @@ function ProviderDetail({ name, editingName, provider, onChange, onEditingNameCh
   const set = <K extends keyof ProviderEntry>(k: K, v: ProviderEntry[K]) => onChange({ ...provider, [k]: v });
 
   useEffect(() => {
-    if (!provider.api) onChange({ ...provider, api: "openai-completions" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provider.api]);
-
-  useEffect(() => {
     discoveryRequestIdRef.current += 1;
     setDiscoveryState({ phase: "idle" });
     setDiscoveryQuery("");

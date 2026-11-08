@@ -13,10 +13,15 @@ import {
 } from "@/lib/file-paths";
 import type { GitFileStatus, GitFileStatusKind, GitStatusResponse } from "@/lib/git-types";
 import type { FileIndexEntry } from "@/lib/file-fuzzy";
+import { uploadFiles, type UploadConflictStrategy, type UploadError, type UploadResponse } from "@/lib/file-upload-client";
 import { buildSearchTree, type SearchTreeNode } from "@/lib/search-tree";
+import type { FileTreeHiddenReason } from "@/lib/file-tree-visibility";
 import { useI18n } from "@/hooks/useI18n";
 import { isImeComposing } from "@/lib/ime";
 type Translate = ReturnType<typeof useI18n>["t"];
+
+/** Why a listed entry is normally left out; only listings with `hidden=1` report it. */
+type HiddenReason = Exclude<FileTreeHiddenReason, "always">;
 
 interface FileEntry {
   name: string;
@@ -27,6 +32,7 @@ interface FileEntry {
   outsideLinkTarget?: string;
   /** That target contains the project or the home folder. */
   outsideLinkEncloses?: boolean;
+  hidden?: HiddenReason;
 }
 
 interface FileNode {
@@ -38,6 +44,7 @@ interface FileNode {
   loaded?: boolean;
   outsideLinkTarget?: string;
   outsideLinkEncloses?: boolean;
+  hidden?: HiddenReason;
 }
 
 interface Props {
@@ -51,6 +58,8 @@ interface Props {
   onChangesCountChange?: (count: number) => void;
   fileSearchOpen?: boolean;
   onFileSearchOpenChange?: (open: boolean) => void;
+  /** Also list what Git ignores, dimmed (the explorer bar's switch). */
+  showHidden?: boolean;
 }
 
 export interface FileExplorerHandle {
@@ -58,21 +67,6 @@ export interface FileExplorerHandle {
 }
 
 type UploadPhase = "idle" | "checking" | "uploading";
-type UploadConflictStrategy = "error" | "overwrite" | "skip";
-
-interface UploadError {
-  name: string;
-  error: string;
-}
-
-interface UploadResponse {
-  uploaded?: string[];
-  skipped?: string[];
-  errors?: UploadError[];
-  conflicts?: string[];
-  nonReplaceable?: string[];
-  error?: string;
-}
 
 interface UploadSummary {
   uploaded: string[];
@@ -97,9 +91,9 @@ async function responseError(res: Response, fallback: string): Promise<Error> {
   return new Error(message);
 }
 
-async function fetchEntries(dirPath: string): Promise<FileNode[]> {
+async function fetchEntries(dirPath: string, showHidden = false): Promise<FileNode[]> {
   const encoded = encodeFilePathForApi(dirPath);
-  const res = await fetch(`/api/files/${encoded}?type=list`);
+  const res = await fetch(`/api/files/${encoded}?type=list${showHidden ? "&hidden=1" : ""}`);
   if (!res.ok) throw await responseError(res, "Failed to load files");
   const data = await res.json() as { entries?: FileEntry[] };
   return (data.entries ?? []).map((e) => ({
@@ -111,6 +105,7 @@ async function fetchEntries(dirPath: string): Promise<FileNode[]> {
     loaded: !e.isDir,
     outsideLinkTarget: e.outsideLinkTarget,
     outsideLinkEncloses: e.outsideLinkEncloses,
+    hidden: e.hidden,
   }));
 }
 
@@ -173,41 +168,6 @@ function GitStatusBadge({ status, t }: { status: GitFileStatus; t: Translate }) 
   );
 }
 
-function uploadFiles(
-  targetDirectory: string,
-  files: File[],
-  strategy: UploadConflictStrategy,
-  onProgress: (progress: number) => void,
-): Promise<{ status: number; data: UploadResponse }> {
-  return new Promise((resolve, reject) => {
-    const formData = new FormData();
-    files.forEach((file) => formData.append("files", file, file.name));
-
-    const xhr = new XMLHttpRequest();
-    xhr.open(
-      "POST",
-      `/api/files/${encodeFilePathForApi(targetDirectory)}?type=upload&conflict=${strategy}`,
-    );
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable && event.total > 0) {
-        onProgress(Math.round((event.loaded / event.total) * 100));
-      }
-    };
-    xhr.onerror = () => reject(new Error("Network error while uploading files"));
-    xhr.onabort = () => reject(new Error("Upload cancelled"));
-    xhr.onload = () => {
-      let data: UploadResponse = {};
-      try {
-        data = JSON.parse(xhr.responseText) as UploadResponse;
-      } catch {
-        if (xhr.responseText) data.error = xhr.responseText;
-      }
-      resolve({ status: xhr.status, data });
-    };
-    xhr.send(formData);
-  });
-}
-
 function MentionIcon({ size = 11 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -227,6 +187,14 @@ function OutsideLinkIcon({ size = 11 }: { size?: number }) {
   );
 }
 
+// Listed only while the explorer shows ignored files: dimmed like VS Code's
+// ignored entries, the reason in the name's tooltip.
+const HIDDEN_ENTRY_OPACITY = 0.55;
+const HIDDEN_REASON_KEYS = {
+  ignored: "files.hiddenIgnored",
+  excluded: "files.hiddenExcluded",
+} as const satisfies Record<HiddenReason, string>;
+
 export function TreeNode({
   node,
   depth,
@@ -239,6 +207,8 @@ export function TreeNode({
   highlightedPaths,
   gitStatusByPath,
   changedDirectoryPaths,
+  showHidden = false,
+  parentHidden,
   t,
 }: {
   node: FileNode;
@@ -252,9 +222,13 @@ export function TreeNode({
   highlightedPaths: Set<string>;
   gitStatusByPath: Map<string, GitFileStatus>;
   changedDirectoryPaths: Set<string>;
+  showHidden?: boolean;
+  /** Set inside a hidden directory: Git has no answer there, so its entries inherit the reason. */
+  parentHidden?: HiddenReason;
   t: Translate;
 }) {
   const open = expandedPaths.has(node.fullPath);
+  const hidden = node.hidden ?? parentHidden;
   const highlighted = highlightedPaths.has(node.fullPath);
   const normalizedPath = normalizeFilePathSlashes(node.fullPath);
   const gitStatus = gitStatusByPath.get(normalizedPath);
@@ -289,7 +263,7 @@ export function TreeNode({
     setLoading(true);
     setLoadError(null);
     try {
-      const entries = await fetchEntries(node.fullPath);
+      const entries = await fetchEntries(node.fullPath, showHidden);
       setChildren(entries);
       setLoaded(true);
     } catch (error) {
@@ -297,7 +271,26 @@ export function TreeNode({
     } finally {
       setLoading(false);
     }
-  }, [loaded, node.fullPath]);
+  }, [loaded, node.fullPath, showHidden]);
+
+  // The switch changes what every listing holds: reload an open directory now
+  // and a collapsed one when it next opens.
+  const listedShowHiddenRef = useRef(showHidden);
+  useEffect(() => {
+    if (listedShowHiddenRef.current === showHidden) return;
+    listedShowHiddenRef.current = showHidden;
+    if (!loaded) return;
+    if (open && !pendingLinkTarget) loadChildren(true);
+    else setLoaded(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showHidden]);
+
+  // A hidden directory left expanded mounts open again when the switch comes
+  // back on, before anything listed it.
+  useEffect(() => {
+    if (node.isDir && open && !loaded && !pendingLinkTarget) loadChildren();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Re-fetch children when the tree refreshes and the directory is open.
   useEffect(() => {
@@ -378,19 +371,21 @@ export function TreeNode({
           </svg>
         )}
         {!node.isDir && <span style={{ width: 10, flexShrink: 0 }} />}
-        <span style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
+        <span style={{ flexShrink: 0, display: "flex", alignItems: "center", opacity: hidden ? HIDDEN_ENTRY_OPACITY : 1 }}>
           {node.isDir ? <FolderIcon size={14} open={open} /> : getFileIcon(node.name, 14)}
         </span>
         <span
+          data-hidden-reason={hidden}
           style={{
             fontSize: "var(--fs-caption)",
-            color: "var(--text)",
+            color: hidden ? "var(--text-muted)" : "var(--text)",
+            opacity: hidden ? HIDDEN_ENTRY_OPACITY : 1,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
             flex: 1,
           }}
-          title={node.fullPath}
+          title={hidden ? `${node.fullPath}\n${t(HIDDEN_REASON_KEYS[hidden])}` : node.fullPath}
         >
           {node.name}
         </span>
@@ -581,6 +576,8 @@ export function TreeNode({
               highlightedPaths={highlightedPaths}
               gitStatusByPath={gitStatusByPath}
               changedDirectoryPaths={changedDirectoryPaths}
+              showHidden={showHidden}
+              parentHidden={hidden}
               t={t}
             />
           ))}
@@ -732,6 +729,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   onChangesCountChange,
   fileSearchOpen = false,
   onFileSearchOpenChange,
+  showHidden = false,
 }, ref) {
   const { t } = useI18n();
   const [roots, setRoots] = useState<FileNode[]>([]);
@@ -971,12 +969,12 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     setLoading(cwdChanged);
     setError(null);
     let cancelled = false;
-    fetchEntries(cwd)
+    fetchEntries(cwd, showHidden)
       .then((entries) => { if (!cancelled) setRoots(entries); })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [cwd, refreshKey, treeRefreshKey]);
+  }, [cwd, refreshKey, treeRefreshKey, showHidden]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1140,6 +1138,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
           </svg>
           <input
             ref={searchInputRef}
+            id="file-search-input"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             onKeyDown={(event) => { if (event.key === "Escape" && !isImeComposing(event)) onFileSearchOpenChange?.(false); }}
@@ -1264,6 +1263,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
                 highlightedPaths={highlightedPaths}
                 gitStatusByPath={gitStatusByPath}
                 changedDirectoryPaths={changedDirectoryPaths}
+                showHidden={showHidden}
                 t={t}
               />
             ))

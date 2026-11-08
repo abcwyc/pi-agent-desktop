@@ -56,7 +56,7 @@ test("launchers propagate verbosity and retain startup, diagnostics and unknown 
   const dir = await mkdtemp(path.join(tmpdir(), "pi-web-logging-"));
   try {
     for (const directory of ["bin", "lib", "scripts", ".next", "node_modules/next/dist/bin"]) await mkdir(path.join(dir, directory), { recursive: true });
-    for (const file of ["bin/pi-web-options.js", "bin/pi-web-node-args.js", "bin/process-lifecycle.js", "bin/pi-web.js", "bin/node-version.js", "bin/network-exposure-warning.js", "lib/browser-open.js", "scripts/web-dev.mjs", "next.config.ts"]) {
+    for (const file of ["bin/pi-web-options.js", "bin/pi-web-node-args.js", "bin/process-lifecycle.js", "bin/pi-web.js", "bin/rotate-preview-secrets.js", "bin/node-version.js", "bin/network-exposure-warning.js", "lib/browser-open.js", "scripts/web-dev.mjs", "next.config.ts"]) {
       await cp(new URL(`../${file}`, import.meta.url), path.join(dir, file));
     }
     await writeFile(path.join(dir, "package.json"), JSON.stringify({ scripts: { web: "node scripts/web-dev.mjs" } }));

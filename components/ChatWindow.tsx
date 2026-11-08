@@ -22,7 +22,7 @@ import { AnsiText } from "./AnsiText";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { phaseLabel } from "@/lib/chat-phase-label";
-import { useAgentSession, type NoticeItem } from "@/hooks/useAgentSession";
+import { useAgentSession, type AgentEndInfo, type NoticeItem } from "@/hooks/useAgentSession";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { useScrollbarVisibility } from "@/hooks/useScrollbarVisibility";
 import { useArtifactPublisher } from "@/hooks/useArtifactPublisher";
@@ -57,7 +57,8 @@ interface Props {
   sessionRunning?: boolean;
   newSessionCwd: string | null;
   newSessionDraftKey: string | null;
-  onAgentEnd?: () => void;
+  /** A run ended; `aborted` when it was stopped rather than finished. */
+  onAgentEnd?: (end: AgentEndInfo) => void;
   onAttentionNeeded?: (request: BlockingExtensionUiRequest) => void;
   onSessionCreated?: (session: SessionInfo, sourceDraftKey: string) => void;
   onSessionForked?: (newSessionId: string) => void;
@@ -282,11 +283,12 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   const soundEnabledRef = useRef(soundEnabled);
   soundEnabledRef.current = soundEnabled;
   const extensionDialogShownRef = useRef(false);
-  const wrappedOnAgentEnd = useCallback(() => {
-    if (completionNotificationsEnabled && soundEnabledRef.current) {
+  const wrappedOnAgentEnd = useCallback((end: AgentEndInfo) => {
+    // A stopped run did not finish anything: no completion sound (pi's `agent_settled.aborted`).
+    if (!end.aborted && completionNotificationsEnabled && soundEnabledRef.current) {
       playDoneSoundRef.current();
     }
-    onAgentEnd?.();
+    onAgentEnd?.(end);
   }, [completionNotificationsEnabled, onAgentEnd]);
 
   const initialScrollPositionRef = useRef(searchTarget ? null : initialScrollPosition ?? null);

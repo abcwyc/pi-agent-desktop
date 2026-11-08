@@ -24,6 +24,7 @@ import { displayPathWithin, shortenPath } from "@/lib/display-path";
 import {
   mcpFieldLabel,
   mcpFileProblemDetail,
+  mcpOverrideNotice,
   mcpServerHasHiddenCharacters,
   mcpServerTarget,
   mcpVariableChips,
@@ -97,6 +98,7 @@ import {
   mcpGroupEmptyKey,
   mcpGroupSwitchChecked,
   mcpGroupSwitchTargets,
+  mcpInProjectView,
   mcpProjectTrustable,
   mcpRowContext,
   mcpRowStateDetailKey,
@@ -138,6 +140,7 @@ import {
   type McpActionRequest,
   type McpActionResult,
   type McpAutoEnableCodemode,
+  type McpInProjectView,
   type McpLoadFailure,
   type McpNoticeText,
   type McpRowContext,
@@ -597,6 +600,18 @@ export function McpConfig({
     setFocusBack({ control: pressed });
   }, [runAction]);
 
+  // A global server on or off in this project alone: an override in its .pi/mcp.json, like a switch.
+  const switchServerInProject = useCallback(async (server: McpServerInfo, enabled: boolean) => {
+    const key = mcpServerKey(server);
+    const pressed = pressedButton();
+    setActionError(null);
+    setGroupStatus(null);
+    const result = await runAction({ action: "set-in-project", name: server.name, enabled }, `in-project:${key}`);
+    if (!result) return;
+    if (!result.ok) setActionError({ key, failure: result.error });
+    setFocusBack({ control: pressed });
+  }, [runAction]);
+
   // Like a switch: the dropdown is disabled while the change runs, and gets focus back after.
   const setServerExposure = useCallback(async (server: McpServerInfo, exposure: McpExposure) => {
     const key = mcpServerKey(server);
@@ -795,6 +810,7 @@ export function McpConfig({
       onCodemodeModeChange={(mode) => void saveCodemodeMode(mode)}
       onCodemodeInlineBudgetSave={(budget) => void saveCodemodeInlineBudget(budget)}
       onServerSwitch={(server, enabled) => void switchServer(server, enabled)}
+      onServerSwitchInProject={(server, enabled) => void switchServerInProject(server, enabled)}
       onExposureChange={(server, exposure) => void setServerExposure(server, exposure)}
       onGroupSwitch={(scope, servers, enabled) => void switchGroup(scope, servers, enabled)}
       onRemove={(server) => void removeServer(server)}
@@ -839,6 +855,7 @@ export function McpConfigView({
   onCodemodeModeChange = () => {},
   onCodemodeInlineBudgetSave = () => {},
   onServerSwitch = () => {},
+  onServerSwitchInProject = () => {},
   onExposureChange = () => {},
   onGroupSwitch = () => {},
   onRemove = () => {},
@@ -857,7 +874,7 @@ export function McpConfigView({
   refreshing: boolean;
   embedded: boolean;
   codemodeSave?: McpCodemodeSaveState;
-  /** The change on its way, if any: `switch:<key>`, `remove:<key>`, `sign-out:<key>`, `group:<scope>` or `undo`. */
+  /** The change on its way, if any: `switch:<key>`, `in-project:<key>`, `remove:<key>`, `sign-out:<key>`, `group:<scope>` or `undo`. */
   busy?: string | null;
   actionError?: McpActionErrorState | null;
   groupStatus?: McpGroupStatus | null;
@@ -886,6 +903,8 @@ export function McpConfigView({
   /** Saves the global `codemode.inlineBudget`; null removes it, for pi's default. */
   onCodemodeInlineBudgetSave?: (budget: number | null) => void;
   onServerSwitch?: (server: McpServerInfo, enabled: boolean) => void;
+  /** Turns a global server on or off in the listed project alone. */
+  onServerSwitchInProject?: (server: McpServerInfo, enabled: boolean) => void;
   onExposureChange?: (server: McpServerInfo, exposure: McpExposure) => void;
   onGroupSwitch?: (scope: McpScope, servers: McpServerInfo[], enabled: boolean) => void;
   onRemove?: (server: McpServerInfo) => void;
@@ -1119,6 +1138,8 @@ export function McpConfigView({
                 toolSearchDisabled={data.toolSearchDisabled}
                 autoEnable={autoEnable}
                 block={writeBlock(selectedServer.scope)}
+                inProject={mcpInProjectView(selectedServer, data)}
+                inProjectBlock={writeBlock("project")}
                 savedWhileOff={!data.mcp.available && !writesOff}
                 busy={busy}
                 controlsBusy={controlsBusy}
@@ -1129,6 +1150,12 @@ export function McpConfigView({
                 signInBlock={mcpSignInBlock(selectedServer, data)}
                 signOutBlock={mcpSignOutBlock(selectedServer, data)}
                 onSwitch={onServerSwitch}
+                onSwitchInProject={onServerSwitchInProject}
+                onShowServer={(key) => {
+                  onSelect(key);
+                  // The pane the button sat in goes with the selection: focus follows to the row now selected.
+                  requestAnimationFrame(() => focusIfLost(document, focusFallback()));
+                }}
                 onExposureChange={onExposureChange}
                 onRemove={onRemove}
                 onTest={onTest}
@@ -1402,6 +1429,8 @@ function McpServerDetail({
   toolSearchDisabled,
   autoEnable,
   block,
+  inProject,
+  inProjectBlock,
   savedWhileOff,
   busy,
   controlsBusy,
@@ -1412,6 +1441,8 @@ function McpServerDetail({
   signInBlock,
   signOutBlock,
   onSwitch,
+  onSwitchInProject,
+  onShowServer,
   onExposureChange,
   onRemove,
   onTest,
@@ -1427,6 +1458,10 @@ function McpServerDetail({
   autoEnable: McpAutoEnableCodemode;
   /** Why this server cannot be changed here. */
   block: McpWriteBlock | undefined;
+  /** A global server's "This project" row (`mcpInProjectView()`), when it has one. */
+  inProject: McpInProjectView | undefined;
+  /** Why the project's file cannot be changed here. */
+  inProjectBlock: McpWriteBlock | undefined;
   /** MCP is off by `-builtin:mcp`: changes are written, but no session connects these servers. */
   savedWhileOff: boolean;
   busy: string | null;
@@ -1443,6 +1478,8 @@ function McpServerDetail({
   signInBlock: McpTestBlock | undefined;
   signOutBlock: McpTestBlock | undefined;
   onSwitch: (server: McpServerInfo, enabled: boolean) => void;
+  onSwitchInProject: (server: McpServerInfo, enabled: boolean) => void;
+  onShowServer: (key: string) => void;
   onExposureChange: (server: McpServerInfo, exposure: McpExposure) => void;
   onRemove: (server: McpServerInfo) => void;
   onTest: (server: McpServerInfo) => void;
@@ -1463,6 +1500,7 @@ function McpServerDetail({
   const stdio = !http && (server.transport === "stdio" || server.command !== undefined);
   const reachNotice = server.exposure ? mcpExposureReachNotice(server.exposure, { codemode, toolSearchDisabled }, autoEnable) : undefined;
   const exposureId = useId();
+  const inProjectNoteId = useId();
   const key = mcpServerKey(server);
   const name = revealHiddenCharacters(server.name);
   // The route never turns on an entry that references PI_WEB_PASSWORD; turning one off still works.
@@ -1627,6 +1665,38 @@ function McpServerDetail({
             </span>
           </ConfigDetailGridRow>
         )}
+        {inProject && (
+          <ConfigDetailGridRow label={t("mcp.detail.inProject")} tone="plain">
+            <span className="mcp-config-lines">
+              {inProject.kind === "override" ? (
+                <>
+                  <span className="mcp-config-line">
+                    {inProject.applies ? t("mcp.inProject.overridden", { keys: inProject.keys.join(", ") }) : t("mcp.inProject.refused")}
+                  </span>
+                  <span>
+                    <ConfigButton size="small" onClick={() => onShowServer(inProject.key)}>{t("mcp.inProject.show")}</ConfigButton>
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span>
+                    <ConfigButton
+                      size="small"
+                      disabled={controlsBusy || inProjectBlock !== undefined || passwordKeepsOff}
+                      aria-describedby={[inProjectNoteId, inProjectBlock || passwordKeepsOff ? noteId : null].filter(Boolean).join(" ")}
+                      onClick={() => onSwitchInProject(server, !server.enabled)}
+                    >
+                      {busy === `in-project:${key}`
+                        ? t("i18n.saving")
+                        : t(server.enabled ? "mcp.inProject.turnOff" : "mcp.inProject.turnOn")}
+                    </ConfigButton>
+                  </span>
+                  <span id={inProjectNoteId} className="mcp-config-line is-dim">{t("mcp.inProject.saved")}</span>
+                </>
+              )}
+            </span>
+          </ConfigDetailGridRow>
+        )}
         <ConfigDetailGridRow label={t("mcp.detail.file")} tone="dim" mono>
           {displayPath(server.sourcePath)}
         </ConfigDetailGridRow>
@@ -1638,8 +1708,12 @@ function McpServerDetail({
         )}
         {!server.validated && <p className="mcp-config-line is-warning">{t("mcp.server.unchecked")}</p>}
         {server.replacesGlobal && <p className="mcp-config-line is-warning">{t("mcp.server.replacesGlobal")}</p>}
+        {server.override && <p className="mcp-config-line">{noticeText(mcpOverrideNotice(server.override.keys), t)}</p>}
         {server.shadowedByProject && state !== "replaced" && (
           <p className="mcp-config-line">{t("mcp.server.shadowedByProject")}</p>
+        )}
+        {server.overriddenByProject && state !== "overridden" && (
+          <p className="mcp-config-line">{t("mcp.server.overriddenByProject")}</p>
         )}
         {server.masked && <p className="mcp-config-line is-dim">{t("mcp.server.masked")}</p>}
       </div>
