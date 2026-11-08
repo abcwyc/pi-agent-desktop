@@ -141,6 +141,20 @@ The sidebar project tree is a keyboard `tree`: rows move focus with Up/Down/Home
 ## Projects pane views
 The Projects header's hover-only `…` menu switches between `grouped` (project rows with nested session families) and `timeline` (all top-level session families sorted by the root session's `modified` time, with each row's project name after the title). The choice persists in `APP_PREF_KEYS.projectViewMode`. Collapse/expand-all remain grouped-view actions; switching modes never rewrites the stored `collapsedProjects` set. The old Recent section is intentionally gone — the timeline replaces it. Desktop uses `showNativeMenu` check items, while the web build renders `ProjectViewMenu` as a DOM popover. In grouped view, "Show more" reveals five additional session rows per click; collapsing and reopening a project clears that page state so it starts from the latest five (`APP_PREF_KEYS.expandedProjects` stores root → extra pages).
 
+## Projects section fold and count
+
+The Projects heading shows the number of active project groups, not the session
+count and not archived projects. Its button folds both the active list (including
+the timeline view) and the Archive group. This section preference is independent
+of per-project folds, per-session archives and the Archive group's own state.
+`APP_PREF_KEYS.collapsedProjectsSection` is read with the same server-safe
+`useSyncExternalStore` pattern as Chats; restoring a stored fold must not change
+the initial hydration markup. The store keeps an in-memory snapshot after the
+first read and updates it before writing, so quota/private-mode failures still
+let the button fold for the session. Searching temporarily reveals the section
+and its archived matches without changing the stored preference. The add/menu controls
+remain available while folded and reuse the existing header styling.
+
 ## Project archive
 A project row's menu (its `…` or a right-click on the row) offers "Move to archive"; the project leaves the list for the Archive group at the bottom of the Projects pane (`components/ArchivedProjectsSection.tsx`), folded by default (`APP_PREF_KEYS.archiveExpanded`). The archive is the old "Remove project" set (`APP_PREF_KEYS.archivedProjects`, keyed by project root, so all worktrees go together), now held by the `lib/archived-projects.ts` store that both `SessionSidebar` and `AppShell` read. Archived projects unfold to show their sessions, which stay readable and can be continued, but there is no new session in one: the row has no `+`, and every new-session entry point (sidebar "New session", the row `+`, Ctrl+Alt+N, the native app menu) refuses with a notice instead of silently restoring. Restoring is explicit: the archived row's menu ("Restore to projects") or picking the folder again through "Add project" / the composer's folder picker. Archiving the selected project moves the selection to the most recent listed project. Unfolding an archived project never selects it, since selecting a project opens a new-session composer there. A search looks inside the archive and unfolds it.
 
