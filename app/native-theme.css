@@ -3776,6 +3776,17 @@ html.dark {
     height: 32px;
     margin-left: 14px;
   }
+  /* Upstream's phone header is a Back | title | close grid (v0.14.2). The
+     fork's header still holds title, section picker and close until P1's
+     drill-down lands, so it keeps its one-row flex layout. */
+  .settings-dialog-header:has(> .settings-mobile-section-picker) {
+    display: flex;
+    align-items: center;
+    padding: 0 4px 0 14px;
+  }
+  .settings-dialog-header:has(> .settings-mobile-section-picker) .settings-dialog-close {
+    margin-left: auto;
+  }
 }
 
 .app-menu-copy {

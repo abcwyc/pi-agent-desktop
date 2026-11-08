@@ -214,6 +214,8 @@ test("uses top navigation on desktop and one compact section picker on mobile", 
   assert.match(cssSource, /\.settings-section-tab:focus-visible\[aria-current="page"\][\s\S]*?outline: none/);
   assert.match(cssSource, /@media \(max-width: 640px\)[\s\S]*?\.settings-section-tabs \{[\s\S]*?display: none/);
   // upstream dropped its phone rule for the picker (v0.14.2); the fork styles its own.
+  // Until P1 lands, the fork keeps its one-row phone header over upstream's Back | title | close grid.
+  assert.match(nativeThemeSource, /\.settings-dialog-header:has\(> \.settings-mobile-section-picker\) \{\s*display: flex;/);
   assert.match(nativeThemeSource, /@media \(max-width: 640px\) \{[\s\S]*?\.settings-mobile-section-picker\.app-select-trigger \{[\s\S]*?display: inline-flex;[\s\S]*?max-width: 210px;/);
   assert.doesNotMatch(panelSource, /width: isMobile \? "100%" : 188/);
   assert.match(panelSource, /<main className="settings-dialog-main">/);
