@@ -92,6 +92,21 @@ function fileUrlToPath(href: string): string | null {
   }
 }
 
+/** Provider sandbox:/absolute/path is a local link alias, never a remote
+ * authority or a filesystem grant. Leave other schemes unchanged and make
+ * malformed sandbox links inert before Markdown can hand them to a browser. */
+export function normalizeSandboxFileHref(href: string): string {
+  if (!/^sandbox:/i.test(href)) return href;
+  const path = href.slice("sandbox:".length);
+  const decoded = safeDecode(path);
+  // Browsers drop raw tab/CR/LF while parsing, so sandbox:/<TAB>/host would
+  // become a remote http authority. Reject raw and encoded control characters;
+  // %20 must still decode to a legitimate space in a filename.
+  const hasControl = (value: string) => /[\u0000-\u001f\u007f]/.test(value);
+  if (hasControl(path) || hasControl(decoded)) return "";
+  return /^\/(?![\/\\])/.test(decoded) && /^\/(?!\/)/.test(path) ? path : "";
+}
+
 export function resolveLocalFileHref(
   href: string | undefined,
   baseDir?: string,
@@ -99,7 +114,7 @@ export function resolveLocalFileHref(
 ): string | null {
   if (!href) return null;
 
-  const cleanHref = href.split("#", 1)[0].split("?", 1)[0].trim();
+  const cleanHref = normalizeSandboxFileHref(href).split("#", 1)[0].split("?", 1)[0].trim();
   if (!cleanHref) return null;
 
   let candidate: string | null = null;

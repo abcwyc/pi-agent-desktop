@@ -1,4 +1,5 @@
 import type { Content, Link, Parent, Root } from "mdast";
+import { normalizeSandboxFileHref } from "./file-links.ts";
 import { defaultUrlTransform, type Options as ReactMarkdownOptions } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
@@ -19,13 +20,16 @@ const markdownSanitizeSchema = {
   },
   protocols: {
     ...defaultSchema.protocols,
-    href: [...(defaultSchema.protocols?.href ?? []), "file"],
+    // Keep the alias only until the final URL transform validates it; remote
+    // or malformed sandbox forms are converted to an empty href, not allowed.
+    href: [...(defaultSchema.protocols?.href ?? []), "file", "sandbox"],
   },
   strip: [...(defaultSchema.strip || []), "iframe", "object", "style", "form"],
 };
 
 export function markdownUrlTransform(value: string): string {
-  return /^file:/i.test(value) ? value : defaultUrlTransform(value);
+  const localValue = normalizeSandboxFileHref(value);
+  return /^file:/i.test(localValue) ? localValue : defaultUrlTransform(localValue);
 }
 
 /**
