@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { invalidateModelsCache } from "@/lib/models-cache";
 import { removeStoredCredentialIfType, storeProviderCredential } from "@/lib/provider-credential-store";
-import { createModelRuntimeWithExtensions } from "@/lib/model-runtime";
+import { getModelRuntimeWithExtensions } from "@/lib/model-runtime";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export async function POST(req: Request, { params }: Params) {
     if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
       return NextResponse.json({ error: "apiKey is required" }, { status: 400 });
     }
-    const modelRuntime = await createModelRuntimeWithExtensions();
+    const modelRuntime = await getModelRuntimeWithExtensions();
     const apiKeyAuth = modelRuntime.getProvider(provider)?.auth.apiKey;
     if (!apiKeyAuth?.login) {
       throw new Error(`${provider} does not support API key login`);

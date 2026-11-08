@@ -1,4 +1,5 @@
 import type { Content, Link, Parent, Root } from "mdast";
+import type { Element as HastElement, Root as HastRoot, RootContent as HastContent } from "hast";
 import { defaultUrlTransform, type Options as ReactMarkdownOptions } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
@@ -675,6 +676,42 @@ export const markdownPreviewRemarkPlugins: ReactMarkdownOptions["remarkPlugins"]
 export const markdownRehypePlugins: ReactMarkdownOptions["rehypePlugins"] = [
   rehypeRaw,
   [rehypeSanitize, markdownSanitizeSchema],
+  [rehypeKatex, { throwOnError: false, strict: false }],
+];
+
+function hastText(node: HastContent): string {
+  return node.type === "text" ? node.value : node.type === "element" ? node.children.map(hastText).join("") : "";
+}
+
+/** GitHub's heading slugs for `#fragment` links, as a data attribute: two rendered documents never share an id. */
+function markdownHeadingAnchors() {
+  return (tree: HastRoot) => {
+    const seen = new Map<string, number>();
+    const visit = (node: HastRoot | HastElement) => node.children.forEach((child) => {
+      if (child.type !== "element") return;
+      if (/^h[1-6]$/.test(child.tagName)) {
+        const base = hastText(child).toLowerCase().replace(/[^\p{L}\p{M}\p{N}_\- ]/gu, "").replace(/ /g, "-");
+        // As github-slugger numbers repeats: "a", "a", "a-1" become a, a-1, a-1-1.
+        let slug = base;
+        while (seen.has(slug)) {
+          seen.set(base, seen.get(base)! + 1);
+          slug = `${base}-${seen.get(base)}`;
+        }
+        seen.set(slug, 0);
+        child.properties.dataHeadingAnchor = slug;
+      }
+      visit(child);
+    });
+    visit(tree);
+  };
+}
+
+// A document whose `#fragment` links lead to its headings (Settings › Skills).
+// Anchors come before KaTeX, which writes each formula's text twice.
+export const markdownDocumentRehypePlugins: ReactMarkdownOptions["rehypePlugins"] = [
+  rehypeRaw,
+  [rehypeSanitize, markdownSanitizeSchema],
+  markdownHeadingAnchors,
   [rehypeKatex, { throwOnError: false, strict: false }],
 ];
 

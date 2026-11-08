@@ -77,6 +77,8 @@ export interface EnabledModelsModelView {
   /** `provider/modelId`, the reference used by every edit. */
   ref: string;
   enabled: boolean;
+  /** The context budget currently resolved by pi, including models.json overrides. */
+  contextWindow?: number;
   /** Thinking level pinned by a `:level` pattern; read-only in pi-web. */
   thinkingPin?: string;
 }

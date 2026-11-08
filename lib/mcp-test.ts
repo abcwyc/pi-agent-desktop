@@ -13,7 +13,7 @@ import {
 import { guardedCredentialStore, mcpOAuthUrl, mcpSignInKey, mcpSignOutCount, mcpSignOutGuard, type McpSignInWriteGuard } from "./mcp-sign-out";
 import { recordMcpStatus } from "./mcp-status";
 import { createPiWebMcpTransportFactory, resolvedConfigValues } from "./mcp-transport";
-import { createModelRuntimeWithExtensions } from "./model-runtime";
+import { getModelRuntimeWithExtensions } from "./model-runtime";
 import type {
   McpClient,
   McpOAuthCredentialStore,
@@ -385,16 +385,16 @@ export function openTestConnection(
 /**
  * Reads a pi provider's token for an entry with `auth.provider`, as a
  * session's MCP extension does (`modelRegistry.getApiKeyForProvider()`), with
- * the providers extensions register: the runtime is built at the first request
- * that asks, once per connection, and asked again on every request, so a
- * provider's refresh applies. Undefined when it cannot be read, as in a
- * session; the server then answers 401.
+ * the providers extensions register: the shared runtime is fetched at the
+ * first request that asks, once per connection, and asked again on every
+ * request, so a provider's refresh applies. Undefined when it cannot be read,
+ * as in a session; the server then answers 401.
  */
 function providerTokenReader(): (provider: string) => Promise<string | undefined> {
   let registry: Promise<ModelRegistry> | undefined;
   return async (provider) => {
     try {
-      registry ??= createModelRuntimeWithExtensions().then((runtime) => new ModelRegistry(runtime));
+      registry ??= getModelRuntimeWithExtensions().then((runtime) => new ModelRegistry(runtime));
       return await (await registry).getApiKeyForProvider(provider);
     } catch {
       return undefined;

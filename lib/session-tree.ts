@@ -63,7 +63,7 @@ export type SidebarRow =
   | { kind: "spacer"; key: "pinned-spacer" | "footer-spacer" }
   | { kind: "footer-open"; key: "footer-open" }
   | { kind: "footer-archived"; key: "footer-archived"; count: number }
-  | { kind: "archive-group"; key: string; project: SidebarProject; count: number };
+  | { kind: "archive-group"; key: string; project: SidebarProject; count: number; expanded: boolean };
 
 export interface SessionTreeInput {
   /** The full catalog (allSessions), subagents included. */
@@ -559,9 +559,12 @@ export function nextProjectKeysToRecord(toRecord: readonly string[], sent: Reado
 /**
  * The archive view: archived families of every project, grouped by project.
  * Groups by their newest archivedAt (desc), families by archivedAt (desc).
+ * A group is open unless its project key is in `collapsed` (the browser's
+ * own choice, lib/sidebar-prefs.ts); folded, only its header shows.
  */
 export function buildArchiveRows(
-  input: Pick<SessionTreeInput, "sessions" | "uiState" | "runningIds" | "awaitingIds" | "unreadIds" | "selectedSessionId" | "currentProject">,
+  input: Pick<SessionTreeInput, "sessions" | "uiState" | "runningIds" | "awaitingIds" | "unreadIds" | "selectedSessionId" | "currentProject">
+    & { collapsed?: ReadonlySet<string> },
 ): SidebarRow[] {
   const { uiState, runningIds } = input;
   const flags: FamilyFlagsInput = input;
@@ -588,7 +591,9 @@ export function buildArchiveRows(
     .sort((a, b) => compareDesc(a.group.newest, b.group.newest) || a.index - b.index);
   for (const { key, group } of ordered) {
     const project = resolver.get(key);
-    rows.push({ kind: "archive-group", key: `archive:${key}`, project, count: group.families.length });
+    const expanded = !input.collapsed?.has(key);
+    rows.push({ kind: "archive-group", key: `archive:${key}`, project, count: group.families.length, expanded });
+    if (!expanded) continue;
     const families = group.families
       .map((entry, index) => ({ ...entry, index }))
       .sort((a, b) => compareDesc(a.archivedAt, b.archivedAt) || a.index - b.index);
@@ -620,6 +625,29 @@ export function familiesToArchive(
     if (status.running || status.unread || status.selected || status.transient) continue;
     const modified = Date.parse(family.latestModified);
     if (Number.isNaN(modified) || modified >= cutoff) continue;
+    ids.push(family.root.id);
+  }
+  return ids;
+}
+
+/**
+ * Root ids of the archived families the archive view's bulk actions take
+ * (Restore all, Delete…): every archived family, or those of `projectKey`,
+ * or those archived before `archivedBefore`. An archived family never runs
+ * (isFamilyArchived) and always has a file.
+ */
+export function archivedFamilyIds(
+  input: Pick<SessionTreeInput, "sessions" | "uiState" | "runningIds">,
+  filter: { projectKey?: string; archivedBefore?: number } = {},
+): string[] {
+  const ids: string[] = [];
+  for (const family of listSessionFamilies(input.sessions)) {
+    if (filter.projectKey !== undefined && familyProjectKey(family) !== filter.projectKey) continue;
+    if (!isFamilyArchived(family, input.uiState, input.runningIds)) continue;
+    if (filter.archivedBefore !== undefined) {
+      const archivedAt = finiteNumber(familyEntry(input.uiState, family.root.id)?.archivedAt);
+      if (archivedAt === null || archivedAt >= filter.archivedBefore) continue;
+    }
     ids.push(family.root.id);
   }
   return ids;
@@ -878,17 +906,21 @@ export function getVisibleRowIndices(
 /**
  * The scrollTop that brings row `index` into a viewport of `viewportHeight`
  * now scrolled to `scrollTop`: centred when it is partly or wholly out of
- * view, null when it is already in view (or there is no such row).
+ * view, null when it is already in view (or there is no such row). With
+ * `block` "start" the row goes to the top unless it is there already (the
+ * browser clamps a list too short to put it there).
  */
 export function revealScrollTop(
   offsets: readonly number[],
   index: number,
   scrollTop: number,
   viewportHeight: number,
+  block?: "start",
 ): number | null {
   if (!Number.isInteger(index) || index < 0 || index >= offsets.length - 1) return null;
   const top = offsets[index];
   const bottom = offsets[index + 1];
+  if (block === "start") return top === scrollTop ? null : top;
   if (top >= scrollTop && bottom <= scrollTop + viewportHeight) return null;
   return Math.max(0, top - Math.max(0, (viewportHeight - (bottom - top)) / 2));
 }

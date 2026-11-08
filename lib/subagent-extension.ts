@@ -11,7 +11,8 @@ import {
   type SubagentProfile,
   type SubagentRunInfo,
 } from "./subagents";
-import { MAX_SUBAGENT_INPUT_FILES } from "./subagent-input";
+import { MAX_SUBAGENT_INPUT_BYTES, MAX_SUBAGENT_INPUT_FILES } from "./subagent-input";
+import { worktreeHasUncommittedFiles } from "./worktree";
 
 export const HOST_SUBAGENT_EXTENSION_NAME = "pi-web-subagents";
 const HOST_SUBAGENT_EXTENSION_PATH = `<inline:${HOST_SUBAGENT_EXTENSION_NAME}>`;
@@ -112,18 +113,38 @@ export function subagentToolDetails(run: SubagentRunInfo): SubagentToolDetails {
   };
 }
 
+/**
+ * Where an isolated run's worktree is, as its result was recorded: the model reads only `content`,
+ * never `details` (#1202). Git keeps the branch, with any commits, when it removes the checkout,
+ * and refuses to remove one that still has changes. Only this run's own refusal gives a reason, and
+ * never in git's words, which end in "use --force to delete it". A result recorded without
+ * `worktreeExists` (before #1202) says nothing.
+ */
+function worktreeOutcomeText(run: SubagentRunInfo): string | undefined {
+  if (!run.worktreePath || !run.worktreeBranch || run.worktreeExists === undefined) return undefined;
+  if (!run.worktreeExists) return `Its worktree was removed; branch ${run.worktreeBranch} keeps any commits it made.`;
+  return run.worktreeCleanupError && worktreeHasUncommittedFiles(run.worktreeCleanupError)
+    ? `Its worktree was kept at ${run.worktreePath} (branch ${run.worktreeBranch}) because it still has uncommitted or untracked files.`
+    : `Its worktree is still at ${run.worktreePath} (branch ${run.worktreeBranch}).`;
+}
+
 export function subagentFinalText(run: SubagentRunInfo): string {
   if (run.status === "starting" || run.status === "running") {
     return `Subagent ${run.sessionId} is ${run.status}.`;
   }
   // Keep the session ID in the text: the model only sees `content`, never `details`, and needs it for `resume` / `get_subagent_result`.
+  // The worktree line follows the status, before the subagent's own words.
+  const worktree = worktreeOutcomeText(run);
+  const withWorktree = (status: string) => worktree ? `${status}\n\n${worktree}` : status;
   if (run.status === "completed") {
     const result = run.result?.trim();
-    return result ? `Subagent ${run.sessionId} completed.\n\n${result}` : `Subagent ${run.sessionId} completed without text output.`;
+    return result
+      ? `${withWorktree(`Subagent ${run.sessionId} completed.`)}\n\n${result}`
+      : withWorktree(`Subagent ${run.sessionId} completed without text output.`);
   }
-  if (run.status === "aborted") return `Subagent ${run.sessionId} was stopped.`;
+  if (run.status === "aborted") return withWorktree(`Subagent ${run.sessionId} was stopped.`);
   if (run.status === "interrupted") return `Subagent ${run.sessionId} was interrupted before completion.`;
-  const failure = `Subagent ${run.sessionId} failed: ${run.error ?? "Unknown error"}`;
+  const failure = withWorktree(`Subagent ${run.sessionId} failed: ${run.error ?? "Unknown error"}`);
   const partial = run.result?.trim();
   return partial ? `${failure}\n\nPartial output:\n\n${partial}` : failure;
 }
@@ -176,7 +197,7 @@ export function createSubagentExtension(
           prompt: Type.String({ description: "The complete task for the subagent." }),
           resume: Type.Optional(Type.String({ description: "Existing session ID to continue with its current profile, model, thinking, and context. Omit new-session options." })),
           input_files: Type.Optional(Type.Array(Type.String(), {
-            description: "UTF-8 text files under the session cwd to include with the task.",
+            description: `UTF-8 text files under the session cwd to include with the task. Together they may fill about a tenth of the subagent model's context window, at most ${MAX_SUBAGENT_INPUT_BYTES / 1024} KB. Pass fewer or smaller files, or name the paths in prompt if the subagent can read them.`,
             maxItems: MAX_SUBAGENT_INPUT_FILES,
           })),
           description: Type.String({ description: "Short activity label shown in the UI." }),

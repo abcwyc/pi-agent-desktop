@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ModelsConfigReadError, readModelsConfig, writeModelsConfig } from "@/lib/models-config-store";
 import { mergeStoredLiteralApiKeys, redactModelsJson } from "@/lib/models-config-redaction";
+import { ContextWindowError, normalizeContextWindowOverrides } from "@/lib/model-context";
 
 export const dynamic = "force-dynamic";
 
@@ -26,12 +27,16 @@ export async function PUT(req: Request) {
     // The client never sees stored literal apiKeys (GET redacts them), so an
     // incoming provider that omits the field must keep the stored value while
     // the user edits unrelated settings. An explicit apiKey (even "") wins.
-    writeModelsConfig({
+    // Context-window overrides are checked and normalized as upstream does (Settings › Models).
+    writeModelsConfig(normalizeContextWindowOverrides({
       ...body,
       providers: mergeStoredLiteralApiKeys(incomingProviders, existingProviders),
-    });
+    }));
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof ContextWindowError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     if (error instanceof ModelsConfigReadError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
     }

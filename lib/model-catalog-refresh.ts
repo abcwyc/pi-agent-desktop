@@ -13,16 +13,18 @@ import { invalidateModelsCache } from "@/lib/models-cache";
  * fetches and persists to `~/.pi/agent/models-store.json`, keyed by provider.
  * Restoring that overlay needs no network, which is why "run the pi CLI once"
  * was the known workaround — the CLI refreshes with the network on, and every
- * pi-web request then reads what the CLI left behind. Both of pi-web's own
- * refresh paths ask for the offline half only (`createAgentSessionServices()`
- * and `set_model` in `lib/rpc-manager.ts` pass `allowNetwork: false`;
+ * pi-web request then reads what the CLI left behind. pi-web's own refresh
+ * paths ask for the offline half only (`createAgentSessionServices()`,
+ * `set_model` in `lib/rpc-manager.ts` and the shared runtime's per-call
+ * refresh in `lib/model-runtime.ts` pass `allowNetwork: false`;
  * `lib/provider-usage.ts` skips the refresh with `refreshOnCreate: false`), so
  * pi-web never filled that file itself.
  *
  * This runs the network pass in pi-web, behind the Models panel's refresh
  * button. It only has to write `models-store.json`: the overlay reaches the UI
- * through the ordinary `/api/models` and `/api/models/enabled` loads, which
- * build a fresh runtime that restores the store.
+ * through the ordinary `/api/models` load, which builds a fresh runtime, and
+ * the `/api/models/enabled` load, which refreshes the shared runtime offline;
+ * both restore the store.
  *
  * Deliberately never on an unrelated request's path. A pass fetches a catalog
  * per authenticated provider, and a save must not wait on a slow catalog — the

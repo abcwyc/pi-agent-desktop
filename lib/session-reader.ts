@@ -7,6 +7,7 @@ import { readdir } from "fs/promises";
 import { isAbsolute, join, normalize as normalizePath, relative, resolve as resolvePath, sep } from "path";
 import type { AgentMessage, ImageContent, SessionEntry, SessionHeader, SessionInfo, SessionContext } from "./types";
 import { normalizeToolCalls } from "./normalize";
+import { withoutMessageSignatures } from "./message-signatures";
 import { getThinkingPreview, isMessageGroupAnchor } from "./message-display";
 import { projectIdentityKey } from "./project-identity";
 import { sessionPathKey } from "./session-path";
@@ -1032,7 +1033,8 @@ function entryToUiMessage(
       if (entry.message.role === "system") return null;
       // Tool-result details are projected to the fields the UI renders:
       // extensions can persist megabytes there (see lib/tool-result-details.ts).
-      const normalized = slimToolResultMessage(normalizeToolCalls(entry.message));
+      // Provider signatures are dropped too: the browser never needs them (upstream #1193).
+      const normalized = slimToolResultMessage(normalizeToolCalls(withoutMessageSignatures(entry.message)));
       let message = options.deferToolResultImages
         ? deferToolResultBase64Images(normalized, options.sessionId, entry.id)
         : normalized;

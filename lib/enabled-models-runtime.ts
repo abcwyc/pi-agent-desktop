@@ -159,6 +159,7 @@ export function buildEnabledModelsView({
       name: model.name || model.id,
       ref,
       enabled: enabled.has(ref),
+      ...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }),
       ...(pin ? { thinkingPin: pin } : {}),
     };
     const list = byProvider.get(model.provider);

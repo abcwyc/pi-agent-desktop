@@ -488,7 +488,12 @@ export async function removeWorktree(cwd: string, worktreePath: string, force = 
  * deliberately not matched: offering a single force there would just fail.
  */
 export function worktreeRemovalRequiresForce(message: string): boolean {
-  return /contains modified or untracked files|is dirty|containing submodules/i.test(message);
+  return worktreeHasUncommittedFiles(message) || /containing submodules/i.test(message);
+}
+
+/** The refusal is about modified or untracked files, not initialized submodules. */
+export function worktreeHasUncommittedFiles(message: string): boolean {
+  return /contains modified or untracked files|is dirty/i.test(message);
 }
 
 function extractGitError(error: unknown): string {

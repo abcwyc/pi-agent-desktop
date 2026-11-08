@@ -11,6 +11,10 @@
 - The keys are the panel's last grid row, so xterm's `ResizeObserver` refits above them instead of being covered. Buttons call `preventDefault()` on pointer and mouse down so the hidden xterm textarea keeps focus and the keyboard stays up.
 - Keys go through `terminal.input(sequence, true)`, the same `onData` path (and the same connected / disableStdin checks) as typing. Arrows and Home/End follow xterm's application cursor mode; CTRL and ALT are one-shot and also modify the next character typed on the soft keyboard (`applyTerminalModifiers` in `onData`).
 
+## Terminal theme (`lib/terminal-theme.ts`, `hooks/useTerminalTheme.ts`)
+- The terminal header's sun/moon button switches the terminal alone between dark (the default) and light, apart from the app theme. The choice is per browser in `localStorage` (`pi-web:terminal-theme`), shared by every open terminal and synced across tabs by the `storage` event.
+- A switch sets `terminal.options.theme` on the live xterm, never recreating it, so the shell and its SSE stream stay. The panel's chrome reads `--terminal-*` variables that `.terminal-panel[data-terminal-theme="light"]` overrides; `--terminal-bg` must match each xterm palette's `background`.
+
 ## Sidebar breakpoint (`components/AppShell.tsx`)
 - The mobile drawer starts closed on entering the mobile breakpoint. Desktop open state is remembered separately, seeded from the URL's initial `sidebarCollapsed` value and updated only by explicit desktop toggles. Returning to desktop restores that preference; mobile drawer toggles, backdrop clicks and toolbar actions must not replace it.
 

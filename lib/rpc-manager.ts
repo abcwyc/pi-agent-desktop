@@ -7,8 +7,9 @@ import { resolve } from "path";
 import { validateAgentImages } from "./image-attachments";
 import { userImageDisplayText, userMessageImageCount } from "./user-image-display";
 import { invalidateModelsCache } from "./models-cache";
+import { invalidateModelRuntimeWithExtensions } from "./model-runtime";
 import { resolveVisibleModels, selectInitialModelScope } from "./model-scope";
-import { findDeferredModel, rememberProviderModels } from "./deferred-provider-models";
+import { findDeferredModel, findDeferredStartupModel, rememberProviderModels } from "./deferred-provider-models";
 import { isBlockingExtensionUiRequest } from "./extension-ui-queue";
 import {
   createProjectCommandBashExtension,
@@ -71,6 +72,7 @@ import { mcpPromptPreparation, type McpCommandCandidate } from "./mcp-command";
 import { createReadOnlyMcpPolicyExtension, createSubagentMcpPolicyExtension } from "./mcp-read-only-policy";
 import { createSubagentSkillsBinding } from "./subagent-skills";
 import { isNestedToolExecutionEvent } from "./agent-event-wire";
+import { collectLiveAssistantNotices, readShowCacheMissNotices, withSessionPrices } from "./transcript-notices-server";
 import {
   appendClearedSessionToolSelection,
   appendSessionToolSelection,
@@ -315,6 +317,8 @@ function restrictToChatTools(session: AgentSessionLike, names: readonly string[]
 // A tool that hands work to another agent. A chat loads no extension that registers one.
 const CHAT_DELEGATION_TOOL_NAMES: ReadonlySet<string> = new Set(SUBAGENT_CONTROL_TOOL_NAMES);
 const THINKING_LEVEL_NAMES = new Set<ThinkingLevel>(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
+// The SDK's DEFAULT_THINKING_LEVEL (dist/core/defaults.js), which it does not export.
+const SDK_DEFAULT_THINKING_LEVEL: ThinkingLevel = "medium";
 
 // Extensions require a complete Theme, while the web UI applies its own styling.
 class PlainTextTheme extends Theme {
@@ -649,6 +653,31 @@ export class AgentSessionWrapper {
     // connected sidebars reconcile instead of waiting for the next event.
     notifyRunningChange();
     this.composerQueue.wake();
+  }
+
+  /**
+   * An assistant `message_end` with the notices pi's TUI shows under
+   * `showCacheMissNotices` (#1265), as `transcriptNotices` beside the message.
+   * The message itself is left alone: pi writes that object to the file.
+   */
+  private withTranscriptNotices(event: AgentEvent): AgentEvent {
+    const message = event.message as { role?: unknown } | undefined;
+    if (this.listeners.size === 0 || message?.role !== "assistant") return event;
+    try {
+      const manager = this.inner.sessionManager;
+      if (!readShowCacheMissNotices(manager.getCwd())) return event;
+      const entries = manager.getEntries() as unknown as SessionEntry[];
+      const notices = collectLiveAssistantNotices(
+        entries,
+        manager.getBranch() as unknown as SessionEntry[],
+        message,
+        withSessionPrices(entries, this.inner.modelRuntime),
+      );
+      return notices.length > 0 ? { ...event, transcriptNotices: notices } : event;
+    } catch (error) {
+      console.warn("[pi-web] transcript notices failed:", error instanceof Error ? error.message : error);
+      return event;
+    }
   }
 
   /**
@@ -1633,6 +1662,8 @@ export class AgentSessionWrapper {
           this.inner.extensionRunner.setUIContext?.(this.createExtensionUiContext(), "rpc");
         }
         invalidateModelsCache();
+        // /reload is how an edited extension is picked up; the provider lists' runtime follows.
+        invalidateModelRuntimeWithExtensions();
         return { success: true };
       }
 
@@ -2442,6 +2473,8 @@ export class AgentSessionWrapper {
             this.inner.extensionRunner.setUIContext?.(this.createExtensionUiContext(), "rpc");
           },
         });
+        // As the `reload` command: the provider lists' runtime follows.
+        invalidateModelRuntimeWithExtensions();
       },
     };
   }
@@ -3212,10 +3245,8 @@ export async function startRpcSession(
       && !services.resourceLoader.getExtensions().extensions.some((extension) => extension.tools.has("codemode"))) {
       throw new Error("Code mode is unavailable: builtin:codemode was not registered");
     }
-    const scope = await resolveVisibleModels(
-      services.modelRuntime,
-      services.settingsManager.getEnabledModels(),
-    );
+    const enabledModels = services.settingsManager.getEnabledModels();
+    const scope = await resolveVisibleModels(services.modelRuntime, enabledModels);
     // A provider an extension registers only at session_start (lib/deferred-provider-models.ts)
     // has no model in this runtime yet: build on the default, switch once extensions are bound.
     const deferredInitialModel = initialModel && !services.modelRuntime.getModel(initialModel.provider, initialModel.modelId)
@@ -3233,6 +3264,9 @@ export async function startRpcSession(
       : undefined;
     const defaultProvider = services.settingsManager.getDefaultProvider();
     const defaultModelId = services.settingsManager.getDefaultModel();
+    const defaultModel = defaultProvider && defaultModelId
+      ? { provider: defaultProvider, modelId: defaultModelId }
+      : undefined;
     const branch = sessionManager.getBranch();
     // System messages carry the prompt and tool loadout, not a conversation.
     const hasExistingMessages = branch.some((entry) => entry.type === "message" && entry.message.role !== "system");
@@ -3264,11 +3298,40 @@ export async function startRpcSession(
     const startupModel = restoredModel && services.modelRuntime.hasConfiguredAuth(restoredModel.provider)
       ? restoredModel
       : initial?.model;
+    // A registered default the session starts on is in scope with deferred models counted too
+    // (globs and exact entries only gain matches), unless the scope fell back to every model.
+    const startsOnDefault = Boolean(initial?.model && defaultModel
+      && initial.model.provider === defaultModel.provider && initial.model.id === defaultModel.modelId
+      && (scope.scopedModels.length > 0 || !enabledModels?.some((pattern) => pattern.trim())));
+    // pi's pick with deferred providers counted in, as /api/models shows it (#1240): a deferred
+    // model asked for gets its enabledModels pin; with no usable model asked for, the browser shows
+    // that pick and sends none, so a deferred pick is switched to as well.
+    const deferredStartup = !hasExistingMessages && !chatOnly && (deferredInitialModel || (!effectiveInitialModel && !startsOnDefault))
+      ? await findDeferredStartupModel(services.modelRuntime, enabledModels, deferredInitialModel
+        ? { requestedModel: { provider: deferredInitialModel.provider, modelId: deferredInitialModel.id } }
+        : defaultModel ? { defaultModel } : {})
+      : undefined;
     const deferredModel = hasExistingMessages
       ? savedModel && !restoredModel
         ? findDeferredModel(services.modelRuntime, savedModel.provider, savedModel.modelId)
         : undefined
-      : deferredInitialModel;
+      : deferredInitialModel ?? deferredStartup?.model;
+    // set_model applies the model's modelThinkingLevels entry, else defaultThinkingLevel, else keeps
+    // the current level: the stand-in model's (clamped, or its own pin). Apply what pi's
+    // createAgentSession gives this model at startup instead: a resumed session's last saved level,
+    // else the default; a new one's requested level, else the model's enabledModels pin, its
+    // modelThinkingLevels entry, else the default.
+    const deferredThinkingLevel = !deferredModel
+      ? undefined
+      : hasExistingMessages
+        ? (branch.findLast((entry) => entry.type === "thinking_level_change")?.thinkingLevel as ThinkingLevel | undefined)
+          ?? services.settingsManager.getDefaultThinkingLevel()
+          ?? SDK_DEFAULT_THINKING_LEVEL
+        : thinkingLevel
+          ?? deferredStartup?.thinkingLevelPin
+          ?? services.settingsManager.getModelThinkingLevel(deferredModel.provider, deferredModel.id)
+          ?? services.settingsManager.getDefaultThinkingLevel()
+          ?? SDK_DEFAULT_THINKING_LEVEL;
     // The extension's model a Chat-only session wanted (saved, chosen or default); a prompt names
     // it when the session ended up with no model at all.
     const chatOnlyExtensionModel = chatOnly
@@ -3351,6 +3414,7 @@ export async function startRpcSession(
         try {
           await wrapper.waitUntilReady();
           await wrapper.send({ type: "set_model", provider: deferredModel.provider, modelId: deferredModel.id });
+          if (deferredThinkingLevel) await wrapper.send({ type: "set_thinking_level", level: deferredThinkingLevel });
         } catch (error) {
           console.error(`[pi-web] could not switch to ${deferredModel.provider}/${deferredModel.id}:`, error instanceof Error ? error.message : error);
         }
