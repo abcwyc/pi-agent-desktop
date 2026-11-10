@@ -10184,6 +10184,70 @@ html.dark .terminal-panel {
 }
 .composer-clear-button:hover { background: var(--bg-hover); color: var(--text); }
 .composer-clear-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.composer-side-chat-button:disabled { opacity: 0.45; cursor: not-allowed; }
+.composer-side-chat-button:disabled:hover { background: transparent; color: inherit; }
+
+/* C1: a side chat in a right-panel tab fills the panel like the main chat its column. */
+.session-chat-panel {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.session-chat-panel-status {
+  padding: 24px 16px;
+  color: var(--text-dim);
+  font-size: var(--fs-caption);
+  text-align: center;
+}
+
+/* C1: the Agents panel's row actions (New side chat, tab, delete) and the delete confirmation. */
+.agent-row-button {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.agent-row-button:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
+.agent-row-button[aria-pressed="true"] { color: var(--accent); }
+.agent-row-button.is-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 9%, transparent); color: var(--danger); }
+.agent-row-button:disabled { opacity: 0.4; cursor: not-allowed; }
+.agent-row-button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.agent-row-confirm {
+  height: 26px;
+  padding: 0 10px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: var(--fs-caption);
+  cursor: pointer;
+}
+.agent-row-confirm.is-danger { border-color: color-mix(in srgb, var(--danger) 45%, transparent); color: var(--danger); }
+.agent-row-confirm.is-danger:hover { background: color-mix(in srgb, var(--danger) 9%, transparent); }
+
+/* C1: where a side chat's own messages start, below the history it inherited. */
+.side-chat-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  color: var(--text-dim);
+  font-size: var(--fs-caption);
+}
+.side-chat-divider > span[aria-hidden="true"] {
+  flex: 1;
+  height: var(--hairline);
+  background: var(--border);
+}
 @media (pointer: coarse) { .composer-clear-button { width: 44px; height: 44px; } }
 
 

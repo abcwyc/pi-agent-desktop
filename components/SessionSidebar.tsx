@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, useSyncExternalStore, type ReactNode } from "react";
 import type { SessionInfo, SessionWorkspaceKind } from "@/lib/types";
-import { listSessionFamilies } from "@/lib/session-family";
+import { listSessionFamilies, sideChatTitle } from "@/lib/session-family";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { skillExpansionToCommand } from "@/lib/slash-display";
 import { workspaceKeyOf } from "@/lib/workspace-memory";
@@ -2422,10 +2422,13 @@ function SessionFamilyItem({
   archiveActions,
   onFork,
   familySessions,
+  sideFamily,
   subtitle,
 }: {
   node: SessionTreeNode;
   familySessions?: SessionInfo[];
+  /** C1: the family a side chat row is numbered in, as its tab and the Agents panel number it. */
+  sideFamily?: SessionInfo[];
   depth?: number;
   selectedSessionId: string | null;
   runningSessionIds: Set<string>;
@@ -2444,6 +2447,7 @@ function SessionFamilyItem({
   /** Cross-project context, shown by the chronological sidebar view. */
   subtitle?: string;
 }) {
+  const { t } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
   const hasChildren = node.children.length > 0;
 
@@ -2472,6 +2476,7 @@ function SessionFamilyItem({
           chatActions={depth === 0 ? chatActions : undefined}
           archiveActions={depth === 0 ? archiveActions : undefined}
           onFork={depth === 0 ? onFork : undefined}
+          sideTitle={node.session.relation?.kind === "side" ? sideChatTitle(node.session, t("sideChat.title"), sideFamily ?? familySessions ?? []) : undefined}
           hasChildren={hasChildren}
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((v) => !v)}
@@ -2491,6 +2496,7 @@ function SessionFamilyItem({
               onSelectSession={onSelectSession}
               onRenamed={onRenamed}
               onSessionDeleted={onSessionDeleted}
+              sideFamily={sideFamily ?? familySessions}
               subtitle={subtitle}
             />
           ))}
@@ -2617,6 +2623,7 @@ function SessionItem({
   chatActions,
   archiveActions,
   onFork,
+  sideTitle,
   hasChildren = false,
   collapsed = false,
   onToggleCollapse,
@@ -2634,6 +2641,8 @@ function SessionItem({
   chatActions?: ChatRowActions;
   archiveActions?: SessionArchiveActions;
   onFork?: (session: SessionInfo) => void;
+  /** C1: a side chat's numbered name ("Side chat 2") while it has none of its own. */
+  sideTitle?: string;
   hasChildren?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -2681,7 +2690,7 @@ function SessionItem({
   // back to the compact /skill:name args command the user typed before using
   // it as the auto-name fallback, mirroring MessageView's rendering.
   const displayFirstMessage = skillExpansionToCommand(session.firstMessage) ?? session.firstMessage;
-  const title = session.name || displayFirstMessage.slice(0, 50) || session.id.slice(0, 12);
+  const title = sideTitle ?? (session.name || displayFirstMessage.slice(0, 50) || session.id.slice(0, 12));
 
   const startRename = useCallback(() => {
     if (session.transient) return;
