@@ -71,6 +71,7 @@ app/api/
   agent/running/events/route.ts   GET SSE stream of currently-running session ids
   agent/tasks/route.ts            GET live task snapshots (running step, waiting dialogs, last outcome) for the Tasks page
   remote-access/route.ts          GET/PUT Tailscale remote-access setting (PUT only from loopback)
+  network-proxy/route.ts          GET/PUT the app's HTTP proxy setting (PUT only from this computer); test/route.ts POST a connection test
   push/{config,subscribe,unsubscribe,test}/route.ts  Web Push key, device subscriptions, test send
   relay/route.ts                  GET/PUT encrypted relay status and config (PUT local-only)
   relay/pairing/**                POST pairing QR ticket, POST [id] approve/deny (local-only)
@@ -127,6 +128,7 @@ lib/
   markdown.ts          shared markdown helpers
   npx.ts               npx runner used by skill install
   pi-types.ts          local structural types for pi SDK objects
+  network-proxy.ts    Settings › General › Network proxy: process.env + dispatcher rebuild; network-proxy-test.ts the connection test
   rpc-manager.ts      AgentSessionWrapper + registry + startRpcSession
   scheduled-tasks/    scheduler, runner, cron, store, run index for scheduled tasks (see docs/agents/scheduled-tasks.md)
   session-reader.ts   SessionManager wrappers + path cache + buildSessionContext adapter
