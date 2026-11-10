@@ -458,3 +458,26 @@ test("alert markers inside lists stay ordinary quotes", () => {
   const html = renderMarkdown("- item\n\n  > [!NOTE]\n  > nested");
   assert.doesNotMatch(html, /markdown-alert/);
 });
+
+test("an audio or video file a reply links as an image plays in place (C9)", () => {
+  const audio = renderMarkdown("![take 2](media/take2.wav)");
+  assert.match(audio, /<audio class="markdown-media" controls="" preload="metadata" src="\/api\/files\/[^"]*take2\.wav\?type=read" aria-label="take 2"><\/audio>/);
+  assert.doesNotMatch(audio, /<img/);
+  assert.match(renderMarkdown("![](clips/demo.mp4)"), /<video class="markdown-media" controls="" playsInline="" preload="metadata"|<video class="markdown-media" controls="" playsinline="" preload="metadata"/);
+  // A remote clip keeps its URL; an image stays an image.
+  assert.match(renderMarkdown("![](https://example.com/a.mp3?x=1)"), /<audio[^>]*src="https:\/\/example\.com\/a\.mp3\?x=1"/);
+  assert.match(renderMarkdown("![chart](chart.png)"), /<img src="\/api\/files\/[^"]*chart\.png\?type=read" alt="chart"/);
+});
+
+test("a display formula carries a Copy button for its LaTeX (C8)", () => {
+  const html = renderMarkdown("$$\nE = mc^2\n$$");
+  assert.match(html, /<div class="markdown-math-display">[\s\S]*class="katex-display"[\s\S]*<button type="button" class="markdown-code-action markdown-math-copy">Copy<\/button><\/div>/);
+  // Inline math has no button.
+  assert.doesNotMatch(renderMarkdown("Energy is $E = mc^2$ here."), /markdown-math-copy/);
+});
+
+test("an extension message keeps its line breaks and indents, as pi's TUI prints it (C11)", () => {
+  const html = renderMarkdown("Progress\n  ├─ step one\n  └─ step two", { keepTextLayout: true });
+  assert.match(html, /Progress<br\/>/);
+  assert.match(html, /├─ step one<br\/>/);
+});

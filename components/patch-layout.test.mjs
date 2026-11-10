@@ -22,3 +22,9 @@ test("the lines a diff leaves out between hunks are marked in both layouts and i
   const theme = await read("../app/native-theme.css");
   assert.match(theme, /\.patch-diff-gap \{/);
 });
+
+test("a code block's long lines wrap by default and the button turns that off (C10)", async () => {
+  const source = await read("./MermaidBlock.tsx");
+  assert.match(source, /const \[wrap, setWrap\] = useState\(true\);/);
+  assert.match(source, /\{wrap \? t\("chat\.codeNoWrap"\) : t\("chat\.codeWrap"\)\}/);
+});

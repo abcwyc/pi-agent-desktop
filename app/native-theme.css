@@ -6715,6 +6715,15 @@ html.dark {
   }
 }
 
+/* Markdown audio/video a reply links to (C9, upstream #1281). */
+.markdown-body .markdown-media {
+  display: block;
+  max-width: 100%;
+  margin: 6px 0;
+  border-radius: var(--radius-sm);
+}
+.markdown-body audio.markdown-media { width: min(100%, 420px); }
+
 /* Patch views: unchanged lines a diff leaves out between hunks (F7, upstream #1304). */
 .patch-diff-gap {
   padding: 2px 10px;
