@@ -2715,6 +2715,30 @@ html:not(.dark) .session-item.is-selected .session-item-time {
 
 /* "…" popover menu on session rows: keep the delete item red on hover
    (the generic .native-popover hover rule would repaint it as plain text) */
+/* Git changes header: list / tree switch (F2). */
+.file-changes-view-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.file-changes-view-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.file-changes-view-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 /* The project menu's "Delete all sessions…" (S6) reads red like the session delete. */
 .sidebar-project-context-menu button.is-danger {
   color: var(--danger);

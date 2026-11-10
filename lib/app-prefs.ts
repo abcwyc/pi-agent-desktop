@@ -32,6 +32,8 @@ export const APP_PREF_KEYS = {
   pinnedChats: "pi-web:pinned-chats",
   pinnedSessions: "pi-web:pinned-sessions",
   pinnedProjects: "pi-web:pinned-projects",
+  /** "tree" shows the Git changes as folders (F2); anything else is the flat list. */
+  changesViewMode: "pi-web:sidebar-changes-view-mode",
   /** Chat session ids hidden from the Chats section until "Show archived". */
   archivedChats: "pi-web:archived-chats",
   /** Project session ids hidden from their project until "Show archived" (#200). */
