@@ -6715,6 +6715,10 @@ html.dark {
   }
 }
 
+/* Settings › Models: where a dragged model would land (M5). */
+.config-sidebar-item[data-drop="before"] { box-shadow: inset 0 2px 0 var(--accent); }
+.config-sidebar-item[data-drop="after"] { box-shadow: inset 0 -2px 0 var(--accent); }
+
 /* Markdown audio/video a reply links to (C9, upstream #1281). */
 .markdown-body .markdown-media {
   display: block;

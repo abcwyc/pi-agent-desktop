@@ -4,7 +4,7 @@ import type { ModelContextSettings } from "./ModelContextWindow";
 import { withContextWindowOverride } from "@/lib/model-context";
 import { AppSelect } from "./AppSelect";
 
-import { useState, useEffect, useCallback, useId, useRef } from "react";
+import { useState, useEffect, useCallback, useId, useRef, type ButtonHTMLAttributes, type DragEvent } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import type { ModelCatalogPreset, ModelCatalogRecommendation } from "@/lib/model-catalog";
 import type { DiscoveredModel } from "@/lib/model-discovery";
@@ -30,6 +30,10 @@ import {
   type ModelSpecField,
   type ModelCostDraft,
   type ModelCostKey,
+  moveModelEntry,
+  modelDropIndex,
+  sortModelEntries,
+  type ModelOrderChange,
 } from "./models-config-helpers";
 import {
   ConfigButton,
@@ -1949,6 +1953,11 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null, onOpenMcp 
    * from an unrelated edit without guessing.
    */
   const savedModelIdsRef = useRef<Map<string, (string | null)[]>>(new Map());
+  // M5: the row a dragged model would land on, and a stable key per model entry across reorders.
+  const draggedModelRef = useRef<{ providerName: string; index: number } | null>(null);
+  const [modelDrop, setModelDrop] = useState<{ providerName: string; index: number; after: boolean } | null>(null);
+  const modelKeysRef = useRef(new WeakMap<object, string>());
+  const modelKeySequenceRef = useRef(0);
   /** models.json as last read or saved, so the model form can tell saved values from edits. */
   const [savedConfig, setSavedConfig] = useState<ModelsJson>({ providers: {} });
   /**
@@ -2103,6 +2112,73 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null, onOpenMcp 
       return { ...prev, providers: { ...(prev.providers ?? {}), [providerName]: { ...provider, models } } };
     });
   }, []);
+
+  const applyModelOrder = useCallback((change: ModelOrderChange<ModelsJson> | null) => {
+    if (!change) return;
+    setConfig(change.config);
+    setSavedOk(false);
+    setSaveError(null);
+    setSelection((current) => current?.type === "model" && current.providerName === change.providerName
+      ? { ...current, index: change.order.indexOf(current.index) }
+      : current);
+  }, []);
+
+  const moveModel = useCallback((providerName: string, from: number, to: number) => {
+    if (saving || loadError) return;
+    applyModelOrder(moveModelEntry(config, savedModelIdsRef.current, providerName, from, to));
+  }, [applyModelOrder, config, loadError, saving]);
+
+  /**
+   * Native drag and drop of a model row within its provider (upstream 6386fa4):
+   * desktop only (iOS never starts it from a touch); Alt+Up/Down moves it from the keyboard.
+   */
+  const modelDragProps = (providerName: string, index: number, modelId: string): ButtonHTMLAttributes<HTMLButtonElement> => {
+    const target = (event: DragEvent<HTMLButtonElement>) => {
+      const dragged = draggedModelRef.current;
+      if (dragged?.providerName !== providerName) return null;
+      const rect = event.currentTarget.getBoundingClientRect();
+      const after = event.clientY >= rect.top + rect.height / 2;
+      return { from: dragged.index, to: modelDropIndex(dragged.index, index, after), after };
+    };
+    const endDrag = () => {
+      draggedModelRef.current = null;
+      setModelDrop(null);
+    };
+    return {
+      draggable: !saving && !loadError,
+      onDragStart: (event) => {
+        draggedModelRef.current = { providerName, index };
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", modelId);
+      },
+      onDragOver: (event) => {
+        const drop = target(event);
+        if (!drop) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        // No line where the drop would leave the order as it is.
+        const next = drop.to === drop.from ? null : { providerName, index, after: drop.after };
+        setModelDrop((prev) => prev?.providerName === next?.providerName && prev?.index === next?.index && prev?.after === next?.after ? prev : next);
+      },
+      onDragLeave: (event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        setModelDrop((prev) => prev?.providerName === providerName && prev.index === index ? null : prev);
+      },
+      onDrop: (event) => {
+        const drop = target(event);
+        if (!drop) return;
+        event.preventDefault();
+        moveModel(providerName, drop.from, drop.to);
+        endDrag();
+      },
+      onDragEnd: endDrag,
+    };
+  };
+
+  const sortModels = useCallback((providerName: string) => {
+    if (saving || loadError) return;
+    applyModelOrder(sortModelEntries(config, savedModelIdsRef.current, providerName));
+  }, [applyModelOrder, config, loadError, saving]);
 
   const removeModel = useCallback((providerName: string, index: number) => {
     savedModelIdsRef.current.get(providerName)?.splice(index, 1);
@@ -2324,12 +2400,28 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null, onOpenMcp 
                     {/* Model rows */}
                     {models.map((m, i) => {
                       const isModelSelected = selection?.type === "model" && selection.providerName === pName && selection.index === i;
+                      let modelKey = modelKeysRef.current.get(m);
+                      if (!modelKey) {
+                        modelKey = `model-${++modelKeySequenceRef.current}`;
+                        modelKeysRef.current.set(m, modelKey);
+                      }
+                      const drop = modelDrop?.providerName === pName && modelDrop.index === i ? modelDrop : null;
                       return (
                         <ConfigSidebarItem
-                          key={i}
+                          key={modelKey}
                           active={isModelSelected}
                           className="models-sidebar-indented-item"
+                          data-drop={drop ? (drop.after ? "after" : "before") : undefined}
+                          aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
                           onClick={() => setSelection({ type: "model", providerName: pName, index: i })}
+                          onKeyDown={(event) => {
+                            if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+                            const direction = event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : null;
+                            if (direction === null) return;
+                            event.preventDefault();
+                            moveModel(pName, i, i + direction);
+                          }}
+                          {...modelDragProps(pName, i, m.id)}
                         >
                           <ConfigSidebarText className="is-grow" style={{ color: m.id ? "var(--text-muted)" : "var(--text-dim)" }}>
                              {m.id || t("i18n.newModel")}
@@ -2344,13 +2436,25 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null, onOpenMcp 
                       );
                     })}
 
-                    {/* Add model button */}
-                    <ConfigSidebarItem
-                      className="models-sidebar-indented-item models-sidebar-add-item"
-                      onClick={(e) => { e.stopPropagation(); addModel(pName); }}
-                    >
-                       <ConfigSidebarText>+ {t("i18n.model")}</ConfigSidebarText>
-                    </ConfigSidebarItem>
+                    {/* Add model button, and A–Z once */}
+                    <div className="models-sidebar-model-footer">
+                      <ConfigSidebarItem
+                        className="models-sidebar-indented-item models-sidebar-add-item"
+                        onClick={(e) => { e.stopPropagation(); addModel(pName); }}
+                      >
+                        <ConfigSidebarText>+ {t("i18n.model")}</ConfigSidebarText>
+                      </ConfigSidebarItem>
+                      <button
+                        type="button"
+                        className="models-sidebar-sort-button"
+                        aria-label={t("models.sortByName")}
+                        title={t("models.sortByName")}
+                        disabled={saving || loadError !== null || models.length < 2}
+                        onClick={() => sortModels(pName)}
+                      >
+                        A–Z
+                      </button>
+                    </div>
                   </div>
                 );
               })}
