@@ -2825,7 +2825,7 @@ dependencies = [
 
 [[package]]
 name = "pi-agent-desktop"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "dunce",
  "getrandom 0.3.4",

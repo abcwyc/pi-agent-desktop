@@ -114,49 +114,61 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.8.2
+            ## Pi Agent Desktop 0.8.3
 
             ### New
 
-            - **Archive single sessions.** Right-click a project session, or use its "…" menu, and choose "Archive". It moves out of the project's list into a "Show archived (n)" fold under that project; search still finds it, and "Unarchive" brings it back.
-            - **Name sessions automatically.** Settings › General › "Name sessions automatically" (off by default). After the first reply, the session's model writes a title for an unnamed session, at the cost of one extra short request per session.
+            - **Network proxy.** Settings › General › "Network proxy": turn on "Use an HTTP proxy", enter the proxy address and the hosts that skip it, and press "Test connection". Model requests, sign-ins and update checks use it right away, with no restart, so Pi Agent no longer needs your proxy app's TUN mode.
+            - **Side chats.** Ask a side question without interrupting the session: type `/side`, use the side-chat button in the composer while a reply is running, or select text and choose "Ask in side chat". Side chats open as tabs in the right panel.
+            - **Sidebar.** "Pin" a project, or a session within its project, to the top; "Fork" a session from its row menu; "Delete all sessions… · n" in a project's menu (running sessions are kept). The Projects heading now folds and shows how many projects are active.
+            - **Files and right panel.** Drag right-panel tabs to reorder them; CSV/TSV files show as a table; Git changes can be shown as a folder tree; drop files on the file tree to upload them into that folder. On a phone, diffs use one column and the terminal has an extra-keys row.
+            - **Models.** Set the context window of a built-in model, override a custom model's Base URL, and reorder a provider's models in models.json (drag, Alt+↑/↓ or A–Z). The model picker names providers by their display name, and the model can be switched while a reply is streaming (from the next request on).
 
             ### Improved
 
-            - **Session switching is fast again.** 0.8.1 released loaded sessions once more than 4 were idle, so switching back to one had to load it from scratch. Idle sessions are now released only when they add up to more than 256 MiB.
-            - **Lower GPU use in the sidebar**, most noticeable on Windows: the sidebar no longer blurs its (opaque) background, and the running and unread indicators use lighter animations that stop when reduced motion is on.
-            - **pi 1.5.0.** Adds GPT-6.1 Terra (OpenAI, Azure OpenAI and OpenAI Codex), handles large streamed tool calls with far less CPU and memory, lets tool search find tools from Chinese and other non-English queries, and signs in to more MCP servers that use OAuth.
-            - **A quieter chat.** Assistant messages no longer show their cost and token counts, and the new-session screen no longer shows starter suggestion chips.
+            - **Merged pi-web 0.15.0.** Prompts sent during a manual compaction wait and are sent after it; a stopped run no longer plays the completion sound or sends a notification; subagents get MCP servers, skills and Code mode.
+            - **Chat.** "Quote" puts the selection at the cursor as a Markdown quote; formulas can be copied; audio and video in Markdown play; long code lines wrap by default; extension dialogs widen for code and tables and can be maximized.
+            - **Settings on a phone** open one level at a time, with Back.
+            - **pi 1.5.1.** Adds Claude Fable 5.2, keeps prompt caches warm between runs when that saves money (cache warming now defaults to "idle"), sends only new messages to Anthropic, stops grep and read from loading whole large files into memory, and fixes several MCP sign-in token refresh problems.
+            - The web and PWA icons now use the Pi Agent app icon.
 
             ### Fixed
 
-            - A scheduled task's time limit now covers the whole run, so a run whose session never starts or whose prompt is never accepted can no longer hold a scheduler slot forever.
-            - Renaming a session while it is open now updates its title right away and keeps it in the session's history.
+            - **Security:** with remote access (Tailscale) or LAN mode on, a request carrying the build's preview id could skip the web password check. The desktop server now strips that header and rotates the preview secrets on every start. Dependencies with known vulnerabilities (Next.js, undici and others) are upgraded.
+            - "Full history" export failed for every session; it works again.
+            - Download links some models write as `sandbox:/path/file` now open the file.
+            - "Check again" on the "Project folder unavailable" banner shows "Checking…", and says "Still unavailable." when nothing changed, instead of looking unresponsive.
 
-            Bundled components: pi 1.5.0, pi-web 0.10.0.
+            Bundled components: pi 1.5.1, pi-web 0.15.0.
 
             ---
 
-            ## Pi Agent Desktop 0.8.2
+            ## Pi Agent Desktop 0.8.3
 
             ### 新增
 
-            - **单个会话也能归档。** 右键项目里的会话或点它的“…”菜单，选择“归档”，会话会从项目列表移到该项目下的“显示已归档（n）”折叠区；搜索仍能找到它，选择“取消归档”即可恢复。
-            - **自动命名会话。** “设置 › 通用 › 自动命名会话”（默认关闭）。第一轮回复结束后，用当前会话的模型为未命名的会话生成标题，每个会话多一次简短请求。
+            - **网络代理。** “设置 › 常规 › 网络代理”：打开“使用 HTTP 代理”，填写代理地址和不走代理的主机，然后点“测试连接”。模型请求、登录和更新检查会立即走这个代理，无需重启，不必再为 Pi Agent 打开代理软件的 TUN 模式。
+            - **侧聊。** 不打断当前会话也能另问一个问题：输入 `/side`、在回复进行中点输入框里的侧聊按钮，或选中文字后选择“在侧聊询问”。侧聊以标签页形式在右侧面板打开。
+            - **侧栏。** 可以把项目、或项目里的会话“置顶”；会话的行菜单里可以“分叉”；项目菜单里新增“删除全部会话… · n”（运行中的会话会保留）。“项目”标题可以折叠，并显示活跃项目数。
+            - **文件与右侧面板。** 右侧面板的标签页可以拖动排序；CSV/TSV 文件以表格显示；Git 改动可以按目录树显示；把文件拖到文件树上即可上传到对应目录。在手机上，差异视图改为单栏，终端多出一排快捷键。
+            - **模型。** 可以设置内置模型的上下文窗口、覆盖自定义模型的 Base URL，并在 models.json 中给服务商的模型排序（拖动、Alt+↑/↓ 或 A–Z）。模型选择器按服务商的显示名称列出；回复进行中也能切换模型（从下一次请求开始生效）。
 
             ### 改进
 
-            - **切换会话重新变快。** 0.8.1 在闲置会话超过 4 个时就会释放它们，切回去时需要重新加载。现在只有闲置会话合计超过 256 MiB 时才会释放。
-            - **侧栏 GPU 占用更低**，Windows 上最明显：侧栏不再对（不透明的）背景做模糊，运行中和未读标记改用更轻的动画，开启“减少动态效果”时会停止。
-            - **pi 1.5.0。** 新增 GPT-6.1 Terra（OpenAI、Azure OpenAI 和 OpenAI Codex）；流式输出大型工具调用时 CPU 和内存占用大幅降低；工具搜索支持中文等非英文查询；可以登录更多使用 OAuth 的 MCP 服务器。
-            - **对话界面更清爽。** 助手消息下方不再显示费用和 token 数，新会话页面也不再显示建议提示。
+            - **合入 pi-web 0.15.0。** 手动压缩期间发送的消息会等压缩结束后再发出；手动停止的运行不再播放完成提示音或发送通知；子代理可以使用 MCP 服务器、技能和 Code mode。
+            - **对话。** “引用”会把选中文字以 Markdown 引用的形式插入到光标处；公式可以复制；Markdown 中的音频和视频可以播放；长代码行默认自动换行；扩展弹窗会为代码和表格加宽，并可最大化。
+            - **手机上的设置**改为逐层进入，可以返回上一级。
+            - **pi 1.5.1。** 新增 Claude Fable 5.2；在划算时于两次运行之间保持提示缓存预热（缓存预热默认改为“idle”）；向 Anthropic 只发送新增消息；grep 和 read 不再把整个大文件读入内存；修复多处 MCP 登录令牌刷新问题。
+            - 网页和 PWA 图标改为 Pi Agent 应用图标。
 
             ### 修复
 
-            - 定时任务的时间限制现在覆盖整个运行过程：会话始终没有启动、或提示始终没有被接收的运行，不会再一直占用调度名额。
-            - 会话打开时重命名，标题会立即更新，并正确记录在会话历史中。
+            - **安全：**开启远程访问（Tailscale）或局域网模式时，带有构建预览 ID 的请求可以绕过网页密码校验。桌面服务器现在会去掉这个请求头，并在每次启动时更换预览密钥。同时升级了存在已知漏洞的依赖（Next.js、undici 等）。
+            - “完整历史”导出对所有会话都会失败，现已恢复。
+            - 部分模型输出的 `sandbox:/路径/文件` 下载链接现在可以打开文件。
+            - “项目目录不可用”提示条上的“重新检查”按钮会显示“检查中…”，没有变化时提示“仍无法访问。”，不再像是点不动。
 
-            内置组件版本：pi 1.5.0、pi-web 0.10.0。
+            内置组件版本：pi 1.5.1、pi-web 0.15.0。
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
