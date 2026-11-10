@@ -1645,6 +1645,7 @@ export const zhTWLocale: LocalePlugin = {
     "models.thinkingSummary": "思考等級：{count}",
     "models.apiOverride": "API 覆寫",
     "models.baseUrlOverride": "Base URL 覆寫",
+    "models.baseUrlHelp": "僅此模型使用此網址；留空則使用 Provider 的網址。",
     "models.headers": "Headers",
     "models.headersHelp": "加入此模型的請求，並覆寫 Provider 的同名 Header。",
     "models.imageMaxBytes": "圖片大小上限（位元組）",

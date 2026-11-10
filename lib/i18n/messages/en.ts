@@ -1645,6 +1645,7 @@ export const enLocale: LocalePlugin = {
     "models.thinkingSummary": "Thinking levels: {count}",
     "models.apiOverride": "API override",
     "models.baseUrlOverride": "Base URL override",
+    "models.baseUrlHelp": "Only this model uses this URL. Leave blank to use the provider's.",
     "models.headers": "Headers",
     "models.headersHelp": "Added to this model's requests and overrides provider headers.",
     "models.imageMaxBytes": "Image size limit (bytes)",

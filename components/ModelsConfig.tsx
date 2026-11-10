@@ -104,6 +104,8 @@ interface ModelEntry {
   id: string;
   name?: string;
   api?: string;
+  /** pi's per-model endpoint; absent inherits the provider's (upstream #1288). */
+  baseUrl?: string;
   reasoning?: boolean;
   thinkingLevelMap?: Record<string, string | null>;
   input?: string[];
@@ -966,15 +968,18 @@ function ModelDetail({
      return [t("i18n.failed"), ...meta, testState.message].filter(Boolean).join(" · ");
   })();
 
+  // The endpoint this model is tested and looked up at: its own override, else the provider's.
+  const effectiveBaseUrl = model.baseUrl ?? provider.baseUrl;
+
   useEffect(() => {
     setTestState({ phase: "idle" });
-  }, [providerName, provider.baseUrl, provider.api, provider.apiKey, model.id, model.api]);
+  }, [providerName, effectiveBaseUrl, provider.api, provider.apiKey, model.id, model.api]);
 
   useEffect(() => {
     catalogRequestIdRef.current += 1;
     setCatalogState({ phase: "idle" });
     catalogUndoRef.current = null;
-  }, [providerName, provider.baseUrl, model.id]);
+  }, [providerName, effectiveBaseUrl, model.id]);
 
   const handleTest = useCallback(async () => {
     if (!model.id.trim() || testState.phase === "testing") return;
@@ -1019,7 +1024,7 @@ function ModelDetail({
     setCatalogState({ phase: "loading" });
     try {
       const params = new URLSearchParams({ q: query, provider: providerName, limit: "50" });
-      if (provider.baseUrl?.trim()) params.set("baseUrl", provider.baseUrl.trim());
+      if (effectiveBaseUrl?.trim()) params.set("baseUrl", effectiveBaseUrl.trim());
       const res = await fetch(`/api/models-config/catalog?${params}`);
       const data = await res.json() as { recommendation?: ModelCatalogRecommendation; error?: string };
       if (requestId !== catalogRequestIdRef.current) return;
@@ -1042,7 +1047,7 @@ function ModelDetail({
       if (requestId !== catalogRequestIdRef.current) return;
       setCatalogState({ phase: "error", message: error instanceof Error ? error.message : String(error) });
     }
-  }, [catalogState.phase, model, onChange, provider.baseUrl, providerName]);
+  }, [catalogState.phase, model, onChange, effectiveBaseUrl, providerName]);
 
   const undoCatalogFill = () => {
     const previous = catalogUndoRef.current;
@@ -1105,6 +1110,7 @@ function ModelDetail({
   }
   compatibilityOverrideCount += remainingCompatKeys.size;
   const advancedSummaryParts = [
+    model.baseUrl ? t("models.baseUrlOverride") : null,
     model.api ? `API: ${model.api}` : null,
     Object.keys(model.headers ?? {}).length
       ? t("models.headersSummary", { count: Object.keys(model.headers ?? {}).length })
@@ -1329,6 +1335,14 @@ function ModelDetail({
 
         {advancedOpen && (
           <div id="model-advanced-settings" style={{ display: "flex", flexDirection: "column", gap: 14, padding: "4px 0 16px" }}>
+            <Field label={t("models.baseUrlOverride")}>
+              <TextInput value={model.baseUrl ?? ""} onChange={(v) => set("baseUrl", v.trim() || undefined)}
+                placeholder={provider.baseUrl ?? t("models.providerDefaults")} mono />
+              <span style={{ fontSize: "var(--fs-micro)", color: "var(--text-dim)", marginTop: 2 }}>
+                {t("models.baseUrlHelp")}
+              </span>
+            </Field>
+
             <Field label={t("models.apiOverride")}>
               <Select label={t("models.apiOverride")} value={model.api ?? ""} onChange={(v) => set("api", v || undefined)} options={API_OPTIONS} />
             </Field>
