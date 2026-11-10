@@ -9,7 +9,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { fenceFilePaths, inlineCodeFilePath } from "@/lib/file-context-menu";
 import { parsePdfPageFragment, resolveLocalFileHref, shouldOpenLocalFileInApp } from "@/lib/file-links";
 import { encodeFilePathForApi } from "@/lib/file-paths";
-import { markdownRehypePlugins, markdownRemarkPlugins, markdownTextLayoutRemarkPlugins, markdownUrlTransform, markdownUserRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
+import { isExternalMarkdownHref, markdownAppUrlTransform, markdownDocumentRehypePlugins, markdownRehypePlugins, markdownRemarkPlugins, markdownTextLayoutRemarkPlugins, markdownUrlTransform, markdownUserRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 import { isAudioPath, isVideoPath } from "@/lib/file-types";
 import { copyText } from "@/lib/clipboard";
 import { ImagePreview } from "./ImagePreview";
@@ -36,6 +36,8 @@ interface MarkdownBodyProps {
   keepLineBreaks?: boolean;
   /** An extension's custom message: keepLineBreaks, plus each paragraph line's indent, as in pi's TUI. */
   keepTextLayout?: boolean;
+  /** A document reader (a skill's instructions): relative links call this instead of leaving the app; headings get anchors. */
+  onNavigateLink?: (href: string) => void;
   /** Render `:::artifact{...}` blocks as artifact cards (assistant text only). */
   artifacts?: boolean;
 }
@@ -201,6 +203,7 @@ function buildComponents(
   cwd: string | undefined,
   onOpenFile: ((filePath: string, page?: number) => void) | undefined,
   fenceFiles: Map<number, string>,
+  onNavigateLink?: (href: string) => void,
 ): Components {
   return {
     code({ className, children, node, ...props }) {
@@ -255,6 +258,17 @@ function buildComponents(
     a({ href, children, ...props }) {
       // `node` is react-markdown metadata, not a DOM attribute.
       delete props.node;
+      if (onNavigateLink && href && !isExternalMarkdownHref(href)) {
+        // No href: a middle-click or "Open in new tab" would load the path on the app's own URL (M7).
+        const navigate = () => onNavigateLink(href);
+        return (
+          <MarkdownLinkContext.Provider value={true}>
+            <a {...props} role="link" tabIndex={0} onClick={navigate} onKeyDown={(event) => { if (event.key === "Enter") navigate(); }}>
+              {children}
+            </a>
+          </MarkdownLinkContext.Provider>
+        );
+      }
       const filePath = onOpenFile ? resolveLocalFileHref(href, cwd) : null;
       const openFile = onOpenFile;
       if (!filePath || !openFile) {
@@ -305,7 +319,7 @@ function buildComponents(
 
 // Memoized: markdown parsing + highlighting is the most expensive render work
 // in the app, so parent re-renders with identical props must be free.
-export const MarkdownBody = memo(function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile, keepLineBreaks, keepTextLayout, artifacts }: MarkdownBodyProps) {
+export const MarkdownBody = memo(function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile, onNavigateLink, keepLineBreaks, keepTextLayout, artifacts }: MarkdownBodyProps) {
   const markdown = useStreamingMarkdownText(children, Boolean(isStreaming));
   const normalizedMarkdown = useMemo(
     () => normalizeDisplayMath(artifacts && markdown.includes(":::artifact") ? encodeArtifactsForMarkdown(markdown) : markdown),
@@ -317,21 +331,21 @@ export const MarkdownBody = memo(function MarkdownBody({ children, className, is
     [normalizedMarkdown, cwd, trackFences],
   );
   const components = useMemo(
-    () => buildComponents(isStreaming, cwd, onOpenFile, fenceFiles),
-    [isStreaming, cwd, onOpenFile, fenceFiles],
+    () => buildComponents(isStreaming, cwd, onOpenFile, fenceFiles, onNavigateLink),
+    [isStreaming, cwd, onOpenFile, fenceFiles, onNavigateLink],
   );
   // Reuse the element when a new network delta has not published a snapshot.
   const body = useMemo(() => (
     <StreamingMarkdown
       isStreaming={isStreaming}
       remarkPlugins={keepTextLayout ? markdownTextLayoutRemarkPlugins : keepLineBreaks ? markdownUserRemarkPlugins : markdownRemarkPlugins}
-      rehypePlugins={markdownRehypePlugins}
-      urlTransform={onOpenFile ? markdownUrlTransform : undefined}
+      rehypePlugins={onNavigateLink ? markdownDocumentRehypePlugins : markdownRehypePlugins}
+      urlTransform={onOpenFile ? markdownUrlTransform : onNavigateLink ? markdownAppUrlTransform : undefined}
       components={components}
     >
       {normalizedMarkdown}
     </StreamingMarkdown>
-  ), [normalizedMarkdown, components, onOpenFile, keepLineBreaks, keepTextLayout, isStreaming]);
+  ), [normalizedMarkdown, components, onOpenFile, onNavigateLink, keepLineBreaks, keepTextLayout, isStreaming]);
 
   return (
     <div className={["markdown-body", className].filter(Boolean).join(" ")}>
