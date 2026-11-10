@@ -2879,13 +2879,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 onSelectProject={onSelectProject}
               />
             )}
-            {/* Model selector — visible always, disabled during streaming */}
+            {/* Model selector — visible always, busy while a switch is pending; a switch during a run applies from its next request (C2) */}
             {(modelOptions.length > 0 || model || modelError) && onModelChange && (
               <ModelSelector
                 options={modelOptions}
                 value={model}
                 onChange={onModelChange}
-                disabled={isStreaming}
                 busy={modelSwitching}
                 isAutoSelection={isAutoModelSelection}
                 defaultValue={defaultModel}
