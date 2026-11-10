@@ -10068,6 +10068,21 @@ html.dark .terminal-panel {
   --terminal-magenta: #d8a0ed;
   --terminal-cyan: #67d5df;
 }
+/* Phone extra keys (F6) on the fork's terminal surface. */
+.terminal-extra-keys {
+  border-top: var(--hairline) solid var(--border);
+  background: var(--surface);
+}
+.terminal-extra-keys button {
+  color: var(--text);
+  font-size: var(--fs-caption);
+}
+.terminal-extra-keys button:active {
+  background: var(--bg-hover);
+}
+.terminal-extra-keys button.is-active {
+  color: var(--accent);
+}
 .terminal-panel-header {
   background: var(--surface);
   border-color: var(--border);

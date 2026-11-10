@@ -85,3 +85,12 @@ test("failed or stopped delivery discards queued input without retrying commands
   await setImmediate();
   assert.equal(fetch.mock.callCount(), 1);
 });
+
+test("an upright phone gets the extra key row, and CTRL / ALT latch for the next key (F6)", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const panel = (await readFile(new URL("./TerminalPanel.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+  assert.match(panel, /\{showExtraKeys && <TerminalExtraKeys modifiers=\{modifiers\} onKey=\{sendExtraKey\} onToggleModifier=\{toggleModifier\} \/>\}/);
+  // Typed keys take the latched modifiers too, then the latch clears.
+  assert.match(panel, /writer\.write\(applyTerminalModifiers\(data, consumeModifiers\(\)\)\)/);
+  assert.match(panel, /terminalExtraKeySequence\(key, consumeModifiers\(\), terminal\.modes\.applicationCursorKeysMode\)/);
+});
