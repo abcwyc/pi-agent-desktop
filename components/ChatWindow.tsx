@@ -408,12 +408,8 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
 
   useEffect(() => {
     if (!quoteInputOpen || !quotedSelection) return;
-    quoteChatInputRef.current?.insertIfEmpty(buildQuotedSelection(
-      quotedSelection.text,
-      t("chat.quoteIntro"),
-      t("chat.quoteQuestion"),
-    ));
-  }, [quoteInputOpen, quotedSelection, t]);
+    quoteChatInputRef.current?.insertIfEmpty(buildQuotedSelection(quotedSelection.text));
+  }, [quoteInputOpen, quotedSelection]);
 
   useLayoutEffect(() => {
     const popover = quotePopoverRef.current;
@@ -459,16 +455,17 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     };
   }, [quotedSelection, quoteInputOpen, quoteSubmitting, closeQuotedSelection]);
 
-  const askSelectionHere = useCallback(() => {
+  // C3 (upstream): the selection goes into the composer as a Markdown quote at
+  // the caret, in a paragraph of its own, with a blank line to type after.
+  const quoteSelectionHere = useCallback(() => {
     if (!quotedSelection) return;
-    chatInputRef?.current?.insertText(buildQuotedSelection(
-      quotedSelection.text,
-      t("chat.quoteIntro"),
-      t("chat.quoteQuestion"),
-    ));
-    window.getSelection()?.removeAllRanges();
+    chatInputRef?.current?.insertQuote(buildQuotedSelection(quotedSelection.text));
+    // No `removeAllRanges()` here: inserting focuses the composer, and that
+    // focus already collapses the page's selection. Calling it afterwards also
+    // clears the composer's own selection and drops its caret to offset 0
+    // (upstream #1319), so the quote would be typed in front of instead of after.
     closeQuotedSelection();
-  }, [chatInputRef, quotedSelection, closeQuotedSelection, t]);
+  }, [chatInputRef, quotedSelection, closeQuotedSelection]);
 
   const askSelectionInNewChat = useCallback(async (prompt: string) => {
     const sourceSessionId = sessionIdRef.current ?? session?.id;
@@ -1680,14 +1677,17 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
           <button
             type="button"
             className="file-viewer-icon-button"
-            title={t("chat.askInCurrent")}
-            aria-label={t("chat.askInCurrent")}
+            title={t("chat.quoteSelection")}
+            aria-label={t("chat.quoteSelection")}
             onPointerDown={(event) => event.preventDefault()}
-            onClick={askSelectionHere}
+            onClick={quoteSelectionHere}
             style={{ width: "auto", height: 35, flex: "0 0 auto", gap: 5, padding: "0 10px", border: "none", fontSize: "var(--fs-caption)", fontWeight: "var(--fw-medium)" }}
           >
-            <span aria-hidden="true" style={{ fontSize: "var(--fs-title)" }}>@</span>
-            <span>{t("chat.askInCurrent")}</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z" />
+              <path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z" />
+            </svg>
+            <span>{t("chat.quoteSelection")}</span>
           </button>
           {onAskInNewChat && quotedSelection.sourceEntryId && !bashRunning && (
             <button

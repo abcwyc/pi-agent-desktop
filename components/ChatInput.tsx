@@ -28,6 +28,7 @@ import {
 import { resolveSessionReferences } from "@/lib/session-reference";
 import type { RoutedModelInfo } from "@/lib/types";
 import { getMarkdownListContinuation } from "@/lib/markdown-list-continuation";
+import { quoteSeparator } from "@/lib/quoted-selection";
 import { isBareMcpCommand, isBuiltinMcpCommand } from "@/lib/mcp-command";
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { ImagePreview } from "./ImagePreview";
@@ -174,6 +175,8 @@ interface Props {
 
 export interface ChatInputHandle {
   insertText: (text: string) => void;
+  /** C3: a quote at the caret, starting a paragraph of its own. */
+  insertQuote: (text: string) => void;
   insertIfEmpty: (text: string) => void;
   replaceMessage: (message: UserMessage) => boolean;
   prependText: (text: string) => void;
@@ -1140,6 +1143,30 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       requestAnimationFrame(() => {
         if (!ta) return;
         const pos = start + sep.length + text.length;
+        ta.setSelectionRange(pos, pos);
+        ta.focus();
+        ta.style.height = "auto";
+        ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+      });
+    },
+    insertQuote(text: string) {
+      const ta = textareaRef.current;
+      if (!ta) {
+        setValue((v) => v + quoteSeparator(v) + text);
+        return;
+      }
+      const start = ta.selectionStart ?? ta.value.length;
+      const end = ta.selectionEnd ?? ta.value.length;
+      const before = ta.value.slice(0, start);
+      const inserted = quoteSeparator(before) + text;
+      const newVal = before + inserted + ta.value.slice(end);
+      valueRef.current = newVal;
+      setValue(newVal);
+      setAtQuery(null);
+      setHashQuery(null);
+      requestAnimationFrame(() => {
+        if (!ta) return;
+        const pos = start + inserted.length;
         ta.setSelectionRange(pos, pos);
         ta.focus();
         ta.style.height = "auto";
