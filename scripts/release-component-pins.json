@@ -1,7 +1,7 @@
 {
   "pi": {
-    "version": "1.5.0",
-    "reason": "Upgrade the bundled SDK to pi 1.5.0; checked against its changelog (pi-schema tool validation, TypeBox no longer re-exported from pi-ai)."
+    "version": "1.5.1",
+    "reason": "Upgrade the bundled SDK to pi 1.5.1; checked against its changelog (cacheWarming defaults to idle, grep/read Operations changes, SDK reload refuses while a response runs)."
   },
   "pi-web": {
     "version": "0.10.0",
