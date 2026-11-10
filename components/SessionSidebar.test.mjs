@@ -221,7 +221,8 @@ test("chats can be pinned and archived, ordered by recency with no date groups",
   assert.match(source, /APP_PREF_KEYS\.archivedChats/);
   // Row menu: only chat rows (depth 0) get the actions, in both the native and DOM menus.
   assert.match(source, /chatActions=\{depth === 0 \? chatActions : undefined\}/);
-  assert.match(source, /t\(chatActions\.pinned \? "sidebar\.unpinChat" : "sidebar\.pinChat"\)/);
+  // The pin is generic: chats always pass one, project sessions too (S2).
+  assert.match(source, /t\(pin\.pinned \? "sidebar\.unpinChat" : "sidebar\.pinChat"\)/);
   // Archive is shared with project sessions: chats bring it with their actions.
   assert.match(source, /const archive: SessionArchiveActions \| undefined = chatActions \?\? archiveActions;/);
   assert.match(source, /t\(archive\.archived \? "sidebar\.unarchiveChat" : "sidebar\.archiveChat"\)/);
@@ -377,4 +378,41 @@ test("the row menu shows the compaction count only when the session was compacte
     sessionItemSource,
     /\{\(session\.compactionCount \?\? 0\) > 0 && \(\s*<div>\{t\("sidebar\.compactionCount", \{ count: session\.compactionCount \?\? 0 \}\)\}<\/div>/,
   );
+});
+
+test("a project's sessions can be pinned to the top of it, kept per browser (S2)", () => {
+  assert.match(source, /readIdSetPref\(APP_PREF_KEYS\.pinnedSessions\)/);
+  assert.match(source, /setPrefJson\(APP_PREF_KEYS\.pinnedSessions, \[\.\.\.pinnedSessions\]\)/);
+  assert.match(source, /pinned: pinnedSessions\.has\(id\),\s*onTogglePin: \(\) => setPinnedSessions\(\(current\) => toggleId\(current, id\)\),/);
+  assert.match(source, /const groupTree = pinnedFirst\(unarchivedGroupTree, \(node\) => pinnedSessions\.has\(node\.session\.id\)\);/);
+  // The native menu and the DOM menu both offer it, and the row shows the pin.
+  assert.match(source, /\.\.\.\(pin\s*\? \[\{ label: t\(pin\.pinned \? "sidebar\.unpinChat" : "sidebar\.pinChat"\), onSelect: pin\.onTogglePin \}\]/);
+  assert.match(source, /\{pin\?\.pinned && \(\s*<svg className="session-item-pin"/);
+});
+
+test("projects can be pinned above the others from both project menus (S2)", async () => {
+  assert.match(source, /readIdSetPref\(APP_PREF_KEYS\.pinnedProjects\)/);
+  assert.match(source, /setPrefJson\(APP_PREF_KEYS\.pinnedProjects, \[\.\.\.pinnedProjects\]\)/);
+  assert.match(source, /const activeProjects = pinnedFirst\(\s*allProjects\.filter\(\(group\) => !archivedProjectRoots\.has\(group\.projectRoot\)\),\s*\(group\) => pinnedProjects\.has\(group\.projectRoot\),\s*\);/);
+  const nativeMenu = source.slice(source.indexOf("const showNativeProjectMenu = useCallback"));
+  assert.match(nativeMenu.slice(0, 4000), /sidebar\.unpinProject" : "sidebar\.pinProject"/);
+  assert.match(source, /pinned=\{pinnedProjects\.has\(projectMenu\.root\)\}/);
+  const menu = (await readFile(new URL("./ProjectContextMenu.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+  assert.match(menu, /t\(pinned \? "sidebar\.unpinProject" : "sidebar\.pinProject"\)/);
+});
+
+test("a project's sessions can all be deleted, keeping the running ones (S6)", async () => {
+  const helper = source.slice(source.indexOf("const projectSessionsToDelete = useCallback"), source.indexOf("const restoreProject = useCallback"));
+  // Subagent runs go with their parent; scheduled runs and chats are not the project's list.
+  assert.match(helper, /session\.relation\?\.kind === "subagent" \|\| session\.relation\?\.kind === "scheduled"/);
+  assert.match(helper, /if \(runningSessionIds\.has\(session\.id\)\) kept \+= 1;\s*else ids\.push\(session\.id\);/);
+  // One by one through the session delete route, then the list reloads.
+  assert.match(helper, /for \(const id of target\.ids\)[\s\S]*?fetch\(`\/api\/sessions\/\$\{encodeURIComponent\(id\)\}`, \{ method: "DELETE" \}\)/);
+  assert.match(helper, /void loadSessions\(\);/);
+  // A confirmation first, naming the running sessions it keeps.
+  assert.match(source, /title=\{t\("sidebar\.deleteProjectSessionsHeading", \{ name: projectSessionsDelete\.name \}\)\}/);
+  assert.match(source, /t\("sidebar\.deleteProjectSessionsRunning", \{ count: projectSessionsDelete\.kept \}\)/);
+  const nativeMenu = source.slice(source.indexOf("const showNativeProjectMenu = useCallback"));
+  assert.match(nativeMenu.slice(0, 4000), /onSelect: \(\) => requestProjectSessionsDelete\(projectRoot\)/);
+  assert.match(source, /deleteSessionsCount=\{projectSessionsToDelete\(projectMenu\.root\)\.ids\.length\}/);
 });

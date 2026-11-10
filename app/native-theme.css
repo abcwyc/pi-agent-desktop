@@ -2715,6 +2715,11 @@ html:not(.dark) .session-item.is-selected .session-item-time {
 
 /* "…" popover menu on session rows: keep the delete item red on hover
    (the generic .native-popover hover rule would repaint it as plain text) */
+/* The project menu's "Delete all sessions…" (S6) reads red like the session delete. */
+.sidebar-project-context-menu button.is-danger {
+  color: var(--danger);
+}
+.sidebar-project-context-menu button.is-danger:hover:not(:disabled),
 .session-item-menu button.is-danger:hover:not(:disabled) {
   background: color-mix(in srgb, var(--danger) 9%, transparent) !important;
   color: var(--danger) !important;
