@@ -5,6 +5,19 @@
 - `/api/worktrees` serves worktree operations under the same allowed-root rules as `/api/files`. New worktrees go under `<repoRoot>-worktrees/<sanitized-branch>`; an existing branch is reused, else `git worktree add -b` creates it. Removing a dirty worktree answers `409 { dirty: true }`, and the UI asks before retrying with `force`.
 - git prints POSIX-style absolute paths even on Windows: every path read from git goes through `toNativePath()` (`lib/paths.ts`) before it is compared or returned, and paths are compared with `samePath()`, never `===` (otherwise `isTopLevel` is always false on Windows and the worktree switcher hides). Branch names are not paths and keep their forward slashes. Browser code cannot apply Node path rules, so `/api/worktrees` resolves `currentWorktreePath` server-side and the sidebar uses it for highlighting and the removal fallback.
 
+## Generated sandbox file links
+
+Some providers write `sandbox:/absolute/path` in Markdown downloads. The client
+normalizes only this local-path alias through `normalizeSandboxFileHref()` before
+resolving links. The Markdown sanitizer retains the protocol only until the final
+URL transform; remote authorities, relative aliases, encoded leading slash or
+backslash authorities and raw/encoded control characters become inert. The
+filename is still decoded once by the normal file resolver (including spaces/Chinese
+and literal encoded delimiters).
+A click opens the existing file viewer, not an automatic download. This is not a
+new file-access grant: existing `/api/files` root/session-reference authorization
+and the viewer's normal missing-file handling remain authoritative.
+
 ## File access allow-list
 - `/api/files` is not a general filesystem browser. Allowed roots: session cwds, their resolved project roots, and roots added with `allowFileRoot()`, which `/api/cwd/validate` and `/api/worktrees` call when they make a location browsable. "Use default directory" too: `/api/default-cwd` only creates `~/pi-cwd/YYYYMMDD`, and the sidebar selects it through `/api/cwd/validate`.
 - `isPathWithinRoots()` (`lib/path-security.ts`) is the single implementation behind `isFilePathAllowed()` and is the security boundary: keep it the only one. It re-resolves and case-folds both sides, so either path form authorizes; roots are stored slash-normalized only as a Set-key convention.

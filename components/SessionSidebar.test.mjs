@@ -58,7 +58,7 @@ test("archived projects sit in a folded Archive group and need a restore before 
   assert.match(source, /onContextMenu=\{\(e\) => openProjectMenu\(e, group\.projectRoot, archived\)\}/);
   assert.match(source, /onRestore=\{\(\) => restoreProject\(projectMenu\.root\)\}/);
   // The group sits after the project list and unfolds for a search.
-  assert.match(source, /activeProjects\.map\(\(group\) => renderProjectGroup\(group\)\)\}\s*\{archivedProjects\.length > 0 && \(\s*<ArchivedProjectsSection/);
+  assert.match(source, /activeProjects\.map\(\(group\) => renderProjectGroup\(group\)\)\)\}\s*\{!projectsSectionFolded && archivedProjects\.length > 0 && \(\s*<ArchivedProjectsSection/);
   assert.match(source, /const archiveShown = archiveExpanded \|\| Boolean\(trimmedSessionQuery\)/);
   // Unfolding an archived project must not select it (that opens a composer there).
   assert.match(source, /if \(archived\) \{\s*setExpandedArchivedProjects\(\(prev\) => toggleId\(prev, group\.projectRoot\)\);\s*return;\s*\}/);
@@ -168,7 +168,7 @@ test("Chats show five families at a time even when there are no projects", () =>
   // available when `activeProjects` is empty.
   assert.match(
     source,
-    /sidebar-chats-header[\s\S]*?\{activeProjects\.length === 0 && !\(trimmedSessionQuery && archivedProjects\.length > 0\) \? \(/,
+    /sidebar-chats-header[\s\S]*?\{!projectsSectionFolded && \(activeProjects\.length === 0 && !\(trimmedSessionQuery && archivedProjects\.length > 0\) \? \(/,
   );
 });
 
@@ -181,6 +181,20 @@ test("Chats fold like a project and unfold back to the first five", () => {
   // The fold and the page count survive a reload.
   assert.match(source, /APP_PREF_KEYS\.collapsedChats/);
   assert.match(source, /APP_PREF_KEYS\.chatSessionPages/);
+});
+
+test("Projects section hydrates safely, folds archive, and still works when storage fails", () => {
+  assert.match(source, /let projectsSectionCollapsedMemory: boolean \| null = null;/);
+  assert.match(source, /if \(projectsSectionCollapsedMemory === null\) \{\s*projectsSectionCollapsedMemory = getPref\(APP_PREF_KEYS\.collapsedProjectsSection\) === "1";\s*\}/);
+  assert.match(source, /projectsSectionCollapsedMemory = collapsed;\s*if \(collapsed\) setPref\(/);
+  assert.match(source, /const projectsSectionCollapsed = useSyncExternalStore\(\s*subscribeProjectsSectionCollapsed, readProjectsSectionCollapsed, serverProjectsSectionCollapsed/);
+  assert.match(source, /const serverProjectsSectionCollapsed = \(\) => false/);
+  assert.match(source, /const projectsSectionFolded = !trimmedSessionQuery && projectsSectionCollapsed/);
+  assert.match(source, /aria-expanded=\{!projectsSectionFolded\}/);
+  assert.match(source, /writeProjectsSectionCollapsed\(!projectsSectionCollapsed\)/);
+  assert.match(source, /sidebar-project-tree-count">\(\{activeProjects\.length\}\)/);
+  assert.match(source, /!projectsSectionFolded && archivedProjects\.length > 0 &&/);
+  assert.match(source, /onToggle=\{\(\) => setArchiveExpanded\(!archiveExpanded\)\}/);
 });
 
 test("the Chats fold hydrates with the server value before reading localStorage", () => {

@@ -292,6 +292,33 @@ function writeChatsCollapsed(collapsed: boolean): void {
   chatsCollapsedListeners.forEach((cb) => cb());
 }
 
+// Keep this section preference separate from per-project folds and archive
+// visibility. Like Chats, hydrate with the server snapshot before reading the
+// stored value so a collapsed list never causes a hydration mismatch.
+const projectsSectionListeners = new Set<() => void>();
+// null = not read yet. Once storage or a click sets it, this value is the
+// snapshot, so a failed localStorage write cannot make the fold unresponsive.
+let projectsSectionCollapsedMemory: boolean | null = null;
+function subscribeProjectsSectionCollapsed(cb: () => void): () => void {
+  projectsSectionListeners.add(cb);
+  return () => { projectsSectionListeners.delete(cb); };
+}
+function readProjectsSectionCollapsed(): boolean {
+  if (projectsSectionCollapsedMemory === null) {
+    projectsSectionCollapsedMemory = getPref(APP_PREF_KEYS.collapsedProjectsSection) === "1";
+  }
+  return projectsSectionCollapsedMemory;
+}
+const serverProjectsSectionCollapsed = () => false;
+function writeProjectsSectionCollapsed(collapsed: boolean): void {
+  // Update the snapshot first: setPref/removePref swallow quota/private-mode
+  // errors, and the toggle must still work for this session.
+  projectsSectionCollapsedMemory = collapsed;
+  if (collapsed) setPref(APP_PREF_KEYS.collapsedProjectsSection, "1");
+  else removePref(APP_PREF_KEYS.collapsedProjectsSection);
+  projectsSectionListeners.forEach((cb) => cb());
+}
+
 function readIdSetPref(key: Parameters<typeof getPrefJson>[0]): Set<string> {
   const stored = getPrefJson<unknown>(key);
   return Array.isArray(stored)
@@ -306,6 +333,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   // Same fold model as a project: folding drops the extra pages, so the next
   // unfold starts again from the first five chats.
   const chatsCollapsed = useSyncExternalStore(subscribeChatsCollapsed, readChatsCollapsed, serverChatsCollapsed);
+  const projectsSectionCollapsed = useSyncExternalStore(
+    subscribeProjectsSectionCollapsed, readProjectsSectionCollapsed, serverProjectsSectionCollapsed,
+  );
   const [chatSessionPages, setChatSessionPages] = useState(() => {
     const stored = getPrefJson<unknown>(APP_PREF_KEYS.chatSessionPages);
     return typeof stored === "number" && Number.isInteger(stored) && stored > 0 ? stored : 0;
@@ -1371,6 +1401,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     : null;
   // A search always lists every match, folded or not.
   const chatsFolded = !trimmedSessionQuery && chatsCollapsed;
+  // Search reveals both active and archived matches without overwriting folds.
+  const projectsSectionFolded = !trimmedSessionQuery && projectsSectionCollapsed;
   let visibleChatFamilies = trimmedSessionQuery
     ? chatFamilies
     : chatFamilies.slice(0, MAX_VISIBLE_CHAT_SESSIONS * (chatSessionPages + 1));
@@ -2060,7 +2092,18 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         )}
 
         <div className={`sidebar-project-tree-header${projectViewMenuOpen ? " is-menu-open" : ""}`}>
-          <span className="sidebar-project-tree-title">{t("sidebar.projects")}</span>
+          <button
+            type="button"
+            className="sidebar-chats-title"
+            data-sidebar-tree-row
+            aria-expanded={!projectsSectionFolded}
+            title={t(projectsSectionFolded ? "sidebar.expandProjectsSection" : "sidebar.collapseProjectsSection")}
+            onClick={() => writeProjectsSectionCollapsed(!projectsSectionCollapsed)}
+          >
+            <span className="sidebar-project-tree-title">{t("sidebar.projects")}</span>
+            {/* Count active project groups, not sessions or archived projects. */}
+            <span className="sidebar-project-tree-count">({activeProjects.length})</span>
+          </button>
           <div className="sidebar-project-tree-tools">
             <button
               ref={projectViewMenuButtonRef}
@@ -2092,7 +2135,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             </button>
           </div>
         </div>
-        {activeProjects.length === 0 && !(trimmedSessionQuery && archivedProjects.length > 0) ? (
+        {!projectsSectionFolded && (activeProjects.length === 0 && !(trimmedSessionQuery && archivedProjects.length > 0) ? (
           <div className="sidebar-project-tree-empty">
             {loading
               ? t("sidebar.loading")
@@ -2134,8 +2177,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           </div>
         ) : projectViewMode === "timeline"
           ? renderTimeline()
-          : activeProjects.map((group) => renderProjectGroup(group))}
-        {archivedProjects.length > 0 && (
+          : activeProjects.map((group) => renderProjectGroup(group)))}
+        {!projectsSectionFolded && archivedProjects.length > 0 && (
           <ArchivedProjectsSection
             count={archivedProjects.length}
             expanded={archiveShown}
