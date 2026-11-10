@@ -51,6 +51,7 @@ import { isScheduledRunSession } from "@/hooks/useScheduledTasks";
 import { prefetchSessionData } from "@/lib/session-data-cache";
 import { isImeComposing } from "@/lib/ime";
 import { appNotify } from "@/lib/notification-store";
+import { forkFailureMessage } from "@/lib/session-fork-client";
 import {
   archiveProjectRoot,
   restoreProjectRoot,
@@ -1275,6 +1276,36 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     else setProjectSessionsDelete(null);
   }, [loadSessions, onSessionDeleted, projectSessionsDelete, t]);
 
+  // S4: Fork copies a session's current branch into a new session beside it
+  // (POST /api/sessions/[id]/fork) and opens the copy; the source is untouched.
+  // One request per source at a time.
+  const forkingIdsRef = useRef(new Set<string>());
+  const forkSession = useCallback(async (source: SessionInfo) => {
+    if (source.transient || forkingIdsRef.current.has(source.id)) return;
+    forkingIdsRef.current.add(source.id);
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(source.id)}/fork`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await res.json().catch(() => ({})) as { session?: SessionInfo; code?: string; error?: string };
+      if (!res.ok || !data.session) {
+        const { key, params } = forkFailureMessage(data.code, data.error ?? `HTTP ${res.status}`);
+        appNotify.error({ message: t(key, params) });
+        return;
+      }
+      const forked = data.session;
+      handleSelectSessionFromList(forked);
+      appNotify.success({ message: t("sidebar.forkedToast", { title: forked.name || forked.firstMessage || forked.id }) });
+      void loadSessions();
+    } catch (error) {
+      appNotify.error({ message: t("sidebar.forkFailed", { error: error instanceof Error ? error.message : String(error) }) });
+    } finally {
+      forkingIdsRef.current.delete(source.id);
+    }
+  }, [handleSelectSessionFromList, loadSessions, t]);
+
   const restoreProject = useCallback((projectRoot: string) => {
     restoreProjectRoot(projectRoot);
     closeProjectMenu();
@@ -1685,6 +1716,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 onSelectSession={handleSelectSessionFromList}
                 onRenamed={loadSessions}
                 archiveActions={sessionArchiveActions(node.session.id)}
+                onFork={forkSession}
                 onSessionDeleted={(id) => {
                   onSessionDeleted?.(id);
                   loadSessions();
@@ -1734,6 +1766,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                       onSelectSession={handleSelectSessionFromList}
                       onRenamed={loadSessions}
                       archiveActions={sessionArchiveActions(node.session.id)}
+                      onFork={forkSession}
                       onSessionDeleted={(id) => {
                         onSessionDeleted?.(id);
                         loadSessions();
@@ -1764,6 +1797,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             familySessions={familySessions}
             subtitle={projectName}
             archiveActions={sessionArchiveActions(family.root.id)}
+            onFork={forkSession}
             selectedSessionId={selectedSessionId}
             runningSessionIds={runningSessionIds}
             unreadSessionIds={unreadSessionIds}
@@ -2385,6 +2419,7 @@ function SessionFamilyItem({
   onContinueInProject,
   chatActions,
   archiveActions,
+  onFork,
   familySessions,
   subtitle,
 }: {
@@ -2403,6 +2438,8 @@ function SessionFamilyItem({
   chatActions?: ChatRowActions;
   /** Project sessions: archive or restore this session (#200). */
   archiveActions?: SessionArchiveActions;
+  /** Project sessions: copy the current branch into a new session (S4). */
+  onFork?: (session: SessionInfo) => void;
   /** Cross-project context, shown by the chronological sidebar view. */
   subtitle?: string;
 }) {
@@ -2433,6 +2470,7 @@ function SessionFamilyItem({
           onContinueInProject={depth === 0 ? onContinueInProject : undefined}
           chatActions={depth === 0 ? chatActions : undefined}
           archiveActions={depth === 0 ? archiveActions : undefined}
+          onFork={depth === 0 ? onFork : undefined}
           hasChildren={hasChildren}
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((v) => !v)}
@@ -2577,6 +2615,7 @@ function SessionItem({
   onContinueInProject,
   chatActions,
   archiveActions,
+  onFork,
   hasChildren = false,
   collapsed = false,
   onToggleCollapse,
@@ -2593,6 +2632,7 @@ function SessionItem({
   onContinueInProject?: (session: SessionInfo) => void;
   chatActions?: ChatRowActions;
   archiveActions?: SessionArchiveActions;
+  onFork?: (session: SessionInfo) => void;
   hasChildren?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -2724,6 +2764,7 @@ function SessionItem({
     setMenuOpen(true);
     const shown = await showNativeMenu([
       { label: t("sidebar.rename"), onSelect: startRename },
+      ...(onFork ? [{ label: t("sidebar.fork"), onSelect: () => onFork(session) }] : []),
       ...(pin
         ? [{ label: t(pin.pinned ? "sidebar.unpinChat" : "sidebar.pinChat"), onSelect: pin.onTogglePin }]
         : []),
@@ -2746,7 +2787,7 @@ function SessionItem({
     ], at);
     setMenuOpen(false);
     return shown;
-  }, [archive, beginDeleteConfirmation, onContinueInProject, pin, session, locale, startRename, t]);
+  }, [archive, beginDeleteConfirmation, onContinueInProject, onFork, pin, session, locale, startRename, t]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const handled = dispatchSessionRowContextMenu({
@@ -3038,6 +3079,25 @@ function SessionItem({
                 </svg>
                 {t("sidebar.rename")}
               </button>
+              {onFork && (
+                <button
+                  role="menuitem"
+                  onClick={() => { setMenuOpen(false); onFork(session); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    width: "100%", height: 30, padding: "0 8px",
+                    background: "transparent", border: 0, borderRadius: "var(--radius-md)",
+                    color: "var(--text)", cursor: "pointer",
+                    fontSize: "var(--fs-body)", textAlign: "left",
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <circle cx="6" cy="5" r="2" /><circle cx="18" cy="5" r="2" /><circle cx="12" cy="19" r="2" />
+                    <path d="M6 7v2a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V7M12 12v5" />
+                  </svg>
+                  {t("sidebar.fork")}
+                </button>
+              )}
               {pin && (
                 <button
                   role="menuitem"

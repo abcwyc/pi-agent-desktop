@@ -416,3 +416,15 @@ test("a project's sessions can all be deleted, keeping the running ones (S6)", a
   assert.match(nativeMenu.slice(0, 4000), /onSelect: \(\) => requestProjectSessionsDelete\(projectRoot\)/);
   assert.match(source, /deleteSessionsCount=\{projectSessionsToDelete\(projectMenu\.root\)\.ids\.length\}/);
 });
+
+test("a project session's row menus offer Fork, which opens the copy (S4)", () => {
+  const fork = source.slice(source.indexOf("const forkSession = useCallback"), source.indexOf("const restoreProject = useCallback"));
+  assert.match(fork, /fetch\(`\/api\/sessions\/\$\{encodeURIComponent\(source\.id\)\}\/fork`, \{\s*method: "POST",/);
+  assert.match(fork, /forkFailureMessage\(data\.code, /);
+  assert.match(fork, /handleSelectSessionFromList\(forked\);/);
+  // Project rows only (chats own a folder), and only a family's top row.
+  assert.equal((source.match(/onFork=\{forkSession\}/g) ?? []).length, 3);
+  assert.match(source, /onFork=\{depth === 0 \? onFork : undefined\}/);
+  assert.match(sessionItemSource, /\.\.\.\(onFork \? \[\{ label: t\("sidebar\.fork"\), onSelect: \(\) => onFork\(session\) \}\] : \[\]\),/);
+  assert.match(sessionItemSource, /onClick=\{\(\) => \{ setMenuOpen\(false\); onFork\(session\); \}\}/);
+});
