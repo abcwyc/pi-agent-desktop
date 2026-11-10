@@ -405,7 +405,8 @@ test("when trusting removes Trust… under the keyboard, focus goes to the selec
   // on screen whenever the overview has loaded.
   assert.match(source, /const focusFallback = \(\) => selectedRowRef\.current \?\? addActionRef\.current;/);
   assert.match(source, /<ConfigListAction ref=\{addActionRef\} active=\{adding\} onClick=\{onAddOpen\}>/);
-  assert.match(settingsUiSource, /export function ConfigListAction\(\{ active = false, children, className, \.\.\.props \}: ButtonHTMLAttributes<HTMLButtonElement> & \{ active\?: boolean; ref\?: Ref<HTMLButtonElement> \}\) \{\n\s*return \(\n\s*<div className="config-list-action">\n\s*<button\n\s*type="button"\n\s*\{\.\.\.props\}/);
+  // The add button passes its ref on through the phone's detail-title hook (P1).
+  assert.match(settingsUiSource, /export function ConfigListAction\(\{ active = false, children, className, onClick, ref, \.\.\.props \}: ButtonHTMLAttributes<HTMLButtonElement> & \{ active\?: boolean; ref\?: Ref<HTMLButtonElement> \}\) \{\n\s*const \{ openDetail \} = useConfigDetailNavigation\(\);\n\s*const buttonRef = useReportDetailTitle\(active, ref\);\n\s*return \(\n\s*<div className="config-list-action">\n\s*<button\n\s*type="button"\n\s*\{\.\.\.props\}\n\s*ref=\{buttonRef\}/);
   assert.match(source, /import \{ focusAfterChange, focusIfLost \} from "@\/lib\/stacked-dialog";/);
   // The ref follows the selection: the Code mode row or a server row, whichever is selected.
   assert.match(source, /<ConfigSidebarItem\n\s*ref=\{active \? rowRef : undefined\}\n\s*active=\{active\}/);
@@ -413,7 +414,7 @@ test("when trusting removes Trust… under the keyboard, focus goes to the selec
   assert.match(source, /rowRef=\{selectedRowRef\}/);
   assert.match(source, /selectedRowRef=\{selectedRowRef\}/);
   // The shared row passes the ref on to its button (a prop since React 19).
-  assert.match(settingsUiSource, /export function ConfigSidebarItem\(\{[\s\S]*?\.\.\.props\n\}: ButtonHTMLAttributes<HTMLButtonElement> & \{ active\?: boolean; ref\?: Ref<HTMLButtonElement> \}\) \{\n\s*return \(\n\s*<button\n\s*type="button"\n\s*\{\.\.\.props\}/);
+  assert.match(settingsUiSource, /export function ConfigSidebarItem\(\{[\s\S]*?\.\.\.props\n\}: ButtonHTMLAttributes<HTMLButtonElement> & \{ active\?: boolean; ref\?: Ref<HTMLButtonElement> \}\) \{\n\s*const \{ openDetail \} = useConfigDetailNavigation\(\);\n\s*const buttonRef = useReportDetailTitle\(active, ref\);\n\s*return \(\n\s*<button\n\s*type="button"\n\s*\{\.\.\.props\}\n\s*ref=\{buttonRef\}/);
   // A selected row with the ref attached renders as before: the ref is not an attribute.
   assert.match(view({ selected: "codemode" }), /<button type="button" aria-label="Code mode: [^"]+" aria-current="page" class="config-sidebar-item">/);
 });

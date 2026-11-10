@@ -76,3 +76,21 @@ test("shows how many extension requests wait behind the one on screen", () => {
   assert.match(customCollapsed, /<ExtensionWaitingCount count=\{waitingCount\} \/>\s+<span[^>]*>\s+\{t\("chat\.extensionExpand"\)\}/);
   assert.match(customExpanded, /chat\.extensionPanel"\)\}<\/div>\s+<div[^>]*>\s+<ExtensionWaitingCount count=\{waitingCount\} \/>/);
 });
+
+test("fits dialogs to their code blocks and lets the user maximize them (#947)", () => {
+  const dialogOnly = dialogSource.slice(0, dialogSource.indexOf("function ExtensionCustomPanel"));
+  // Plain pi compatibility: nothing about size travels in the request or comes from an extension.
+  assert.doesNotMatch(source, /dialogSize/);
+  // A dialog opens at the historical 560px and only grows through the measured fit.
+  assert.match(dialogOnly, /width: full \? "100%" : `min\(\$\{fitWidth \?\? EXTENSION_DIALOG_BASE_WIDTH\}px, 100%\)`,\s+maxHeight: full \? "100%" : "min\(760px, 100%\)"/);
+  assert.match(dialogOnly, /querySelectorAll<HTMLElement>\("pre, \.markdown-table-wrap"\)/);
+  assert.match(dialogOnly, /prev !== null && prev >= needed \? prev : needed/);
+  assert.match(dialogOnly, /new MutationObserver\(fit\)/);
+  // The maximize/restore button sits before the collapse chevron and only affects this dialog.
+  assert.match(dialogOnly, /onClick=\{toggleFull\}[\s\S]*?<ExtensionSizeIcon expanded=\{full\} \/>[\s\S]*?onClick=\{\(\) => setCollapsed\(true\)\}/);
+  assert.doesNotMatch(source, /pi-extension-size|localStorage\.setItem\("pi-extension/);
+});
+
+test("shows a custom panel's lines whole instead of scrolling when they are wider than 920px (#947)", () => {
+  assert.match(customSource, /width: "max-content",\s+minWidth: "min\(920px, 100%\)",\s+maxWidth: "100%"/);
+});

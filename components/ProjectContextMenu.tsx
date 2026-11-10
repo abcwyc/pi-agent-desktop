@@ -247,6 +247,12 @@ interface ProjectContextMenuProps {
   archived?: boolean;
   onArchive: () => void;
   onRestore: () => void;
+  /** S2: the project sits above the others while pinned. */
+  pinned?: boolean;
+  onTogglePin?: () => void;
+  /** S6: deletes every session of the project that is not running; null hides it (none to delete). */
+  deleteSessionsCount?: number;
+  onDeleteSessions?: () => void;
   onSwitchBranch: (branch: string) => void;
   onFetch: () => void;
   onSelectWorktree: (path: string) => void;
@@ -264,6 +270,7 @@ export function ProjectContextMenuPanel({
   fetching, worktreeBusy, worktreeError, confirmRemove, newBranch,
   canReveal, revealLabel, projectRevealError, t,
   onShowBranches, onShowWorktrees, onShowNewWorktree, onBackToActions, onOpenTerminal, onReveal, archived = false, onArchive, onRestore,
+  pinned = false, onTogglePin, deleteSessionsCount = 0, onDeleteSessions,
   onSwitchBranch, onFetch, onSelectWorktree, onRequestRemove, onConfirmRemove, onCancelRemove,
   onNewBranchChange, onCreateWorktree,
   onClose = () => {},
@@ -333,9 +340,19 @@ export function ProjectContextMenuPanel({
         {projectRevealError && (
           <div className="sidebar-project-context-menu-hint" role="alert">{projectRevealError}</div>
         )}
+        {onTogglePin && (
+          <button type="button" role="menuitem" onClick={onTogglePin}>
+            {t(pinned ? "sidebar.unpinProject" : "sidebar.pinProject")}
+          </button>
+        )}
         <button type="button" role="menuitem" onClick={onArchive}>
           {t("sidebar.archiveProject")}
         </button>
+        {onDeleteSessions && deleteSessionsCount > 0 && (
+          <button type="button" role="menuitem" className="is-danger" onClick={onDeleteSessions}>
+            {t("sidebar.deleteProjectSessions", { count: deleteSessionsCount })}
+          </button>
+        )}
       </>
     );
   } else if (view === "branches") {

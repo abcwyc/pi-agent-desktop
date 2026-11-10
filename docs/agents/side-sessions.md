@@ -28,3 +28,11 @@ Why it is built this way: [ADR 0007](../adr/0007-side-sessions.md).
 - `renderMessage()` in `ChatWindow` draws the boundary message as the line (`SIDE_BOUNDARY_MESSAGE_TYPE`, client-safe in `lib/session-family.ts`). If it is not loaded (an older page) or compacted away, there is no line.
 - Names: `createSideSession()` starts with `SIDE_SESSION_NAME`, and the first prompt replaces it with its first line (`sideChatNameFrom()`, the wrapper's `prompt` command; commands name nothing), which `/name` can change. Rows and tabs show it through `sideChatTitle()` with the same family list: unnamed side chats are numbered in creation order (`Side chat 1`, `Side chat 2`), whether their tabs are open or not. `AppShell` rereads the list when a run in an open side tab starts or ends; opening or closing other tabs does not change the numbering.
 - `POST /api/sessions/stats` and the toolbar's totals (`GET /api/sessions/[id]`) count `sideOwnEntries()`, what a side chat added after `createdAt`. `/session` in the main chat shows pi's own `getSessionStats()`, the whole file; a tab has no stats popover, so it answers with one line of the chat's own numbers (`formatSessionSummary()`).
+
+## In this fork (C1)
+
+- Side tabs are kept in `lib/side-tabs.ts` (`pi-web:side-tabs` in sessionStorage), each remembering its parent; `AppShell` lists only the shown family's tabs. A tab whose side chat the catalog no longer lists is dropped once the catalog has shown it (`pruneSideTabs`), so a just-forked chat is not pruned before the sidebar reloads.
+- The right panel has no subagent tabs here: only side chats get a tab, and the Agents panel's tab toggle and Delete appear on side chat rows only. Subagent rows keep the fork's Steer / Stop.
+- The sidebar keeps listing family members under their parent, as it does for subagents, named with the same `sideChatTitle()` numbering as the tabs.
+- Chats (the non-project workspace) offer no side chat: `onSideSession` is not passed there.
+- The selected-text toolbar's "Ask in side chat" replaced the fork's "Ask in new chat"; the Artifacts page's "continue in new chat" still uses the fork-and-send path (`pendingQuotePrompt`).

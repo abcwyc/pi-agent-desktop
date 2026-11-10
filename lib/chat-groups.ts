@@ -15,6 +15,11 @@ export function orderChatFamilies(
   ];
 }
 
+/** The pinned items first, each part in its given order (a project's pinned sessions, S2). */
+export function pinnedFirst<T>(items: readonly T[], isPinned: (item: T) => boolean): T[] {
+  return [...items.filter(isPinned), ...items.filter((item) => !isPinned(item))];
+}
+
 /** Toggle one id in an id set, returning a new set (React state friendly). */
 export function toggleId(ids: ReadonlySet<string>, id: string): Set<string> {
   const next = new Set(ids);

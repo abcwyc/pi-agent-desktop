@@ -112,6 +112,12 @@ try {
       } else {
         const list = host.locator('.config-sidebar-list'); const rows=list.locator('.config-sidebar-item');
         await rows.nth(2).waitFor();await rows.nth(1).click();
+        // A phone opens the row's detail as its own level (P1); Back returns to the list, selection kept.
+        if(width<=640){
+          await host.locator('.config-split-view[data-pane="detail"]').waitFor();
+          await page.locator('.settings-phone-back').click();
+          await host.locator('.config-split-view[data-pane="list"]').waitFor();
+        }
         await page.mouse.move(0,0);
         const selectedFill=await rows.nth(1).evaluate(el=>getComputedStyle(el).backgroundColor);
         await rows.nth(1).hover();
@@ -120,8 +126,10 @@ try {
         const geometry=await rows.evaluateAll(rows=>rows.map(el=>{const b=el.getBoundingClientRect(),p=el.closest('.config-sidebar-list').getBoundingClientRect(),s=getComputedStyle(el);return {
           x:b.x,y:b.y,bottom:b.bottom,leftInset:b.left-p.left,rightInset:p.right-b.right,fill:s.backgroundColor,
           adjacent:el.previousElementSibling?.matches('.config-sidebar-item'),
+          // Models' "+ Model" shares its row with the A–Z sort button (M5): the footer, not the item, reaches the trailing inset.
+          footerRightInset:el.closest('.models-sidebar-model-footer')?(p.right-el.closest('.models-sidebar-model-footer').getBoundingClientRect().right):null,
           selected:el.getAttribute('aria-current')==='page',hovered:el.matches(':hover'),pill:getComputedStyle(el,'::before').width};}));
-        for(const row of geometry){near(row.leftInset,8,section+' leading inset');near(row.rightInset,8,section+' trailing inset');}
+        for(const row of geometry){near(row.leftInset,8,section+' leading inset');near(row.footerRightInset??row.rightInset,8,section+' trailing inset');}
         for(let i=1;i<geometry.length;i++)if(geometry[i].adjacent)near(geometry[i].y-geometry[i-1].bottom,4,section+' adjacent rows');
         assert.ok(geometry[1].selected&&geometry[2].hovered);
         assert.ok(geometry.slice(1,3).every(row=>row.fill!=='rgba(0, 0, 0, 0)'));

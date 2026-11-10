@@ -192,11 +192,11 @@ test("the provider switch is locked when it would empty the scope or the file is
 test("the section is mounted for built-in and api-key providers", () => {
   assert.match(
     modelsConfigSource,
-    /provider\.loggedIn && <EnabledModelsSection providerId=\{provider\.id\} controller=\{enabledModels\} \/>/,
+    /provider\.loggedIn && <EnabledModelsSection providerId=\{provider\.id\} controller=\{enabledModels\} contextSettings=\{contextSettings\} \/>/,
   );
   assert.match(
     modelsConfigSource,
-    /provider\.configured && <EnabledModelsSection providerId=\{provider\.id\} controller=\{enabledModels\} \/>/,
+    /provider\.configured && <EnabledModelsSection providerId=\{provider\.id\} controller=\{enabledModels\} contextSettings=\{contextSettings\} \/>/,
   );
   assert.match(modelsConfigSource, /<EnabledModelsBanner controller=\{enabledModels\} \/>/);
   // A models.json provider gets the header switch instead of a section.
@@ -256,4 +256,13 @@ test("the saved-model slots mirror every move the draft makes", () => {
   assert.match(modelsConfigSource, /savedModelIdsRef\.current\.get\(providerName\)\?\.splice\(index, 1\)/);
   assert.match(modelsConfigSource, /savedModelIdsRef\.current\.delete\(name\)/);
   assert.match(modelsConfigSource, /slots: savedModelIdsRef\.current,/);
+});
+
+test("a built-in provider's model rows edit the context window in the Models draft (M2)", () => {
+  assert.match(source, /<ModelContextWindow\s+modelName=\{model\.name\}\s+effective=\{model\.contextWindow\}\s+value=\{contextOverride\(contextSettings, model\.id\)\}/);
+  assert.match(source, /\{contextSettings && <div id=\{contextNoteId\} className="enabled-models-note">\{t\("models\.contextOverrideHelp"\)\}<\/div>\}/);
+  assert.match(modelsConfigSource, /setConfig\(withContextWindowOverride\(config, providerId, modelId, value\)\)/);
+  // The override lives in models.json under the built-in id; it is not a second, custom provider.
+  assert.match(modelsConfigSource, /function isOverridesOnly\(entry: ProviderEntry\): boolean \{\s*return Object\.keys\(entry\)\.length === 1 && Object\.keys\(entry\.modelOverrides \?\? \{\}\)\.length > 0;/);
+  assert.match(modelsConfigSource, /if \(!isOverridesOnly\(entry\)\) return true;[\s\S]*?return authListed && !managed;/);
 });
