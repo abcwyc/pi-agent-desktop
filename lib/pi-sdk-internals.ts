@@ -47,7 +47,9 @@ const MEMBERS = {
   getMcpToolExposure: { module: "mcpServers", kind: "function" },
   signInMcpServer: { module: "mcpOAuth", kind: "function" },
   McpOAuthCredentialStore: { module: "mcpOAuth", kind: "class" },
-  McpSignInCancelledError: { module: "mcpOAuth", kind: "class" },
+  // pi 1.5.1 moved the class into pi-mcp; the SDK's runtime.js re-exports it
+  // and the SDK's own `instanceof` checks use that same re-export.
+  McpSignInCancelledError: { module: "mcpRuntime", kind: "class" },
   resolveConfigValueOrThrow: { module: "configValues", kind: "function" },
   resolveHeadersOrThrow: { module: "configValues", kind: "function" },
   getConfigValueEnvVarNames: { module: "configValues", kind: "function" },
@@ -193,7 +195,8 @@ export interface McpSignInPrompt {
 
 export interface McpSignInOptions {
   serverUrl: string;
-  store: McpOAuthStateStore;
+  /** Needs `withRefreshLock` too since pi 1.5.1: sign-in takes the per-server refresh lock. */
+  store: McpOAuthServerStore;
   settings: McpOAuthSettings;
   challenge?: McpOAuthChallenge;
   prompt: McpSignInPrompt;
