@@ -1,4 +1,5 @@
 import { configureHttpDispatcher, readHttpIdleTimeoutMs } from "@/lib/http-dispatcher";
+import { initializeNetworkProxy } from "@/lib/network-proxy";
 import { closeAllAgentEventStreams } from "@/lib/agent-event-stream";
 import { startScheduler } from "@/lib/scheduled-tasks";
 import { restartRelayFromConfig } from "@/lib/relay/runtime";
@@ -7,6 +8,14 @@ import { applyCodemodeWorkerDefault } from "@/lib/codemode-workers";
 export function registerNodeInstrumentation(): void {
   // Before any session can run a codemode script (lib/codemode-workers.ts).
   applyCodemodeWorkerDefault();
+
+  // The proxy from Settings › General goes into process.env before the
+  // dispatcher reads it; see lib/network-proxy.ts.
+  try {
+    initializeNetworkProxy();
+  } catch (error) {
+    console.error("[network-proxy] could not apply the saved proxy:", error instanceof Error ? error.message : error);
+  }
 
   // The pi CLI applies settings' `httpIdleTimeoutMs` to the same undici
   // body/header timeouts, so a Web UI session gets the timeout the user

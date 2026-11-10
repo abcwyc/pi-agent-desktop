@@ -10384,6 +10384,26 @@ html.dark .artifacts-thumb[data-tone="data"] { --tone: #4fc1d6; }
   white-space: nowrap;
 }
 
+/* Settings › General › Network proxy (components/NetworkProxySection.tsx):
+   the address rows reuse .remote-access-step. */
+.network-proxy-section .settings-option-list > .settings-option-hint,
+.network-proxy-section .settings-option-list > .settings-general-error {
+  margin: 0;
+  padding: 0 14px 10px;
+}
+
+.network-proxy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 14px 10px;
+}
+
+.network-proxy-test-ok {
+  color: var(--success, #16a34a);
+}
+
 /* Tasks page (components/tasks/TasksView.tsx): reuses the Scheduled page's
    shell and cards, grouped into Waiting / Running / Recent. */
 .tasks-section {

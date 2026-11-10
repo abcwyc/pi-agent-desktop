@@ -13,6 +13,16 @@ const { MarkdownBody } = await jiti.import("./MarkdownBody.tsx");
 const { normalizeDisplayMath, markdownPreviewRemarkPlugins, markdownPreviewRehypePlugins } = await jiti.import("../lib/markdown.ts");
 const { I18nProvider } = await jiti.import("@/hooks/useI18n");
 
+test("sandbox download anchors survive sanitization as local paths, never remote protocols", () => {
+  const html = renderMarkdown("[下载](sandbox:/home/me/project/report%20%E5%8C%97.csv)");
+  assert.match(html, /href="\/home\/me\/project\/report%20/);
+  for (const target of ["sandbox://evil.example/file.csv", "sandbox:relative.csv", "sandbox:/%2Fevil.example/file.csv", "sandbox:/\t/evil.example/file.csv", "sandbox:/%09/evil.example/file.csv", "javascript:alert(1)"]) {
+    const bad = renderMarkdown(`[bad](${target})`);
+    assert.doesNotMatch(bad, /href="(?:sandbox|javascript):/);
+    assert.doesNotMatch(bad, /href="[^\"]*evil\.example/);
+  }
+});
+
 function renderMarkdown(markdown, props = {}) {
   return renderToStaticMarkup(
     React.createElement(

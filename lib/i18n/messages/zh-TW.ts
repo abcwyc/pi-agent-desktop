@@ -749,6 +749,8 @@ export const zhTWLocale: LocalePlugin = {
     "chat.filesWritten": "已變更的檔案",
     "chat.openWrittenFile": "開啟 {name}",
     "chat.writtenFileMissing": "已不存在",
+    "sidebar.expandProjectsSection": "展開專案列表",
+    "sidebar.collapseProjectsSection": "摺疊專案列表",
     "chat.clearDraft": "清空文字和附件",
     "chat.editDraftNotEmpty": "已保留目前草稿。請先清空輸入框及附件（或等待上傳完成），再編輯歷史訊息。",
     "chat.findTitle": "搜尋目前對話",

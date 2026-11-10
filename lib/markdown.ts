@@ -1,5 +1,6 @@
 import type { Content, Link, Parent, Root } from "mdast";
 import type { Element as HastElement, Root as HastRoot, RootContent as HastContent } from "hast";
+import { normalizeSandboxFileHref } from "./file-links.ts";
 import { defaultUrlTransform, type Options as ReactMarkdownOptions } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
@@ -39,7 +40,9 @@ const markdownSanitizeSchema = {
   },
   protocols: {
     ...defaultSchema.protocols,
-    href: [...(defaultSchema.protocols?.href ?? []), "file", ...appLinkSchemes],
+    // `sandbox` is kept only until the final URL transform validates it; remote
+    // or malformed sandbox forms are converted to an empty href, not allowed.
+    href: [...(defaultSchema.protocols?.href ?? []), "file", "sandbox", ...appLinkSchemes],
   },
   strip: [...(defaultSchema.strip || []), "iframe", "object", "style", "form"],
 };
@@ -49,9 +52,13 @@ export function markdownAppUrlTransform(value: string): string {
   return appLinkPattern.test(value) ? value : defaultUrlTransform(value);
 }
 
-/** Also keeps `file:` links, for renderers that open local files in the app. */
+/**
+ * Also keeps `file:` links, for renderers that open local files in the app, and
+ * turns a provider's local `sandbox:/absolute/path` alias into that path.
+ */
 export function markdownUrlTransform(value: string): string {
-  return /^file:/i.test(value) ? value : markdownAppUrlTransform(value);
+  const localValue = normalizeSandboxFileHref(value);
+  return /^file:/i.test(localValue) ? localValue : markdownAppUrlTransform(localValue);
 }
 
 /** A link that leaves the page: it names a scheme or another host. */

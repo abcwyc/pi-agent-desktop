@@ -246,7 +246,7 @@ Files: `lib/markdown.ts` (`markdownClobberPrefix`, `rehypeMatchClobberedIds`, `j
 - Expanding a finished block still lays out all of it once, as before (about 500 ms for that text at 4x). `content-visibility: auto` on the pieces would skip the ones off screen (70 ms to the first frame), but its placeholder heights, about half the real ones in the bench, change the scroll height as pieces come into view; it is not used.
 
 ## Exported session HTML
-- `/api/sessions/[id]/export` delegates to pi's export helper and returns its HTML unchanged. pi 1.5.0's template walks the tree iteratively, so very deep linear sessions no longer overflow the browser call stack; pi-web's string patch for that was removed when it stopped matching.
+- `/api/sessions/[id]/export` delegates to pi's export helper and returns its HTML unmodified. Since pi 1.5.0 the template walks the session tree iteratively, so very deep linear sessions no longer overflow the browser call stack; do not bring back string patches on the generated HTML, they turn every export into a 500 when the template changes. `app/api/sessions/[id]/export/route.test.mjs` pins this.
 
 ## Submitted sessions in the sidebar
 The RPC wrapper advertises a pending prompt preview before MCP preparation or SDK
