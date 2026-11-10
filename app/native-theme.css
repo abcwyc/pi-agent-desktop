@@ -2777,10 +2777,11 @@ html:not(.dark) .session-item.is-selected .session-item-time {
 }
 
 /* The project menu's "Delete all sessions…" (S6) reads red like the session delete. */
-.sidebar-project-context-menu button.is-danger {
+/* Scoped past the shared .app-menu row rule, which sets every row's color. */
+.app-menu.sidebar-project-context-menu button.is-danger[role="menuitem"] {
   color: var(--danger);
 }
-.sidebar-project-context-menu button.is-danger:hover:not(:disabled),
+.app-menu.sidebar-project-context-menu button.is-danger[role="menuitem"]:hover:not(:disabled),
 .session-item-menu button.is-danger:hover:not(:disabled) {
   background: color-mix(in srgb, var(--danger) 9%, transparent) !important;
   color: var(--danger) !important;
@@ -4444,6 +4445,24 @@ html.dark {
 @media (prefers-reduced-motion: reduce) {
   .settings-dialog-backdrop,
   .settings-dialog-surface {
+    animation: none;
+  }
+}
+
+/* P1: a phone shows Settings full screen, one level at a time, as upstream's
+   settings.css does; the desktop card sizing and scrim above would otherwise
+   win, since this file loads last. */
+@media (max-width: 640px) {
+  .settings-dialog-backdrop {
+    background: var(--bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .settings-dialog-surface {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    box-shadow: none;
     animation: none;
   }
 }

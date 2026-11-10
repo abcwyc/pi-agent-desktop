@@ -51,6 +51,7 @@ import { isScheduledRunSession } from "@/hooks/useScheduledTasks";
 import { prefetchSessionData } from "@/lib/session-data-cache";
 import { isImeComposing } from "@/lib/ime";
 import { appNotify } from "@/lib/notification-store";
+import { shortenPath } from "@/lib/display-path";
 import { forkFailureMessage } from "@/lib/session-fork-client";
 import {
   archiveProjectRoot,
@@ -2295,7 +2296,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       {projectSessionsDelete && createPortal(
         <ChatConfirmDialog
           title={t("sidebar.deleteProjectSessionsHeading", { name: projectSessionsDelete.name })}
-          subject={projectSessionsDelete.root}
+          subject={shortenPath(projectSessionsDelete.root)}
           body={projectSessionsDelete.kept > 0
             ? `${t("sidebar.deleteProjectSessionsMessage")} ${t("sidebar.deleteProjectSessionsRunning", { count: projectSessionsDelete.kept })}`
             : t("sidebar.deleteProjectSessionsMessage")}

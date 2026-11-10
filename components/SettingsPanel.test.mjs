@@ -252,3 +252,7 @@ test("keeps password authentication to one login field and one settings action",
   assert.match(loginSource, /className="web-login-composer"[\s\S]*?type="password"[\s\S]*?<button type="submit"/);
   assert.match(globalCssSource, /\.web-login-composer \{[\s\S]*?display: flex;[\s\S]*?border-radius: 14px/);
 });
+
+test("a phone's Settings is full screen: the fork's card sizing stops at the phone breakpoint (P1)", () => {
+  assert.match(nativeThemeSource, /@media \(max-width: 640px\) \{\s*\.settings-dialog-backdrop \{\s*background: var\(--bg\);[\s\S]*?\.settings-dialog-surface \{\s*width: 100%;\s*height: 100%;\s*border-radius: 0;/);
+});
