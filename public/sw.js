@@ -4,7 +4,6 @@ const STATIC_CACHE = `${CACHE_PREFIX}-static-${CACHE_VERSION}`;
 const OFFLINE_URL = "/offline.html";
 const PRECACHE_URLS = [
   OFFLINE_URL,
-  "/manifest.webmanifest",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
   "/icons/apple-touch-icon.png",
@@ -49,6 +48,10 @@ self.addEventListener("fetch", (event) => {
   // Session data and live agent traffic must always come from the local server.
   if (url.pathname.startsWith("/api/") || url.pathname === "/sw.js") return;
 
+  // The manifest is runtime configuration. Bypass even entries left in an old
+  // cache, including requests with a query string or navigation mode.
+  if (url.pathname === "/manifest.webmanifest") return;
+
   if (request.mode === "navigate") {
     event.respondWith(
       fetchWithTimeout(request, NAVIGATION_TIMEOUT_MS).catch(async () => {
@@ -64,7 +67,7 @@ self.addEventListener("fetch", (event) => {
     PRECACHE_URLS.includes(url.pathname);
 
   if (isStaticAsset) {
-    event.respondWith(cacheFirst(request));
+    event.respondWith(cacheFirst(request, event));
   }
 });
 
@@ -84,14 +87,38 @@ self.addEventListener("push", (event) => {
   // subscription in the background-delivery case. Notifications sharing a tag
   // replace each other instead of stacking, so a visible window merely sees
   // the completion notification re-appear.
-  event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      data: { url: typeof url === "string" && url ? url : "/" },
-      ...(typeof tag === "string" && tag ? { tag, renotify: true } : {}),
-    }),
-  );
+  event.waitUntil(showPushNotification(title, body, url, tag));
 });
+
+// An open page announces a completion itself from its event stream, and the
+// push for the same completion lands a moment later. Both carry the session's
+// tag; with renotify the push replaced the page's notification and alerted a
+// second time (#1515). A same-tag notification shown this recently is that
+// completion's, so the push replaces it quietly. An older one belongs to an
+// earlier task and the push alerts again (#701).
+const RECENT_NOTIFICATION_MS = 10000;
+
+async function showPushNotification(title, body, url, tag) {
+  const shownAt = Date.now();
+  const data = { url: typeof url === "string" && url ? url : "/", shownAt };
+  if (typeof tag !== "string" || !tag) {
+    return self.registration.showNotification(title, { body, data });
+  }
+  const renotify = !(await hasRecentNotification(tag, shownAt));
+  return self.registration.showNotification(title, { body, data, tag, renotify });
+}
+
+async function hasRecentNotification(tag, now) {
+  try {
+    const notifications = await self.registration.getNotifications({ tag });
+    return notifications.some((notification) => {
+      const shownAt = notification.data?.shownAt;
+      return typeof shownAt === "number" && now - shownAt >= 0 && now - shownAt < RECENT_NOTIFICATION_MS;
+    });
+  } catch {
+    return false;
+  }
+}
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
@@ -151,14 +178,30 @@ async function fetchWithTimeout(request, timeoutMs) {
   }
 }
 
-async function cacheFirst(request) {
+async function cacheFirst(request, event) {
   const cached = await caches.match(request);
   if (cached) return cached;
 
   const response = await fetchWithTimeout(request, ASSET_TIMEOUT_MS);
   if (response.ok && response.type === "basic") {
-    const cache = await caches.open(STATIC_CACHE);
-    await cache.put(request, response.clone());
+    // Deliberately NOT awaited before returning the response.
+    //
+    // The SW script URL is versioned (?v=<app version>), so every upgrade
+    // starts a fresh cache: the first load after an upgrade misses on every
+    // chunk and writes them all at once. Awaiting each write here held every
+    // response behind Cache Storage I/O, which stalled navigations past
+    // NAVIGATION_TIMEOUT_MS — the browser showed the offline page while the
+    // local server was perfectly healthy. waitUntil keeps this worker alive
+    // until the write finishes without blocking the response.
+    const copy = response.clone();
+    event.waitUntil(
+      caches
+        .open(STATIC_CACHE)
+        .then((cache) => cache.put(request, copy))
+        .catch(() => {
+          // A failed write only costs one network re-fetch next time.
+        }),
+    );
   }
   return response;
 }

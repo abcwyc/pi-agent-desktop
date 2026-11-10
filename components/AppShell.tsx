@@ -16,6 +16,7 @@ import type { MenuAnchor } from "@/lib/menu-placement";
 import { useScheduledRunNotifications } from "@/hooks/useScheduledRunNotifications";
 import type { ChatScrollPosition } from "@/lib/chat-scroll-position";
 import { clearDraft } from "@/lib/draft-store";
+import { movePanelTab, orderPanelTabs } from "@/lib/panel-tab-order";
 import { TabBar, type Tab } from "./TabBar";
 import { LazyTerminalPanel as TerminalPanel, preloadTerminalPanel } from "./LazyTerminalPanel";
 
@@ -60,6 +61,7 @@ import { WindowControls, useDesktopChrome, useReportDesktopReady, useWindowDrag 
 import { SystemPromptPanel } from "./SystemPromptPanel";
 import { ToolDefinitionsPanel } from "./ToolDefinitionsPanel";
 import { AgentSessionPanel } from "./AgentSessionPanel";
+import { SessionChatPanel } from "./SessionChatPanel";
 import { newTerminalTab, restoreTerminalTabs, TERMINAL_TABS_KEY, type TerminalTab } from "./terminal-tab-state";
 import { artifactPanelTab, artifactTabId, artifactTabsForSession, upsertArtifactTab, type ArtifactTab } from "./artifact-tabs";
 import { ArtifactPanel } from "./ArtifactPanel";
@@ -103,10 +105,13 @@ import { cacheWarmingRows } from "@/lib/cache-warming-display";
 import type { McpErrorResponse, ProjectTrustStatus } from "@/lib/api-types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { FileExplorerHandle } from "./FileExplorer";
+import type { AgentEndInfo } from "@/hooks/useAgentSession";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import type { FileViewerState } from "@/lib/file-viewer-state";
 import type { ToolEntry } from "@/lib/tool-presets";
-import { getSessionFamily } from "@/lib/session-family";
+import { getSessionFamily, isHiddenRelation, sideChatTitle } from "@/lib/session-family";
+import { createSideChat, deleteSideChat } from "@/lib/side-chat-client";
+import { addSideTab, pruneSideTabs, readSideTabs, SIDE_TABS_KEY, writeSideTabs, type SideTab } from "@/lib/side-tabs";
 import { getLastSettingsSection, type SettingsSection } from "@/lib/settings-navigation";
 import { archivedProjectRootFor, restoreProjectRoot } from "@/lib/archived-projects";
 import { getProjectDisplayName } from "@/lib/project-display";
@@ -256,7 +261,6 @@ export function AppShell() {
     () => getSessionFamily(sessionsWithSelection, selectedSession?.id),
     [selectedSession?.id, sessionsWithSelection],
   );
-  const hasSubagentSessions = Boolean(activeSessionFamily?.subagents.length);
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
   const handleRunningSessionIdsChange = useCallback((ids: Set<string>) => {
     setRunningSessionIds((previous) => {
@@ -284,6 +288,8 @@ export function AppShell() {
   }, []);
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
+  // Shortcuts open their section; only the plain Settings button opens a phone's list of sections (P1).
+  const [settingsOpenAtHome, setSettingsOpenAtHome] = useState(false);
   useNativeContextMenu();
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [topMoreOpen, setTopMoreOpen] = useState(false);
@@ -540,11 +546,13 @@ export function AppShell() {
     }
   }, [sessionHasBranches]);
 
+  // The Agents panel stays open without members: its main row starts a side chat (C1).
+  const hasAgentsFamily = Boolean(activeSessionFamily);
   useEffect(() => {
-    if (!hasSubagentSessions) {
+    if (!hasAgentsFamily) {
       setActiveTopPanel((panel) => panel === "agents" ? null : panel);
     }
-  }, [hasSubagentSessions]);
+  }, [hasAgentsFamily]);
 
   useEffect(() => {
     if (rightPanelFullWidth) setActiveTopPanel(null);
@@ -730,13 +738,38 @@ export function AppShell() {
   const [artifactTabs, setArtifactTabs] = useState<ArtifactTab[]>([]);
   // artifactPanelTab reads each tab's newest title; this re-renders when one changes.
   useArtifactTitles(artifactTabs);
-  const panelTabs: Tab[] = useMemo(() => [...fileTabs, ...terminalTabs.map((tab) => ({
+  // A2: the order the user dragged the tabs into; tabs opened since go last.
+  const [panelTabOrder, setPanelTabOrder] = useState<string[]>([]);
+  // C1: side chats open as right-panel tabs, kept per main session in this
+  // browser tab (sessionStorage); only the shown family's tabs are listed.
+  const [sideTabs, setSideTabs] = useState<SideTab[]>([]);
+  const [sideTabsRestored, setSideTabsRestored] = useState(false);
+  // The first message a just-forked side chat's tab sends, once.
+  const [sideChatPrompts, setSideChatPrompts] = useState<Record<string, string>>({});
+  const familyRootId = activeSessionFamily?.root.id ?? null;
+  const familyMembers = activeSessionFamily?.subagents;
+  const visibleSideTabs = useMemo(
+    () => sideTabs.filter((tab) => tab.parentId === familyRootId),
+    [familyRootId, sideTabs],
+  );
+  const panelTabs: Tab[] = useMemo(() => orderPanelTabs([...fileTabs, ...terminalTabs.map((tab) => ({
     id: tab.id,
     label: getFileName(tab.cwd) || tab.cwd,
     filePath: tab.cwd,
     kind: "terminal" as const,
     closing: Boolean(tab.closing),
-  })), ...artifactTabs.map(artifactPanelTab)], [fileTabs, terminalTabs, artifactTabs]);
+  })), ...artifactTabs.map(artifactPanelTab), ...visibleSideTabs.map((tab) => {
+    const member = familyMembers?.find((session) => session.id === tab.sessionId);
+    const label = member ? sideChatTitle(member, translate("sideChat.title"), familyMembers ?? []) : translate("sideChat.title");
+    return { id: `agent:${tab.sessionId}`, label, filePath: label, kind: "side" as const };
+  })], panelTabOrder), [fileTabs, terminalTabs, artifactTabs, visibleSideTabs, familyMembers, translate, panelTabOrder]);
+  const activeSideTab = visibleSideTabs.find((tab) => `agent:${tab.sessionId}` === activeFileTabId) ?? null;
+  // A closed tab leaves the saved order, so reopening it appends it like any new tab.
+  const panelTabIds = panelTabs.map((tab) => tab.id).join("\n");
+  useEffect(() => {
+    const open = new Set(panelTabIds.split("\n"));
+    setPanelTabOrder((order) => order.every((id) => open.has(id)) ? order : order.filter((id) => open.has(id)));
+  }, [panelTabIds]);
   const activeArtifactTab = artifactTabs.find((tab) => tab.id === activeFileTabId) ?? null;
   const handleRightPanelToggle = useCallback(() => {
     if (isMobile) {
@@ -1271,6 +1304,8 @@ export function AppShell() {
   const openSettingsAtLastSection = useCallback(() => {
     setActiveTopPanel(null);
     setTopMoreOpen(false);
+    // P1: the plain Settings button opens a phone's Settings on its list of sections.
+    setSettingsOpenAtHome(true);
     // A project-only section without a project falls back to General (SettingsPanel re-checks).
     setSettingsSection(getLastSettingsSection(
       isChatWorkspaceActive ? null : selectedSession?.cwd ?? newSessionCwd ?? activeCwd,
@@ -1450,12 +1485,14 @@ export function AppShell() {
     }
   }, [handleSelectSession, locale]);
 
-  const handleAgentEnd = useCallback(() => {
+  const handleAgentEnd = useCallback((end?: AgentEndInfo) => {
     setRefreshKey((k) => k + 1);
     setExplorerRefreshKey((k) => k + 1);
     if (selectedSession) hydrateSelectedSession(selectedSession.id);
 
-    if (selectedSession?.relation?.kind === "subagent") return;
+    // A stopped run did not finish a task: refresh, but announce nothing.
+    if (end?.aborted) return;
+    if (isHiddenRelation(selectedSession?.relation)) return;
     if (!shouldShowBrowserNotification()) return;
     const targetSession = selectedSession;
     deliverSessionNotification({
@@ -1486,7 +1523,7 @@ export function AppShell() {
   });
 
   const handleAttentionNeeded = useCallback((request: BlockingExtensionUiRequest) => {
-    if (selectedSession?.relation?.kind === "subagent") return;
+    if (isHiddenRelation(selectedSession?.relation)) return;
     if (!shouldShowBrowserNotification()) return;
     if (!claimExtensionAttentionNotification(request, notifiedAttentionRequestIdsRef.current)) return;
 
@@ -1572,20 +1609,6 @@ export function AppShell() {
     hydrateSelectedSession(newSessionId);
     router.replace(`?session=${encodeURIComponent(newSessionId)}`, { scroll: false });
   }, [invalidateWorkspaceRestore, router, hydrateSelectedSession]);
-
-  const handleAskInNewChat = useCallback(async (
-    prompt: string,
-    sourceSessionId: string,
-    sourceEntryId: string,
-  ) => {
-    const result = await sendAgentCommand<{ newSessionId?: string }>(sourceSessionId, {
-      type: "fork_branch",
-      entryId: sourceEntryId,
-    });
-    if (!result?.newSessionId) throw new Error(translate("chat.quoteForkFailed"));
-    setPendingQuotePrompt({ sessionId: result.newSessionId, text: prompt });
-    handleSessionForked(result.newSessionId);
-  }, [handleSessionForked, translate]);
 
   // The Artifacts page's "continue in new chat": like the quote flow, a fork at
   // the artifact's entry that sends the prompt once it opens. The source may
@@ -1728,11 +1751,19 @@ export function AppShell() {
   };
 
   const handleCloseFileTab = useCallback((tabId: string) => {
+    if (tabId.startsWith("agent:")) {
+      const sessionId = tabId.slice("agent:".length);
+      const remaining = visibleSideTabs.filter((tab) => tab.sessionId !== sessionId);
+      setSideTabs((tabs) => tabs.filter((tab) => tab.sessionId !== sessionId));
+      setActiveFileTabId((cur) => cur !== tabId ? cur : fileTabs.at(-1)?.id ?? terminalTabs.at(-1)?.id ?? artifactTabs.at(-1)?.id ?? (remaining.at(-1) ? `agent:${remaining.at(-1)!.sessionId}` : null));
+      if (!remaining.length && !fileTabs.length && !terminalTabs.length && !artifactTabs.length) setRightPanelOpen(false);
+      return;
+    }
     if (artifactTabs.some((tab) => tab.id === tabId)) {
       const remaining = artifactTabs.filter((tab) => tab.id !== tabId);
       setArtifactTabs(remaining);
       setActiveFileTabId((cur) => cur !== tabId ? cur : remaining.at(-1)?.id ?? fileTabs.at(-1)?.id ?? terminalTabs.at(-1)?.id ?? null);
-      if (!remaining.length && !fileTabs.length && !terminalTabs.length) setRightPanelOpen(false);
+      if (!remaining.length && !fileTabs.length && !terminalTabs.length && !visibleSideTabs.length) setRightPanelOpen(false);
       return;
     }
     if (terminalTabs.some((tab) => tab.id === tabId)) {
@@ -1741,7 +1772,7 @@ export function AppShell() {
     }
     setFileTabs((prev) => {
       const next = prev.filter((t) => t.id !== tabId);
-      if (next.length === 0 && terminalTabs.length === 0 && artifactTabs.length === 0) setRightPanelOpen(false);
+      if (next.length === 0 && terminalTabs.length === 0 && artifactTabs.length === 0 && visibleSideTabs.length === 0) setRightPanelOpen(false);
       return next;
     });
     setActiveFileTabId((cur) => {
@@ -1749,7 +1780,95 @@ export function AppShell() {
       const remaining = fileTabs.filter((t) => t.id !== tabId);
       return remaining.at(-1)?.id ?? terminalTabs.at(-1)?.id ?? artifactTabs.at(-1)?.id ?? null;
     });
-  }, [fileTabs, terminalTabs, artifactTabs]);
+  }, [fileTabs, terminalTabs, artifactTabs, visibleSideTabs]);
+
+  // --- C1: side chats in right-panel tabs ---
+  // Restored once from this browser tab, then written back on every change.
+  useEffect(() => {
+    try {
+      setSideTabs(readSideTabs(window.sessionStorage.getItem(SIDE_TABS_KEY)));
+    } catch {
+      // Private mode or blocked storage: tabs live for this page only.
+    }
+    setSideTabsRestored(true);
+  }, []);
+  useEffect(() => {
+    if (!sideTabsRestored) return;
+    try {
+      const value = writeSideTabs(sideTabs);
+      if (value === null) window.sessionStorage.removeItem(SIDE_TABS_KEY);
+      else window.sessionStorage.setItem(SIDE_TABS_KEY, value);
+    } catch {
+      // Best-effort, as above.
+    }
+  }, [sideTabs, sideTabsRestored]);
+
+  // A deleted side chat's tab goes once the catalog no longer lists it; a
+  // just-forked one waits until the catalog has shown it.
+  const seenSideIdsRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (sessionCatalog.length === 0) return;
+    const ids = new Set(sessionCatalog.map((session) => session.id));
+    for (const tab of sideTabs) if (ids.has(tab.sessionId)) seenSideIdsRef.current.add(tab.sessionId);
+    setSideTabs((tabs) => pruneSideTabs(tabs, ids, seenSideIdsRef.current));
+  }, [sessionCatalog, sideTabs]);
+
+  // One session, one chat: the main chat showing a side chat closes its tab.
+  useEffect(() => {
+    if (!selectedSessionId || !sideTabs.some((tab) => tab.sessionId === selectedSessionId)) return;
+    setSideTabs((tabs) => tabs.filter((tab) => tab.sessionId !== selectedSessionId));
+  }, [selectedSessionId, sideTabs]);
+
+  // Another family's side tab is not listed: leave it for the latest other tab.
+  useEffect(() => {
+    if (!activeFileTabId?.startsWith("agent:") || activeSideTab) return;
+    setActiveFileTabId(panelTabsRef.current.fileTabs.at(-1)?.id ?? panelTabsRef.current.terminalTabs.at(-1)?.id ?? null);
+  }, [activeFileTabId, activeSideTab]);
+
+  const openSideTab = useCallback((sessionId: string, parentId: string) => {
+    setSideTabs((tabs) => addSideTab(tabs, { sessionId, parentId }));
+    setActiveFileTabId(`agent:${sessionId}`);
+    setRightPanelOpen(true);
+    if (isMobile) setSidebarOpen(false);
+  }, [isMobile]);
+
+  // `/side`, the composer's Side chat button, "Ask in side chat" and the Agents panel.
+  const handleSideSession = useCallback((session: SessionInfo, prompt: string | null) => {
+    const parentId = session.relation?.kind === "side" ? session.relation.parentSessionId : null;
+    if (!parentId) return;
+    if (prompt) setSideChatPrompts((prompts) => ({ ...prompts, [session.id]: prompt }));
+    // The sidebar reloads, so the family (and the Agents panel) lists it.
+    setRefreshKey((key) => key + 1);
+    // A fork that returns after the main chat moved on joins its parent's saved
+    // tabs instead of opening beside the session now shown.
+    if (parentId === familyRootId) openSideTab(session.id, parentId);
+    else setSideTabs((tabs) => addSideTab(tabs, { sessionId: session.id, parentId }));
+  }, [familyRootId, openSideTab]);
+
+  const handleToggleSideTab = useCallback((sessionId: string) => {
+    if (!familyRootId) return;
+    const tabId = `agent:${sessionId}`;
+    if (rightPanelOpen && activeFileTabId === tabId) handleCloseFileTab(tabId);
+    else openSideTab(sessionId, familyRootId);
+  }, [activeFileTabId, familyRootId, handleCloseFileTab, openSideTab, rightPanelOpen]);
+
+  const handleNewSideChat = useCallback(async (): Promise<string | null> => {
+    if (!familyRootId) return translate("sideChat.error.noSession");
+    const result = await createSideChat(familyRootId, translate);
+    if ("error" in result) return result.error;
+    handleSideSession(result.session, null);
+    return null;
+  }, [familyRootId, handleSideSession, translate]);
+
+  const handleDeleteSideChat = useCallback(async (sessionId: string): Promise<string | null> => {
+    const failure = await deleteSideChat(sessionId);
+    if (failure) return failure.error;
+    if (sideTabs.some((tab) => tab.sessionId === sessionId)) handleCloseFileTab(`agent:${sessionId}`);
+    setRefreshKey((key) => key + 1);
+    // The main chat showing it goes back to the parent, as the Main agent row does.
+    if (selectedSession?.id === sessionId && activeSessionFamily) handleSelectSession(activeSessionFamily.root);
+    return null;
+  }, [activeSessionFamily, handleCloseFileTab, handleSelectSession, selectedSession?.id, sideTabs]);
 
   const handleViewFullHistory = useCallback(() => {
     if (!selectedSession) return;
@@ -2624,6 +2743,10 @@ export function AppShell() {
                   selectedSessionId={selectedSession.id}
                   runningSessionIds={runningSessionIds}
                   onSelectSession={handleSelectSession}
+                  openSideTabIds={new Set(rightPanelOpen ? visibleSideTabs.map((tab) => tab.sessionId) : [])}
+                  onToggleSideTab={handleToggleSideTab}
+                  onNewSideChat={isChatWorkspaceActive ? undefined : handleNewSideChat}
+                  onDeleteSideChat={handleDeleteSideChat}
                 />
               )}
               {activeTopPanel === "system" && (
@@ -2896,7 +3019,7 @@ export function AppShell() {
               onOpenModelsConfig={() => setSettingsSection("models")}
               onOpenFile={handleOpenLinkedFile}
               onOpenSession={handleOpenSession}
-              onAskInNewChat={handleAskInNewChat}
+              onSideSession={isChatWorkspaceActive ? undefined : handleSideSession}
               quoteSelectionEnabled={quoteSelectionEnabled}
               initialPrompt={pendingQuotePrompt?.sessionId === selectedSession?.id ? pendingQuotePrompt?.text : undefined}
               onInitialPromptConsumed={() => setPendingQuotePrompt(null)}
@@ -3142,6 +3265,7 @@ export function AppShell() {
               onSelectTab={setActiveFileTabId}
               onCloseTab={handleCloseFileTab}
               onNewTerminal={visibleProjectCwd ? () => handleOpenTerminal(visibleProjectCwd) : undefined}
+              onReorderTab={(source, target, after) => setPanelTabOrder(movePanelTab(panelTabs.map((tab) => tab.id), source, target, after))}
             />
           </div>
           {workbenchCwd && (
@@ -3197,7 +3321,30 @@ export function AppShell() {
         {/* Only the active viewer is mounted. Lightweight per-tab state is restored on activation. */}
         <div ref={panelBodyRef} className="right-panel-body" style={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden", paddingBottom: "env(safe-area-inset-bottom)" }}>
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          {activeArtifactTab ? (
+          {activeSideTab ? (
+            <div className="session-chat-panel" key={activeSideTab.sessionId}>
+              <SessionChatPanel
+                sessionId={activeSideTab.sessionId}
+                running={runningSessionIds.has(activeSideTab.sessionId)}
+                modelsRefreshKey={modelsRefreshKey}
+                onAgentEnd={() => setRefreshKey((key) => key + 1)}
+                onOpenFile={handleOpenLinkedFile}
+                onOpenSession={handleOpenSession}
+                onSessionForked={handleSessionForked}
+                onOpenSettings={openSettingsSection}
+                quoteSelectionEnabled={quoteSelectionEnabled}
+                initialPrompt={sideChatPrompts[activeSideTab.sessionId]}
+                onInitialPromptConsumed={() => setSideChatPrompts((prompts) => {
+                  const next = { ...prompts };
+                  delete next[activeSideTab.sessionId];
+                  return next;
+                })}
+                soundEnabled={soundEnabled}
+                playDoneSound={playDoneSound}
+                unlockAudio={unlockAudio}
+              />
+            </div>
+          ) : activeArtifactTab ? (
             <ArtifactPanel
               key={activeArtifactTab.id}
               sessionId={activeArtifactTab.sessionId}
@@ -3347,12 +3494,14 @@ export function AppShell() {
         cwd={projectTrustCwd}
         sessionId={selectedSession?.id ?? null}
         initialSection={settingsSection}
+        openAtHome={settingsOpenAtHome}
         quoteSelectionEnabled={quoteSelectionEnabled}
         onQuoteSelectionChange={handleQuoteSelectionChange}
         soundEnabled={soundEnabled}
         onSoundToggle={onSoundToggle}
         onClose={() => {
           setSettingsSection(null);
+          setSettingsOpenAtHome(false);
           setModelsRefreshKey((key) => key + 1);
         }}
         onSessionReloaded={() => setSessionKey((key) => key + 1)}

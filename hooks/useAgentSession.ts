@@ -53,6 +53,7 @@ import {
 } from "@/lib/chat-lazy-load";
 import { findChatScrollAnchor, type ChatScrollPosition } from "@/lib/chat-scroll-position";
 import { useI18n } from "@/hooks/useI18n";
+import { createSideChat, SIDE_REFUSAL_MESSAGES } from "@/lib/side-chat-client";
 import { branchSummaryHolds, useBranchSummary } from "@/hooks/useBranchSummary";
 import { compactNoopMessage, useCompactNotice } from "@/hooks/useCompactNotice";
 import { useScopeWarningDismissal } from "@/hooks/useScopeWarningDismissal";
@@ -188,7 +189,12 @@ export interface SlashCommandInfo {
 
 export type BuiltinSlashCommandResult =
   | { handled: false }
-  | { handled: true; message?: string; error?: string; action?: "openSessionStats" | "openSettings" };
+  | { handled: true; message?: string; error?: string; action?: "openSessionStats" | "openSettings" | "openSideChat" };
+
+/** How a run ended, for completion feedback: `aborted` when it was stopped rather than finished. */
+export interface AgentEndInfo {
+  aborted: boolean;
+}
 
 export interface UseAgentSessionOptions {
   session: SessionInfo | null;
@@ -197,10 +203,14 @@ export interface UseAgentSessionOptions {
   newSessionDraftKey: string | null;
   /** Hidden model-only workspace: always no tools and no shell commands. */
   chatWorkspace?: boolean;
-  onAgentEnd?: () => void;
+  /** A run ended; `aborted` when it was stopped rather than finished (pi's `agent_settled.aborted`). */
+  onAgentEnd?: (end: AgentEndInfo) => void;
   onAttentionNeeded?: (request: BlockingExtensionUiRequest) => void;
   onSessionCreated?: (session: SessionInfo, sourceDraftKey: string) => void;
   onSessionForked?: (newSessionId: string) => void;
+  /** C1 (`/side`, ADR 0007): a side chat was forked from this session; open its tab.
+   *  `prompt` is the first message the tab sends, or null to start empty. */
+  onSideSession?: (session: SessionInfo, prompt: string | null) => void;
   modelsRefreshKey?: number;
   chatInputRef?: React.RefObject<ChatInputHandle | null>;
   onBranchDataChange?: (tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null, options?: LeafChangeOptions) => void, locked: boolean) => void;
@@ -331,7 +341,7 @@ export interface AttachedImage {
 }
 
 type SelectedModel = { provider: string; modelId: string };
-type ModelEntry = { id: string; name: string; provider: string };
+type ModelEntry = { id: string; name: string; provider: string; providerName?: string };
 type ModelsResponse = {
   models: Record<string, string>;
   modelList?: ModelEntry[];
@@ -351,7 +361,7 @@ type SlashCommandsResponse = {
 
 export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
-    session, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked,
+    session, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked, onSideSession,
     modelsRefreshKey, onBranchDataChange, onSystemPromptChange, onSystemToolsChange, onSystemInfoLoaderChange, onSessionStatsPanelOpen,
     onOpenSettings, chatWorkspace = false,
   } = opts;
@@ -1351,10 +1361,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     return wasRunning;
   }, []);
 
-  const notifyPromptStage = useCallback((runId: number) => {
+  const notifyPromptStage = useCallback((runId: number, aborted = false) => {
     if (notifiedPromptRunIdRef.current === runId) return false;
     notifiedPromptRunIdRef.current = runId;
-    onAgentEnd?.();
+    onAgentEnd?.({ aborted });
     return true;
   }, [onAgentEnd]);
 
@@ -1438,7 +1448,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (promptWasPending) {
         notifyPromptStage(runId);
       } else if (agentWasActive && wasRunning) {
-        onAgentEnd?.();
+        onAgentEnd?.({ aborted: false });
       }
       if (sid) scheduleEventStreamClose(sid);
     }
@@ -1656,7 +1666,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           void loadSession(sid);
           scheduleEventStreamClose(sid);
         }
-        if (wasRunning) onAgentEnd?.();
+        if (wasRunning) onAgentEnd?.({ aborted: event.aborted === true });
         break;
       }
       case "prompt_done":
@@ -1665,7 +1675,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           const promptWasPending = rpcPromptPendingRef.current;
           rpcPromptPendingRef.current = false;
           optimisticUserMessageKeyRef.current = null;
-          const firstNotification = notifyPromptStage(runId);
+          const firstNotification = notifyPromptStage(runId, event.aborted === true);
           if (!promptWasPending && !firstNotification) break;
 
           const sid = sessionIdRef.current;
@@ -2169,13 +2179,28 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     modelSwitchPendingRef.current = true;
     setCurrentModelOverride(target);
     setModelSwitching(true);
+    // C2 (upstream #1527): a switch during a run applies from the run's next
+    // model request, as the reasoning level does. Reading the file then would
+    // swap the run's messages under the stream, so take the model and level
+    // from the live state; the run's end reads the file.
+    const midRun = agentRunningRef.current || bashRunningRef.current;
+    const syncLiveState = async () => {
+      const res = await fetch(`/api/agent/${encodeURIComponent(sid)}`).catch(() => null);
+      const d = res?.ok ? await res.json().catch(() => null) as { state?: AgentStateResponse } | null : null;
+      if (d?.state && sessionHookMountedRef.current && sessionIdRef.current === sid) syncLiveModel(d.state);
+    };
     try {
       const selected = await sendAgentCommand<{ provider: string; id: string }>(sid, { type: "set_model", provider, modelId });
       setLiveModel({ provider: selected.provider, modelId: selected.id });
-      // Pi persists model_change synchronously. Reload the canonical session so
-      // the model, thinking level, and active leaf all advance together.
       modelSwitchPendingRef.current = false;
-      await loadSession(sid);
+      if (midRun) {
+        setCurrentModelOverride(null);
+        await syncLiveState();
+      } else {
+        // Pi persists model_change synchronously. Reload the canonical session so
+        // the model, thinking level, and active leaf all advance together.
+        await loadSession(sid);
+      }
     } catch (e) {
       console.error("Failed to set model:", e);
       modelSwitchPendingRef.current = false;
@@ -2185,13 +2210,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         message: `Failed to switch model: ${e instanceof Error ? e.message : String(e)}`,
       });
       // A failed response can still follow a server-side write (for example, a
-      // dropped connection), so let the session file settle the displayed model.
-      await loadSession(sid, false, true);
+      // dropped connection), so let the server settle the displayed model.
+      if (midRun) await syncLiveState();
+      else await loadSession(sid, false, true);
     } finally {
       modelSwitchPendingRef.current = false;
       setModelSwitching(false);
     }
-  }, [addNotice, currentModelOverride, isNew, loadSession, setNewSessionModel]);
+  }, [addNotice, currentModelOverride, isNew, loadSession, setNewSessionModel, syncLiveModel]);
 
   const handleCompact = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -2313,6 +2339,25 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     reloadModelsQuietly();
   }, [addNotice, displayModel, handleModelChange, reloadModelsQuietly, saveDefaultPreferences]);
 
+  /**
+   * Fork this session into a side chat and open its tab: `/side`, the Agents
+   * switcher and the selected-text popover (C1). `prompt` is its first message,
+   * `name` what to call it instead of that message's first line. Answers the
+   * refusal to show, or null.
+   */
+  const startSideChat = useCallback(async (prompt: string | null, name?: string): Promise<string | null> => {
+    // The route refuses these too; a tab has nowhere to open another tab from.
+    const relationKind = opts.session?.relation?.kind;
+    if (relationKind === "side" || relationKind === "subagent") return t(SIDE_REFUSAL_MESSAGES[relationKind]);
+    // No ensureNewSession(): forking a session that does not exist yet has nothing to inherit.
+    const sourceId = sessionIdRef.current;
+    if (!sourceId) return t("sideChat.error.noSession");
+    const result = await createSideChat(sourceId, t, name);
+    if ("error" in result) return result.error;
+    onSideSession?.(result.session, prompt);
+    return null;
+  }, [onSideSession, opts.session?.relation?.kind, t]);
+
   const handleBuiltinSlashCommand = useCallback(async (text: string): Promise<BuiltinSlashCommandResult> => {
     if (!text.startsWith("/")) return { handled: false };
     const match = text.match(/^\/([^\s]+)(?:\s+([\s\S]*))?$/);
@@ -2320,6 +2365,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
     const [, commandName, rawArgs = ""] = match;
     const args = rawArgs.trim();
+    if (commandName === "side") {
+      // Before ensureNewSession(): a fresh composer has nothing to fork.
+      const error = await startSideChat(args || null);
+      if (error) addNotice({ type: "error", message: error });
+      return error ? { handled: true, error } : { handled: true, action: "openSideChat" };
+    }
     const sid = sessionIdRef.current ?? await ensureNewSession();
     const complete = (result: BuiltinSlashCommandResult): BuiltinSlashCommandResult => {
       if (!result.handled) return result;
@@ -2461,7 +2512,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       if (commandName === "compact") setIsCompacting(false);
     }
-  }, [activeLeafId, addNotice, reportCompactFailure, ensureNewSession, isCompacting, loadModels, loadSession, loadSlashCommands, loadTools, promoteNewSession, onOpenSettings, onSessionForked, onSessionStatsPanelOpen, slashCommandsForMcp, setAutomation, setCompactNotice]);
+  }, [activeLeafId, addNotice, reportCompactFailure, ensureNewSession, startSideChat, isCompacting, loadModels, loadSession, loadSlashCommands, loadTools, promoteNewSession, onOpenSettings, onSessionForked, onSessionStatsPanelOpen, slashCommandsForMcp, setAutomation, setCompactNotice]);
 
   // Let AgentSession.prompt decide atomically whether to queue against the
   // current run or start a new turn if it settled while the request was in
@@ -3080,7 +3131,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     lastUserMsgRef, pendingScrollToUserRef, initialScrollDoneRef,
     // Actions
     branchSummaryPending, handleAbortBranchSummary, routedModel,
-    handleSend, handleAbort, handleAbortRetry, handleFork, handleNavigate, handleModelChange,
+    handleSend, handleAbort, handleAbortRetry, startSideChat, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction, handleQueuedMessageAction,
     handleRecallQueue,
     handleBuiltinSlashCommand,

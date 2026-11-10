@@ -5,13 +5,48 @@ import { toSlashPath } from "./paths";
 
 export const MAX_SUBAGENT_INPUT_FILES = 8;
 export const MAX_SUBAGENT_INPUT_BYTES = 512 * 1024;
+/** pi's own estimate (`estimateTokens()` in its compaction module): about four characters a token. */
+const CHARS_PER_TOKEN = 4;
+/** The inlined copy may take about a tenth of the child's context window. */
+const CONTEXT_WINDOW_SHARE = 10;
 
 export interface SubagentInputFile {
   path: string;
   content: string;
 }
 
-export function loadSubagentInputFiles(cwd: string, requestedPaths: readonly string[]): SubagentInputFile[] {
+export interface SubagentInputLimits {
+  /** Total bytes the files may hold; `MAX_SUBAGENT_INPUT_BYTES` when absent. */
+  maxBytes?: number;
+  /** The child's model, named in the refusal when its context window set `maxBytes`. */
+  model?: string;
+}
+
+/**
+ * The files arrive inside the child's first user message, so a copy at the flat limit (about 131k
+ * tokens by pi's chars/4) could fill most of a child's window and make it compact before its first
+ * tool call (#1199). The limit counts bytes: chars/4 for ASCII, fewer characters for multi-byte
+ * text. A model whose window is unknown (0) keeps the flat limit.
+ */
+export function subagentInputLimits(
+  model: { provider: string; id: string; contextWindow?: number } | undefined,
+): SubagentInputLimits {
+  const contextWindow = model?.contextWindow;
+  if (!model || !contextWindow || contextWindow < 0) return {};
+  const maxBytes = Math.floor((contextWindow * CHARS_PER_TOKEN) / CONTEXT_WINDOW_SHARE);
+  return maxBytes < MAX_SUBAGENT_INPUT_BYTES ? { maxBytes, model: `${model.provider}/${model.id}` } : {};
+}
+
+function formatInputLimit(bytes: number): string {
+  return bytes < 1024 ? `${bytes}-byte` : `${Math.floor(bytes / 1024)} KB`;
+}
+
+export function loadSubagentInputFiles(
+  cwd: string,
+  requestedPaths: readonly string[],
+  limits: SubagentInputLimits = {},
+): SubagentInputFile[] {
+  const maxBytes = limits.maxBytes ?? MAX_SUBAGENT_INPUT_BYTES;
   if (requestedPaths.length > MAX_SUBAGENT_INPUT_FILES) {
     throw new Error(`Agent input_files accepts at most ${MAX_SUBAGENT_INPUT_FILES} files`);
   }
@@ -43,8 +78,12 @@ export function loadSubagentInputFiles(cwd: string, requestedPaths: readonly str
 
     const buffer = readFileSync(filePath);
     totalBytes += buffer.byteLength;
-    if (totalBytes > MAX_SUBAGENT_INPUT_BYTES) {
-      throw new Error(`Agent input_files exceeds the ${MAX_SUBAGENT_INPUT_BYTES}-byte total limit`);
+    if (totalBytes > maxBytes) {
+      const scope = limits.model ? ` for ${limits.model}, about a tenth of its context window` : "";
+      throw new Error(
+        `Agent input_files exceeds the ${formatInputLimit(maxBytes)} total limit${scope}. `
+        + "Pass fewer or smaller files, or name the paths in prompt if the subagent can read them.",
+      );
     }
 
     let content: string;

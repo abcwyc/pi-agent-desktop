@@ -152,6 +152,11 @@ export function createProjectCommandBashExtension(options: {
       const displayDefinition = createBashToolDefinition(options.cwd);
       pi.registerTool({
         ...displayDefinition,
+        // This stands in for pi's built-in bash, so like it, it is active only when named:
+        // by `defaultTools` (pi's default list names it), a preset or `set_tools`. Otherwise
+        // pi turns it on at every start and reload, as it does any extension tool, whatever
+        // `defaultTools` leaves out (#1235).
+        defaultActive: false,
         execute(toolCallId, params, signal, onUpdate, context) {
           const executionDefinition = createBashToolDefinition(options.cwd, {
             commandPrefix: options.settings.getShellCommandPrefix(),

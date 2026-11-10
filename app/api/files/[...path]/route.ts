@@ -21,12 +21,13 @@ import {
 } from "@/lib/file-types";
 import { isCredentialPath } from "@/lib/credential-paths";
 import { resolveDirentIsDirectory } from "@/lib/file-dirent";
-import { getFileTreeVisibility } from "@/lib/file-tree-visibility";
+import { getFileTreeHiddenReasons } from "@/lib/file-tree-visibility";
 import { isFilePathReferencedBySession } from "@/lib/session-file-references";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 import {
   inspectUploadTargets,
   parseUploadConflictStrategy,
+  replaceUploadFile,
   validateUploadFileNames,
 } from "@/lib/file-upload";
 import {
@@ -37,6 +38,8 @@ import {
 import { isDesktopApiRequestAllowed } from "@/lib/desktop-api-auth";
 import { filePathFromApiSegments, isWindowsAbsolutePath, samePath } from "@/lib/paths";
 import { hasParentDirectorySegment } from "@/lib/path-security";
+import { registerFileWatch } from "@/lib/file-watch-registry";
+import { pageStreamLabel, registerPageStream } from "@/lib/page-stream-registry";
 
 const IGNORED_NAMES = new Set([
   "node_modules", ".git", ".next", "dist", "build", "__pycache__",
@@ -95,17 +98,28 @@ const SERVE_EXT_TO_MIME: Record<string, string> = {
   wasm: "application/wasm",
 };
 
+// The source view highlights every language here but text, pdf and word with
+// the Prism grammar of that name (refractor/all); a name it lacks renders
+// plain. "html" and "markdown" also turn on FileViewer's Preview, so templates
+// that are not pages take "markup". `.m` stays plain: Objective-C and MATLAB
+// both use it.
 const EXT_TO_LANGUAGE: Record<string, string> = {
-  ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
-  mjs: "javascript", cjs: "javascript", py: "python", rb: "ruby",
-  go: "go", rs: "rust", java: "java", kt: "kotlin", swift: "swift",
-  c: "c", cpp: "cpp", h: "c", hpp: "cpp", cs: "csharp",
-  html: "html", htm: "html", css: "css", scss: "css", less: "css",
+  ts: "typescript", tsx: "tsx", mts: "typescript", cts: "typescript",
+  js: "javascript", jsx: "jsx", mjs: "javascript", cjs: "javascript",
+  py: "python", rb: "ruby", php: "php", lua: "lua", pl: "perl", r: "r",
+  go: "go", rs: "rust", java: "java", kt: "kotlin", kts: "kotlin", swift: "swift",
+  scala: "scala", groovy: "groovy", gradle: "groovy", dart: "dart", zig: "zig",
+  c: "c", cpp: "cpp", h: "c", hpp: "cpp", cs: "csharp", mm: "objectivec",
+  ex: "elixir", exs: "elixir", hs: "haskell", ml: "ocaml", clj: "clojure", nix: "nix",
+  html: "html", htm: "html", vue: "markup", svelte: "markup", astro: "markup",
+  css: "css", scss: "scss", less: "less",
   json: "json", jsonl: "json", yaml: "yaml", yml: "yaml",
-  toml: "toml", xml: "xml", md: "markdown", mdx: "markdown",
+  toml: "toml", ini: "ini", cfg: "ini", properties: "properties",
+  xml: "xml", md: "markdown", mdx: "markdown", tex: "latex",
   sh: "bash", bash: "bash", zsh: "bash", fish: "bash",
-  sql: "sql", graphql: "graphql", gql: "graphql",
-  dockerfile: "dockerfile", tf: "hcl", hcl: "hcl",
+  ps1: "powershell", psm1: "powershell", bat: "batch", cmd: "batch",
+  sql: "sql", graphql: "graphql", gql: "graphql", proto: "protobuf",
+  dockerfile: "dockerfile", tf: "hcl", hcl: "hcl", diff: "diff", patch: "diff",
   env: "bash", gitignore: "bash", txt: "text",
   pdf: "pdf", docx: "word",
 };
@@ -391,17 +405,12 @@ export async function POST(
         continue;
       }
 
-      if (conflictSet.has(file.name)) {
-        try {
-          fs.unlinkSync(destination);
-        } catch (error) {
-          errors.push({ name: file.name, error: error instanceof Error ? error.message : String(error) });
-          continue;
-        }
-      }
-
       try {
-        fs.writeFileSync(destination, bytes, { flag: "wx" });
+        if (conflictSet.has(file.name)) {
+          replaceUploadFile(destination, bytes);
+        } else {
+          fs.writeFileSync(destination, bytes, { flag: "wx" });
+        }
         uploaded.push(file.name);
       } catch (error) {
         errors.push({ name: file.name, error: error instanceof Error ? error.message : String(error) });
@@ -702,7 +711,7 @@ export async function GET(
       }
       const chunk = readTextPreviewChunk(filePath, stat.size, offset);
       const language = getLanguage(filePath);
-      return NextResponse.json({ ...chunk, language, size: stat.size });
+      return NextResponse.json({ ...chunk, language, size: stat.size, mtime: stat.mtime.toISOString() });
     }
 
     if (type === "download") {
@@ -733,6 +742,8 @@ export async function GET(
       const documentMime = getDocumentMime(filePath);
       return NextResponse.json({
         size: stat.size,
+        // The watch's `change` events carry the same pair (lib/file-version.ts).
+        mtime: stat.mtime.toISOString(),
         language: getLanguage(filePath),
         mime: imageMime || audioMime || videoMime || documentMime || "text/plain",
         previewKind: documentPreviewKind(filePath),
@@ -775,6 +786,8 @@ export async function GET(
         return NextResponse.json({ error: "Not a file" }, { status: 400 });
       }
       let watcher: fs.FSWatcher | null = null;
+      // The debug panel's count of open watches; released when the watcher fails or the client cancels.
+      let releaseWatch: (() => void) | null = null;
       let lastMtimeMs = stat?.mtimeMs ?? 0;
       let lastCtimeMs = stat?.ctimeMs ?? 0;
       let lastIno = stat?.ino ?? 0;
@@ -823,8 +836,29 @@ export async function GET(
             watcher.on("error", () => {
               try { watcher?.close(); } catch { /* ignore */ }
               watcher = null;
+              releaseWatch?.();
               try { controller.close(); } catch { /* ignore */ }
             });
+            // Counted, and listed under the page that opened it (`?holder=`).
+            const releaseCount = registerFileWatch();
+            const releasePage = registerPageStream(pageStreamLabel("file-watch", request));
+            releaseWatch = () => {
+              releaseCount();
+              releasePage();
+            };
+            // A client gone without a cancel (a phone off the network) would keep
+            // the watcher, and its place in the debug panel's count, forever.
+            const onAbort = () => {
+              try { watcher?.close(); } catch { /* ignore */ }
+              watcher = null;
+              releaseWatch?.();
+              try { controller.close(); } catch { /* ignore */ }
+            };
+            if (request.signal.aborted) {
+              onAbort();
+              return;
+            }
+            request.signal.addEventListener("abort", onAbort, { once: true });
             // The client snapshots only after this event, so emit it after the
             // watcher exists to avoid dropping changes between those steps.
             send("connected", { filePath });
@@ -835,6 +869,7 @@ export async function GET(
         },
         cancel() {
           try { watcher?.close(); } catch { /* ignore */ }
+          releaseWatch?.();
         },
       });
       return new Response(stream, {
@@ -934,17 +969,22 @@ export async function GET(
       return NextResponse.json({ error: "Not a directory" }, { status: 400 });
     }
 
+    // `hidden=1` (the explorer's "show hidden" switch) also lists what Git
+    // ignores and what the name list hides, marked with the reason; `.git`
+    // and `.DS_Store` stay out either way.
+    const showHidden = request.nextUrl.searchParams.get("hidden") === "1";
     // Avoid per-entry stat calls for normal files and directories. Symlinks and
     // filesystems without directory type information use the stat fallback.
     const dirents = fs.readdirSync(filePath, { withFileTypes: true });
-    const isVisible = await getFileTreeVisibility(filePath, dirents.map((d) => d.name));
+    const hiddenReason = await getFileTreeHiddenReasons(filePath, dirents.map((d) => d.name));
     const entries = dirents
-      .filter((d) => isVisible(d.name))
       .flatMap((d) => {
+        const hidden = hiddenReason(d.name);
+        if (hidden === "always" || (hidden && !showHidden)) return [];
         const isDir = resolveDirentIsDirectory(d, path.join(filePath, d.name));
-        return isDir === null
-          ? []
-          : [{ name: d.name, isDir, size: 0, modified: "" }];
+        if (isDir === null) return [];
+        const entry = { name: d.name, isDir, size: 0, modified: "" };
+        return [hidden ? { ...entry, hidden } : entry];
       })
       .sort((a, b) => {
         // Dirs first, then files, both alphabetically

@@ -354,3 +354,59 @@ test("an entry that is not an object is refused for what it is, not as missing, 
   assert.equal(removed.status, 200);
   assert.equal(server(removed.body, "global", "junk"), undefined);
 });
+
+test("a global server is turned off and on in the project alone, through an override pi reads", async () => {
+  // Only where a decision trusts the project, as for any project write.
+  let { status, body } = await post({ action: "set-in-project", name: "lint", enabled: false, cwd });
+  assert.equal(status, 403);
+  assert.equal(body.reason, "project-untrusted");
+  store.set(cwd, true);
+
+  ({ status, body } = await post({ action: "set-in-project", name: "lint", enabled: false, cwd }));
+  assert.equal(status, 200);
+  assert.deepEqual((await readJson(projectPath)).mcpServers.lint, { enabled: false });
+  assert.equal(await readFile(globalPath, "utf8"), globalText, "the global file is left alone");
+  const override = server(body, "project", "lint");
+  assert.deepEqual(override.override, { keys: ["enabled"] });
+  assert.equal(override.enabled, false);
+  assert.equal(override.command, "npx", "the row describes the global server it changes");
+  assert.equal(server(body, "global", "lint").overriddenByProject, true);
+
+  // On again keeps `enabled: true` written: it replaces the global value.
+  ({ status, body } = await post({ action: "set-in-project", name: "lint", enabled: true, cwd }));
+  assert.equal(status, 200);
+  assert.deepEqual((await readJson(projectPath)).mcpServers.lint, { enabled: true });
+  // The override's own switch and exposure keep the defaults written too.
+  ({ status, body } = await post({ action: "disable", scope: "project", name: "lint", cwd }));
+  ({ status, body } = await post({ action: "enable", scope: "project", name: "lint", cwd }));
+  ({ status, body } = await post({ action: "set-exposure", scope: "project", name: "lint", exposure: "codemode", cwd }));
+  assert.equal(status, 200);
+  assert.deepEqual((await readJson(projectPath)).mcpServers.lint, { enabled: true, exposure: "codemode" });
+
+  // Remove drops the override, and the global entry applies again.
+  ({ status, body } = await post({ action: "remove", scope: "project", name: "lint", cwd }));
+  assert.equal(status, 200);
+  assert.equal(server(body, "project", "lint"), undefined);
+  assert.equal(server(body, "global", "lint").overriddenByProject, undefined);
+
+  // The project's own server of the name is not turned into an override.
+  ({ status, body } = await post({ action: "set-in-project", name: "repo", enabled: false, cwd }));
+  assert.equal(status, 409);
+  assert.equal(body.reason, "server-missing", "repo is no global server");
+  await writeFile(globalPath, JSON.stringify({ mcpServers: { ...JSON.parse(globalText).mcpServers, repo: { command: "g" } } }));
+  ({ status, body } = await post({ action: "set-in-project", name: "repo", enabled: false, cwd }));
+  assert.equal(status, 409);
+  assert.equal(body.reason, "name-taken");
+  assert.deepEqual((await readJson(projectPath)).mcpServers.repo, { command: "node", args: ["server.js"] });
+
+  // A server that references PI_WEB_PASSWORD is never turned on, here either; off works.
+  ({ status, body } = await post({ action: "set-in-project", name: "pw", enabled: true, cwd }));
+  assert.equal(status, 409);
+  assert.equal(body.reason, "web-password");
+  ({ status } = await post({ action: "set-in-project", name: "pw", enabled: false, cwd }));
+  assert.equal(status, 200);
+
+  // It names a global server and a switch position, and needs the project.
+  assert.equal((await post({ action: "set-in-project", name: "lint", cwd })).status, 400);
+  assert.equal((await post({ action: "set-in-project", name: "lint", enabled: false })).status, 400);
+});

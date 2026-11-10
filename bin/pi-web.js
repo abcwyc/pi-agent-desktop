@@ -25,6 +25,8 @@ const { wireChildProcessLifecycle } = require("./process-lifecycle");
 const { checkNetworkExposure } = require("./network-exposure-warning");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { attachReadyHandoff, shouldOpenBrowser } = require("../lib/browser-open");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { rotatePreviewSecrets, getRotationWarning } = require("./rotate-preview-secrets");
 
 let launchOptions;
 try {
@@ -70,6 +72,14 @@ try {
 if (!fs.existsSync(nextDir)) {
   console.error("Build artifacts not found. Please report this issue.");
   process.exit(1);
+}
+
+// Replace the published preview-mode secrets with fresh random values so the
+// previewModeId baked into the npm tarball cannot be used to skip the proxy
+// (via the x-prerender-revalidate header). Must happen before `next start`.
+const rotation = rotatePreviewSecrets(nextDir);
+if (!rotation.ok) {
+  console.warn(getRotationWarning(rotation.reason));
 }
 
 const nextArgs = ["start", "-p", port];

@@ -164,9 +164,13 @@ try{
    await rows.nth(1).hover();
    await tabs.screenshot({path:`test-results/ui-send/settings-choice-geometry-${theme}-${width}.png`});
   }else{
-   await page.locator('.settings-mobile-section-picker').click();
-   await assertChoiceGeometry(page.getByRole('listbox'),page.getByRole('listbox').locator('.app-select-option'),'mobile Settings categories');
-   await page.keyboard.press('Escape');
+   // A phone shows Settings full screen, one level at a time (P1): this fixture opens on a
+   // section, whose Back leads to the list of sections; a row drills in again and Back returns.
+   const home=page.locator('.settings-phone-home');
+   await page.locator('.settings-phone-back').click();await home.waitFor();
+   const box=await surface.boundingBox();assert.ok(box&&box.x===0&&Math.round(box.width)===width,'phone Settings is full screen');
+   await home.locator('.settings-phone-home-item').first().click();
+   await page.locator('.settings-phone-back').click();await home.waitFor();
   }
   await surface.locator('.settings-dialog-close').click();await surface.waitFor({state:'hidden'});
   assert.deepEqual(errors,[]);results.push({theme,width,options:5,mcpOptions:labels.length,geometry,colors,ratios,toolGaps,states});await page.close();

@@ -1,4 +1,4 @@
-import type { McpConfigFieldRef, McpConfigFileProblem, McpServerInfo, McpVariableReference } from "./api-types";
+import type { McpConfigFieldRef, McpConfigFileProblem, McpOverrideKey, McpServerInfo, McpVariableReference } from "./api-types";
 
 // Display helpers for MCP server descriptions (`McpServerInfo`), shared by the
 // trust dialog and Settings › MCP. Client-safe: types only, no Node imports.
@@ -100,6 +100,13 @@ export function mcpFieldLabel(field: McpConfigFieldRef): { key: string; params?:
  */
 export function mcpVariableReferencesKey(server: Pick<McpServerInfo, "transport">): string {
   return server.transport === "http" ? "mcp.server.sendsVariables" : "mcp.server.passesVariables";
+}
+
+/** What a project override changes of the global server of its name (`McpServerInfo.override`), as a message key. */
+export function mcpOverrideNotice(keys: readonly McpOverrideKey[]): { key: string; params?: Record<string, string> } {
+  return keys.length > 0
+    ? { key: "mcp.server.overridesGlobal", params: { keys: keys.join(", ") } }
+    : { key: "mcp.server.overridesGlobalNothing" };
 }
 
 /** One chip per variable: the variable, and the field that reads it. */

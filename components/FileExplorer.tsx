@@ -13,10 +13,17 @@ import {
 } from "@/lib/file-paths";
 import type { GitFileStatus, GitFileStatusKind, GitStatusResponse } from "@/lib/git-types";
 import type { FileIndexEntry } from "@/lib/file-fuzzy";
+import { uploadFiles, type DroppedItem, type UploadConflictStrategy, type UploadError, type UploadResponse } from "@/lib/file-upload-client";
+import { droppedItems } from "@/hooks/useDragDrop";
 import { buildSearchTree, type SearchTreeNode } from "@/lib/search-tree";
+import type { FileTreeHiddenReason } from "@/lib/file-tree-visibility";
 import { useI18n } from "@/hooks/useI18n";
+import { APP_PREF_KEYS, getPref, setPref } from "@/lib/app-prefs";
 import { isImeComposing } from "@/lib/ime";
 type Translate = ReturnType<typeof useI18n>["t"];
+
+/** Why a listed entry is normally left out; only listings with `hidden=1` report it. */
+type HiddenReason = Exclude<FileTreeHiddenReason, "always">;
 
 interface FileEntry {
   name: string;
@@ -27,6 +34,7 @@ interface FileEntry {
   outsideLinkTarget?: string;
   /** That target contains the project or the home folder. */
   outsideLinkEncloses?: boolean;
+  hidden?: HiddenReason;
 }
 
 interface FileNode {
@@ -38,6 +46,7 @@ interface FileNode {
   loaded?: boolean;
   outsideLinkTarget?: string;
   outsideLinkEncloses?: boolean;
+  hidden?: HiddenReason;
 }
 
 interface Props {
@@ -51,6 +60,8 @@ interface Props {
   onChangesCountChange?: (count: number) => void;
   fileSearchOpen?: boolean;
   onFileSearchOpenChange?: (open: boolean) => void;
+  /** Also list what Git ignores, dimmed (the explorer bar's switch). */
+  showHidden?: boolean;
 }
 
 export interface FileExplorerHandle {
@@ -58,29 +69,17 @@ export interface FileExplorerHandle {
 }
 
 type UploadPhase = "idle" | "checking" | "uploading";
-type UploadConflictStrategy = "error" | "overwrite" | "skip";
-
-interface UploadError {
-  name: string;
-  error: string;
-}
-
-interface UploadResponse {
-  uploaded?: string[];
-  skipped?: string[];
-  errors?: UploadError[];
-  conflicts?: string[];
-  nonReplaceable?: string[];
-  error?: string;
-}
 
 interface UploadSummary {
+  /** The folder the files went to: the project root, or the folder they were dropped on (F4). */
+  directory: string;
   uploaded: string[];
   skipped: string[];
   errors: UploadError[];
 }
 
 interface PendingConflict {
+  directory: string;
   files: File[];
   conflicts: string[];
   nonReplaceable: string[];
@@ -97,9 +96,9 @@ async function responseError(res: Response, fallback: string): Promise<Error> {
   return new Error(message);
 }
 
-async function fetchEntries(dirPath: string): Promise<FileNode[]> {
+async function fetchEntries(dirPath: string, showHidden = false): Promise<FileNode[]> {
   const encoded = encodeFilePathForApi(dirPath);
-  const res = await fetch(`/api/files/${encoded}?type=list`);
+  const res = await fetch(`/api/files/${encoded}?type=list${showHidden ? "&hidden=1" : ""}`);
   if (!res.ok) throw await responseError(res, "Failed to load files");
   const data = await res.json() as { entries?: FileEntry[] };
   return (data.entries ?? []).map((e) => ({
@@ -111,6 +110,7 @@ async function fetchEntries(dirPath: string): Promise<FileNode[]> {
     loaded: !e.isDir,
     outsideLinkTarget: e.outsideLinkTarget,
     outsideLinkEncloses: e.outsideLinkEncloses,
+    hidden: e.hidden,
   }));
 }
 
@@ -173,41 +173,6 @@ function GitStatusBadge({ status, t }: { status: GitFileStatus; t: Translate }) 
   );
 }
 
-function uploadFiles(
-  targetDirectory: string,
-  files: File[],
-  strategy: UploadConflictStrategy,
-  onProgress: (progress: number) => void,
-): Promise<{ status: number; data: UploadResponse }> {
-  return new Promise((resolve, reject) => {
-    const formData = new FormData();
-    files.forEach((file) => formData.append("files", file, file.name));
-
-    const xhr = new XMLHttpRequest();
-    xhr.open(
-      "POST",
-      `/api/files/${encodeFilePathForApi(targetDirectory)}?type=upload&conflict=${strategy}`,
-    );
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable && event.total > 0) {
-        onProgress(Math.round((event.loaded / event.total) * 100));
-      }
-    };
-    xhr.onerror = () => reject(new Error("Network error while uploading files"));
-    xhr.onabort = () => reject(new Error("Upload cancelled"));
-    xhr.onload = () => {
-      let data: UploadResponse = {};
-      try {
-        data = JSON.parse(xhr.responseText) as UploadResponse;
-      } catch {
-        if (xhr.responseText) data.error = xhr.responseText;
-      }
-      resolve({ status: xhr.status, data });
-    };
-    xhr.send(formData);
-  });
-}
-
 function MentionIcon({ size = 11 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -227,6 +192,14 @@ function OutsideLinkIcon({ size = 11 }: { size?: number }) {
   );
 }
 
+// Listed only while the explorer shows ignored files: dimmed like VS Code's
+// ignored entries, the reason in the name's tooltip.
+const HIDDEN_ENTRY_OPACITY = 0.55;
+const HIDDEN_REASON_KEYS = {
+  ignored: "files.hiddenIgnored",
+  excluded: "files.hiddenExcluded",
+} as const satisfies Record<HiddenReason, string>;
+
 export function TreeNode({
   node,
   depth,
@@ -239,6 +212,11 @@ export function TreeNode({
   highlightedPaths,
   gitStatusByPath,
   changedDirectoryPaths,
+  showHidden = false,
+  parentHidden,
+  dropTargetPath,
+  onDropFiles,
+  onDropTargetChange,
   t,
 }: {
   node: FileNode;
@@ -252,9 +230,18 @@ export function TreeNode({
   highlightedPaths: Set<string>;
   gitStatusByPath: Map<string, GitFileStatus>;
   changedDirectoryPaths: Set<string>;
+  showHidden?: boolean;
+  /** Set inside a hidden directory: Git has no answer there, so its entries inherit the reason. */
+  parentHidden?: HiddenReason;
+  /** F4: the folder row a file drag is over; files dropped on a folder upload into it. */
+  dropTargetPath?: string | null;
+  onDropFiles?: (directory: string, items: DroppedItem[]) => void;
+  onDropTargetChange?: (path: string | null) => void;
   t: Translate;
 }) {
   const open = expandedPaths.has(node.fullPath);
+  const isDropTarget = node.isDir && dropTargetPath === node.fullPath;
+  const hidden = node.hidden ?? parentHidden;
   const highlighted = highlightedPaths.has(node.fullPath);
   const normalizedPath = normalizeFilePathSlashes(node.fullPath);
   const gitStatus = gitStatusByPath.get(normalizedPath);
@@ -289,7 +276,7 @@ export function TreeNode({
     setLoading(true);
     setLoadError(null);
     try {
-      const entries = await fetchEntries(node.fullPath);
+      const entries = await fetchEntries(node.fullPath, showHidden);
       setChildren(entries);
       setLoaded(true);
     } catch (error) {
@@ -297,7 +284,26 @@ export function TreeNode({
     } finally {
       setLoading(false);
     }
-  }, [loaded, node.fullPath]);
+  }, [loaded, node.fullPath, showHidden]);
+
+  // The switch changes what every listing holds: reload an open directory now
+  // and a collapsed one when it next opens.
+  const listedShowHiddenRef = useRef(showHidden);
+  useEffect(() => {
+    if (listedShowHiddenRef.current === showHidden) return;
+    listedShowHiddenRef.current = showHidden;
+    if (!loaded) return;
+    if (open && !pendingLinkTarget) loadChildren(true);
+    else setLoaded(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showHidden]);
+
+  // A hidden directory left expanded mounts open again when the switch comes
+  // back on, before anything listed it.
+  useEffect(() => {
+    if (node.isDir && open && !loaded && !pendingLinkTarget) loadChildren();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Re-fetch children when the tree refreshes and the directory is open.
   useEffect(() => {
@@ -354,6 +360,21 @@ export function TreeNode({
         }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
+        onDragOver={node.isDir && onDropFiles ? (event) => {
+          if (!event.dataTransfer.types.includes("Files")) return;
+          event.preventDefault();
+          event.stopPropagation();
+          event.dataTransfer.dropEffect = "copy";
+          onDropTargetChange?.(node.fullPath);
+        } : undefined}
+        onDrop={node.isDir && onDropFiles ? (event) => {
+          if (!event.dataTransfer.types.includes("Files")) return;
+          event.preventDefault();
+          event.stopPropagation();
+          onDropTargetChange?.(null);
+          onDropFiles(node.fullPath, droppedItems(event.dataTransfer));
+        } : undefined}
+        className={isDropTarget ? "file-tree-drop-target" : undefined}
         style={{
           position: "relative",
           display: "flex",
@@ -363,7 +384,7 @@ export function TreeNode({
           paddingRight: 8,
           height: 24,
           cursor: "pointer",
-          background: hovered ? "var(--bg-hover)" : "transparent",
+          background: isDropTarget ? undefined : hovered ? "var(--bg-hover)" : "transparent",
           borderRadius: "var(--radius-xs)",
           userSelect: "none",
         }}
@@ -378,19 +399,21 @@ export function TreeNode({
           </svg>
         )}
         {!node.isDir && <span style={{ width: 10, flexShrink: 0 }} />}
-        <span style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
+        <span style={{ flexShrink: 0, display: "flex", alignItems: "center", opacity: hidden ? HIDDEN_ENTRY_OPACITY : 1 }}>
           {node.isDir ? <FolderIcon size={14} open={open} /> : getFileIcon(node.name, 14)}
         </span>
         <span
+          data-hidden-reason={hidden}
           style={{
             fontSize: "var(--fs-caption)",
-            color: "var(--text)",
+            color: hidden ? "var(--text-muted)" : "var(--text)",
+            opacity: hidden ? HIDDEN_ENTRY_OPACITY : 1,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
             flex: 1,
           }}
-          title={node.fullPath}
+          title={hidden ? `${node.fullPath}\n${t(HIDDEN_REASON_KEYS[hidden])}` : node.fullPath}
         >
           {node.name}
         </span>
@@ -581,6 +604,11 @@ export function TreeNode({
               highlightedPaths={highlightedPaths}
               gitStatusByPath={gitStatusByPath}
               changedDirectoryPaths={changedDirectoryPaths}
+              showHidden={showHidden}
+              parentHidden={hidden}
+              dropTargetPath={dropTargetPath}
+              onDropFiles={onDropFiles}
+              onDropTargetChange={onDropTargetChange}
               t={t}
             />
           ))}
@@ -610,20 +638,25 @@ function ChangeRow({
   onOpenFile,
   onAtMention,
   t,
+  depth = 0,
+  treeMode = false,
 }: {
   status: GitFileStatus;
   cwd: string;
   onOpenFile: OpenFileHandler;
   onAtMention?: (relativePath: string, isDir: boolean) => void;
   t: Translate;
+  depth?: number;
+  /** F2: inside the changes tree the folders name the path, so only the file name shows. */
+  treeMode?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const name = getFileName(status.filePath);
   const rel = getRelativeFilePath(status.filePath, cwd);
   // Split the path so the directory part ellipsizes while the file name stays fully visible
   const lastSlash = rel.lastIndexOf("/");
-  const dirPart = lastSlash >= 0 ? rel.slice(0, lastSlash + 1) : "";
-  const baseName = lastSlash >= 0 ? rel.slice(lastSlash + 1) : rel;
+  const dirPart = !treeMode && lastSlash >= 0 ? rel.slice(0, lastSlash + 1) : "";
+  const baseName = treeMode ? name : (lastSlash >= 0 ? rel.slice(lastSlash + 1) : rel);
   return (
     <div
       onClick={() => onOpenFile(status.filePath, name, { modeHint: "diff" })}
@@ -633,8 +666,8 @@ function ChangeRow({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 6,
-        paddingLeft: 10,
+        gap: treeMode ? 4 : 6,
+        paddingLeft: treeMode ? 8 + depth * 14 : 10,
         paddingRight: 8,
         height: 24,
         cursor: "pointer",
@@ -645,6 +678,7 @@ function ChangeRow({
       }}
     >
       <GitStatusBadge status={status} t={t} />
+      {treeMode && <span style={{ width: 10, flexShrink: 0 }} />}
       <span style={{ flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.85 }}>
         {getFileIcon(name, 13)}
       </span>
@@ -678,7 +712,7 @@ function ChangeRow({
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
-            flexShrink: 0,
+            flexShrink: treeMode ? 1 : 0,
             maxWidth: "100%",
           }}
         >
@@ -721,6 +755,157 @@ function ChangeRow({
   );
 }
 
+type ChangesViewMode = "list" | "tree";
+
+function loadChangesViewMode(): ChangesViewMode {
+  return getPref(APP_PREF_KEYS.changesViewMode) === "tree" ? "tree" : "list";
+}
+
+function ChangesFolderRow({
+  node,
+  depth,
+  open,
+  onToggle,
+}: {
+  node: SearchTreeNode;
+  depth: number;
+  open: boolean;
+  onToggle: (path: string, open: boolean) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      role="button"
+      aria-expanded={open}
+      onClick={() => onToggle(node.path, !open)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      title={node.path}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        paddingLeft: 8 + depth * 14,
+        paddingRight: 8,
+        height: 24,
+        cursor: "pointer",
+        background: hovered ? "var(--bg-hover)" : "transparent",
+        borderRadius: "var(--radius-xs)",
+        userSelect: "none",
+      }}
+    >
+      <svg
+        width="10" height="10" viewBox="0 0 10 10" fill="none"
+        stroke="var(--text-dim)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+        style={{ flexShrink: 0, transform: open ? "rotate(90deg)" : "none", transition: "transform 0.1s" }}
+        aria-hidden="true"
+      >
+        <polyline points="3 2 7 5 3 8" />
+      </svg>
+      <span style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
+        <FolderIcon size={14} open={open} />
+      </span>
+      <span
+        style={{
+          fontSize: "var(--fs-caption)",
+          color: "var(--text)",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          flex: 1,
+        }}
+      >
+        {node.name}
+      </span>
+    </div>
+  );
+}
+
+function ChangesTreeRows({
+  nodes,
+  depth,
+  cwd,
+  statusByPath,
+  collapsedPaths,
+  onToggleExpanded,
+  onOpenFile,
+  onAtMention,
+  t,
+}: {
+  nodes: SearchTreeNode[];
+  depth: number;
+  cwd: string;
+  statusByPath: Map<string, GitFileStatus>;
+  collapsedPaths: Set<string>;
+  onToggleExpanded: (path: string, open: boolean) => void;
+  onOpenFile: OpenFileHandler;
+  onAtMention?: (relativePath: string, isDir: boolean) => void;
+  t: Translate;
+}) {
+  return (
+    <>
+      {nodes.map((node) => {
+        if (node.isDir) {
+          const open = !collapsedPaths.has(node.path);
+          return (
+            <div key={`dir:${node.path}`}>
+              <ChangesFolderRow node={node} depth={depth} open={open} onToggle={onToggleExpanded} />
+              {open && (
+                <ChangesTreeRows
+                  nodes={node.children}
+                  depth={depth + 1}
+                  cwd={cwd}
+                  statusByPath={statusByPath}
+                  collapsedPaths={collapsedPaths}
+                  onToggleExpanded={onToggleExpanded}
+                  onOpenFile={onOpenFile}
+                  onAtMention={onAtMention}
+                  t={t}
+                />
+              )}
+            </div>
+          );
+        }
+        const status = statusByPath.get(node.path);
+        if (!status) return null;
+        return (
+          <ChangeRow
+            key={status.filePath}
+            status={status}
+            cwd={cwd}
+            onOpenFile={onOpenFile}
+            onAtMention={onAtMention}
+            t={t}
+            depth={depth}
+            treeMode
+          />
+        );
+      })}
+    </>
+  );
+}
+
+function ChangesViewToggleIcon({ mode }: { mode: ChangesViewMode }) {
+  if (mode === "tree") {
+    // List icon: switching back to the flat list
+    return (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" />
+        <path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" />
+      </svg>
+    );
+  }
+  // Tree icon: switching to the folder tree
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6 3v12" /><path d="M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+      <path d="M6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+      <path d="M18 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+      <path d="M9 12h6" /><path d="M12 12v3" />
+    </svg>
+  );
+}
+
 export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileExplorer({
   cwd,
   onOpenFile,
@@ -732,6 +917,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   onChangesCountChange,
   fileSearchOpen = false,
   onFileSearchOpenChange,
+  showHidden = false,
 }, ref) {
   const { t } = useI18n();
   const [roots, setRoots] = useState<FileNode[]>([]);
@@ -742,6 +928,10 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   const [highlightedPaths, setHighlightedPaths] = useState<Set<string>>(new Set());
   const [gitFiles, setGitFiles] = useState<GitFileStatus[]>([]);
   const [gitLineStats, setGitLineStats] = useState({ additions: 0, deletions: 0 });
+  // F2: the changes as a flat list or a folder tree, remembered per browser.
+  const [changesViewMode, setChangesViewMode] = useState<ChangesViewMode>("list");
+  // Folders stay open unless collapsed here, so a refresh or a newly changed folder never folds them.
+  const [collapsedChangeDirs, setCollapsedChangeDirs] = useState<Set<string>>(() => new Set());
   const [uploadPhase, setUploadPhase] = useState<UploadPhase>("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -856,21 +1046,22 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     });
   }, []);
 
-  const applyUploadResult = useCallback((data: UploadResponse) => {
+  const applyUploadResult = useCallback((data: UploadResponse, directory: string) => {
     const uploaded = data.uploaded ?? [];
     const skipped = data.skipped ?? [];
     const errors = data.errors ?? [];
-    setUploadSummary({ uploaded, skipped, errors });
+    setUploadSummary({ directory, uploaded, skipped, errors });
 
     if (uploaded.length > 0) {
-      setHighlightedPaths(new Set(uploaded.map((name) => joinFilePath(cwd, name))));
+      setHighlightedPaths(new Set(uploaded.map((name) => joinFilePath(directory, name))));
       setTreeRefreshKey((key) => key + 1);
     }
-  }, [cwd]);
+  }, []);
 
   const performUpload = useCallback(async (
     files: File[],
     strategy: UploadConflictStrategy,
+    directory: string,
   ) => {
     setPendingConflict(null);
     setUploadError(null);
@@ -878,9 +1069,10 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     setUploadPhase("uploading");
 
     try {
-      const { status, data } = await uploadFiles(cwd, files, strategy, setUploadProgress);
+      const { status, data } = await uploadFiles(directory, files, strategy, setUploadProgress);
       if (status === 409 && data.conflicts?.length) {
         setPendingConflict({
+          directory,
           files,
           conflicts: data.conflicts,
           nonReplaceable: data.nonReplaceable ?? [],
@@ -891,15 +1083,15 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         throw new Error(data.error ?? `Upload failed (HTTP ${status})`);
       }
       setUploadProgress(100);
-      applyUploadResult(data);
+      applyUploadResult(data, directory);
     } catch (uploadFailure) {
       setUploadError(uploadFailure instanceof Error ? uploadFailure.message : String(uploadFailure));
     } finally {
       setUploadPhase("idle");
     }
-  }, [applyUploadResult, cwd]);
+  }, [applyUploadResult]);
 
-  const prepareUpload = useCallback(async (files: File[]) => {
+  const prepareUpload = useCallback(async (files: File[], directory: string) => {
     if (files.length === 0 || uploadBusy) return;
     setUploadSummary(null);
     setHighlightedPaths(new Set());
@@ -910,7 +1102,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
 
     try {
       const res = await fetch(
-        `/api/files/${encodeFilePathForApi(cwd)}?type=upload-check`,
+        `/api/files/${encodeFilePathForApi(directory)}?type=upload-check`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -922,6 +1114,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
 
       if (data.conflicts?.length) {
         setPendingConflict({
+          directory,
           files,
           conflicts: data.conflicts,
           nonReplaceable: data.nonReplaceable ?? [],
@@ -929,19 +1122,19 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         return;
       }
 
-      await performUpload(files, "error");
+      await performUpload(files, "error", directory);
     } catch (uploadFailure) {
       setUploadError(uploadFailure instanceof Error ? uploadFailure.message : String(uploadFailure));
     } finally {
       setUploadPhase("idle");
     }
-  }, [cwd, performUpload, uploadBusy]);
+  }, [performUpload, uploadBusy]);
 
   const handleUploadInput = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
-    void prepareUpload(files);
-  }, [prepareUpload]);
+    void prepareUpload(files, cwd);
+  }, [cwd, prepareUpload]);
 
   useImperativeHandle(ref, () => ({
     openUploadPicker() {
@@ -971,12 +1164,12 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     setLoading(cwdChanged);
     setError(null);
     let cancelled = false;
-    fetchEntries(cwd)
+    fetchEntries(cwd, showHidden)
       .then((entries) => { if (!cancelled) setRoots(entries); })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [cwd, refreshKey, treeRefreshKey]);
+  }, [cwd, refreshKey, treeRefreshKey, showHidden]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1002,17 +1195,112 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     onChangesCountChange?.(gitFiles.length);
   }, [gitFiles, onChangesCountChange]);
 
+  // Read after mount: the server render has no storage.
+  useEffect(() => {
+    setChangesViewMode(loadChangesViewMode());
+  }, []);
+
+  const changesByRelativePath = useMemo(() => new Map(gitFiles.map((status) => [
+    normalizeFilePathSlashes(getRelativeFilePath(status.filePath, cwd)).replace(/^\/+/, ""),
+    status,
+  ])), [cwd, gitFiles]);
+  const changesTree = useMemo(() => buildSearchTree([...changesByRelativePath.keys()]), [changesByRelativePath]);
+
+  const handleToggleChangesExpanded = useCallback((path: string, open: boolean) => {
+    setCollapsedChangeDirs((prev) => {
+      const next = new Set(prev);
+      if (open) next.delete(path); else next.add(path);
+      return next;
+    });
+  }, []);
+
+  const handleChangesViewModeToggle = useCallback(() => {
+    setChangesViewMode((prev) => {
+      const next: ChangesViewMode = prev === "list" ? "tree" : "list";
+      setPref(APP_PREF_KEYS.changesViewMode, next);
+      return next;
+    });
+  }, []);
+
+  // F4: a file drag over the panel. Folder rows claim it (dropTargetPath);
+  // the panel background means the project root.
+  const fileDragDepthRef = useRef(0);
+  const [fileDragActive, setFileDragActive] = useState(false);
+  const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
+
+  const resetFileDrag = useCallback(() => {
+    fileDragDepthRef.current = 0;
+    setFileDragActive(false);
+    setDropTargetPath(null);
+  }, []);
+
+  const handleExplorerDragEnter = useCallback((event: React.DragEvent) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    fileDragDepthRef.current += 1;
+    setFileDragActive(true);
+  }, []);
+
+  const handleExplorerDragOver = useCallback((event: React.DragEvent) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    // Folder rows stop dragover propagation, so this runs only over the
+    // panel background: those uploads go to the project root.
+    setDropTargetPath((prev) => (prev === null ? prev : null));
+  }, []);
+
+  const handleExplorerDragLeave = useCallback(() => {
+    if (fileDragDepthRef.current <= 0) return;
+    fileDragDepthRef.current -= 1;
+    if (fileDragDepthRef.current === 0) {
+      setFileDragActive(false);
+      setDropTargetPath(null);
+    }
+  }, []);
+
+  const handleDropFiles = useCallback((directory: string, items: DroppedItem[]) => {
+    resetFileDrag();
+    // The endpoint writes files only: a dropped folder would fail the whole
+    // upload, so folders are left out with the chat drop's notice.
+    const files = items.flatMap((item) => (item.kind === "file" ? [item.file] : []));
+    const folders = items.flatMap((item) => (item.kind === "folder" ? [item.name] : []));
+    void prepareUpload(files, directory).then(() => {
+      if (folders.length === 0) return;
+      const notice = t("chat.dropFoldersUnsupported", { names: folders.join(", ") });
+      // An error from this upload says why its files did not land: keep it.
+      setUploadError((error) => (error && files.length > 0 ? error : notice));
+    });
+  }, [prepareUpload, resetFileDrag, t]);
+
+  const handleExplorerDrop = useCallback((event: React.DragEvent) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    handleDropFiles(dropTargetPath ?? cwd, droppedItems(event.dataTransfer));
+  }, [cwd, dropTargetPath, handleDropFiles]);
+
+  const handleDropTargetChange = useCallback((path: string | null) => {
+    setDropTargetPath((prev) => (prev === path ? prev : path));
+  }, []);
+
   const showUploadFeedback = uploadBusy || pendingConflict !== null || uploadError !== null || uploadSummary !== null;
 
   const addUploadedFilesToChat = useCallback(() => {
     if (!uploadSummary || uploadSummary.uploaded.length === 0) return;
     onAtMentions?.(
-      uploadSummary.uploaded.map((name) => getRelativeFilePath(joinFilePath(cwd, name), cwd)),
+      uploadSummary.uploaded.map((name) => getRelativeFilePath(joinFilePath(uploadSummary.directory, name), cwd)),
     );
   }, [cwd, onAtMentions, uploadSummary]);
 
   return (
-    <div style={{ minHeight: "100%" }}>
+    <div
+      style={{ minHeight: "100%" }}
+      onDragEnter={handleExplorerDragEnter}
+      onDragOver={handleExplorerDragOver}
+      onDragLeave={handleExplorerDragLeave}
+      onDrop={handleExplorerDrop}
+    >
       <input ref={uploadInputRef} type="file" multiple hidden onChange={handleUploadInput} />
       {showUploadFeedback && (
         <div style={{ padding: "6px 8px", borderBottom: "var(--hairline) solid var(--border)" }}>
@@ -1051,10 +1339,10 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
               </div>
             )}
             <div style={{ display: "flex", gap: 5, marginTop: 7 }}>
-              <button type="button" onClick={() => void performUpload(pendingConflict.files, "overwrite")} style={{ height: 22, padding: "0 7px", border: "var(--hairline) solid var(--danger)", borderRadius: "var(--radius-xs)", background: "transparent", color: "var(--danger)", cursor: "pointer", fontSize: "var(--fs-micro)" }}>
+              <button type="button" onClick={() => void performUpload(pendingConflict.files, "overwrite", pendingConflict.directory)} style={{ height: 22, padding: "0 7px", border: "var(--hairline) solid var(--danger)", borderRadius: "var(--radius-xs)", background: "transparent", color: "var(--danger)", cursor: "pointer", fontSize: "var(--fs-micro)" }}>
                 {t("files.replace")}
               </button>
-              <button type="button" onClick={() => void performUpload(pendingConflict.files, "skip")} style={{ height: 22, padding: "0 7px", border: "var(--hairline) solid var(--border)", borderRadius: "var(--radius-xs)", background: "var(--bg-panel)", color: "var(--text)", cursor: "pointer", fontSize: "var(--fs-micro)" }}>
+              <button type="button" onClick={() => void performUpload(pendingConflict.files, "skip", pendingConflict.directory)} style={{ height: 22, padding: "0 7px", border: "var(--hairline) solid var(--border)", borderRadius: "var(--radius-xs)", background: "var(--bg-panel)", color: "var(--text)", cursor: "pointer", fontSize: "var(--fs-micro)" }}>
                 {t("files.skipExisting")}
               </button>
               <button type="button" onClick={() => setPendingConflict(null)} style={{ height: 22, padding: "0 7px", border: "none", borderRadius: "var(--radius-xs)", background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: "var(--fs-micro)" }}>
@@ -1140,6 +1428,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
           </svg>
           <input
             ref={searchInputRef}
+            id="file-search-input"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             onKeyDown={(event) => { if (event.key === "Escape" && !isImeComposing(event)) onFileSearchOpenChange?.(false); }}
@@ -1207,24 +1496,49 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
               additions: gitLineStats.additions,
               deletions: gitLineStats.deletions,
             })}
-            style={{ display: "flex", alignItems: "center", gap: 6, height: 24, padding: "0 10px", fontSize: "var(--fs-caption)" }}
+            style={{ display: "flex", alignItems: "center", gap: 6, height: 24, padding: "0 6px 0 10px", fontSize: "var(--fs-caption)" }}
           >
             <span style={{ color: "var(--text-dim)" }}>
               {t("files.changedCount", { count: gitFiles.length })}
             </span>
             <span style={{ color: GIT_STATUS_COLORS.added, fontFamily: "var(--font-mono)" }}>+{gitLineStats.additions}</span>
             <span style={{ color: GIT_STATUS_COLORS.deleted, fontFamily: "var(--font-mono)" }}>-{gitLineStats.deletions}</span>
+            <span style={{ flex: 1 }} />
+            <button
+              type="button"
+              className="file-changes-view-toggle"
+              onClick={handleChangesViewModeToggle}
+              title={changesViewMode === "list" ? t("files.viewAsTree") : t("files.viewAsList")}
+              aria-label={changesViewMode === "list" ? t("files.viewAsTree") : t("files.viewAsList")}
+              aria-pressed={changesViewMode === "tree"}
+            >
+              <ChangesViewToggleIcon mode={changesViewMode} />
+            </button>
           </div>
-          {gitFiles.map((status) => (
-            <ChangeRow
-              key={status.filePath}
-              status={status}
+          {changesViewMode === "tree" ? (
+            <ChangesTreeRows
+              nodes={changesTree}
+              depth={0}
               cwd={cwd}
+              statusByPath={changesByRelativePath}
+              collapsedPaths={collapsedChangeDirs}
+              onToggleExpanded={handleToggleChangesExpanded}
               onOpenFile={onOpenFile}
               onAtMention={onAtMention}
               t={t}
             />
-          ))}
+          ) : (
+            gitFiles.map((status) => (
+              <ChangeRow
+                key={status.filePath}
+                status={status}
+                cwd={cwd}
+                onOpenFile={onOpenFile}
+                onAtMention={onAtMention}
+                t={t}
+              />
+            ))
+          )}
         </div>
       )}
 
@@ -1264,6 +1578,10 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
                 highlightedPaths={highlightedPaths}
                 gitStatusByPath={gitStatusByPath}
                 changedDirectoryPaths={changedDirectoryPaths}
+                showHidden={showHidden}
+                dropTargetPath={dropTargetPath}
+                onDropFiles={handleDropFiles}
+                onDropTargetChange={handleDropTargetChange}
                 t={t}
               />
             ))
@@ -1273,6 +1591,23 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
               {t("files.noFiles")}
             </div>
           )}
+        </div>
+      )}
+      {/* Last, pinned to the bottom: at the top it pushed every row down as
+          a drag came in, so the row under the pointer changed. Drags pass
+          through it to the row it covers. */}
+      {fileDragActive && (
+        <div role="status" aria-live="polite" className="file-tree-drop-hint">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <path d="M12 16V4" />
+            <path d="m7 9 5-5 5 5" />
+            <path d="M5 20h14" />
+          </svg>
+          {t("files.dropToUpload", {
+            directory: dropTargetPath
+              ? (getRelativeFilePath(dropTargetPath, cwd) || dropTargetPath)
+              : (getFileName(cwd) || cwd),
+          })}
         </div>
       )}
     </div>

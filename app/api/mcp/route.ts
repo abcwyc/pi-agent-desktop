@@ -14,6 +14,7 @@ import {
   insertMcpServer,
   isMcpConfigWriteError,
   removeMcpServer,
+  setMcpServerEnabledInProject,
   setMcpServerExposure,
   setMcpServersEnabled,
   type McpConfigFileTarget,
@@ -32,6 +33,7 @@ import {
   isMcpEntryRefusal,
   mcpInternalsOrRefusal,
   mcpProjectTrustRefusal,
+  readMcpServerConfig,
   validateMcpProject,
   type McpEntryRefusal,
 } from "@/lib/mcp-entry-request";
@@ -258,6 +260,45 @@ async function setServerExposure(
 }
 
 /**
+ * Turns a global server on or off in the panel's project alone, as `/mcp`'s
+ * "Enable / Disable in this project" does: an override entry in the project's
+ * `.pi/mcp.json` (pi 1.0.1), written under any project write's checks. The
+ * global entry must be one pi loads, since an override of anything else is
+ * skipped; turning on one that references PI_WEB_PASSWORD is refused, as its
+ * switch would be. Remove on the override's row goes back to the global value.
+ */
+async function switchServerInProject(
+  agentDir: string,
+  project: Project | undefined,
+  internals: PiSdkInternals,
+  name: string,
+  enabled: boolean,
+) {
+  const target = writeTarget("project", project, agentDir);
+  if (target instanceof Refusal) return target.response();
+  if (target.scope !== "project") return refusal(500, "internal", "No project file to write to");
+  const read = readMcpServerEntry({ agentDir, scope: "global", name });
+  if (!read.ok) {
+    const params = { path: read.path, ...(read.reason === "server-missing" ? { name } : {}) };
+    if (read.reason === "unreadable") return refusal(500, "internal", read.error, params);
+    return refusal(409, read.reason, read.error, params);
+  }
+  const global = readMcpServerConfig({ agentDir, internals, scope: "global", name });
+  if (typeof global === "string") return refusal(409, "server-invalid", global, { name });
+  if (enabled && findWebPasswordField(global.config, internals)) {
+    return refusal(409, "web-password", `"${name}" references PI_WEB_PASSWORD, so Pi Web does not turn it on`, { name });
+  }
+  try {
+    const { value: outcome, path } = await setMcpServerEnabledInProject(target, name, enabled);
+    const refused = outcomeRefusal(outcome, path);
+    if (refused) return refused.response();
+  } catch (error) {
+    return writeRefusal(error).response();
+  }
+  return overviewResponse(agentDir, project);
+}
+
+/**
  * The group switch: every server asked for, one write per file, and a result
  * per server, so one the route refuses (removed meanwhile, not an object,
  * referencing PI_WEB_PASSWORD, in an untrusted project, in a file that no
@@ -383,9 +424,10 @@ async function signOutServer(agentDir: string, project: Project | undefined, int
   if (!isRecord(read.value)) {
     return refusal(409, "entry-not-object", `${read.sourcePath} defines MCP server "${name}" as something other than an object`, { name });
   }
-  const config = internals.validateMcpServerConfig(name, read.value);
-  if (typeof config === "string") return refusal(409, "server-invalid", config, { name });
-  const url = mcpOAuthUrl(config);
+  // A project override signs in and out as the global server it changes: same name, same URL.
+  const resolved = readMcpServerConfig({ agentDir, project, internals, scope: server.scope, name });
+  if (typeof resolved === "string") return refusal(409, "server-invalid", resolved, { name });
+  const url = mcpOAuthUrl(resolved.config);
   if (url === undefined) {
     return refusal(409, "sign-in-not-oauth", `MCP server "${name}" does not use OAuth: only an HTTP server without an Authorization header does`, { name });
   }
@@ -542,6 +584,7 @@ async function addServer(
 //   enable | disable | remove | sign-out: { scope, name }
 //   set-enabled: { enabled, servers: [{ scope, name }] } → per-server `results`
 //   set-exposure: { scope, name, exposure }
+//   set-in-project: { name, enabled } → a global server on or off in `cwd`'s project alone
 //   undo: { token } (from a remove's `undo`)
 //   add: { text, scope, values?, secretReferences?, server?, name?, rawPi?, trustFolder?, confirmHostEnv? }
 // `cwd` is the panel's project: required for a project server, and the
@@ -596,6 +639,13 @@ export async function POST(req: Request) {
         }
         return await setServerExposure(agentDir, project, { scope, name }, body.exposure);
       }
+      case "set-in-project": {
+        const name = readName(body.name);
+        if (name === undefined || typeof body.enabled !== "boolean") {
+          return refusal(400, "invalid-request", "name must name a global server, and enabled be a boolean");
+        }
+        return await switchServerInProject(agentDir, project, internals, name, body.enabled);
+      }
       case "undo": {
         if (typeof body.token !== "string" || body.token.length === 0 || body.token.length > 100) {
           return refusal(400, "invalid-request", "token must be the token a remove answered with");
@@ -605,7 +655,7 @@ export async function POST(req: Request) {
       case "add":
         return await addServer(agentDir, project, internals, body);
       default:
-        return refusal(400, "invalid-request", "action must be add, enable, disable, remove, set-enabled, set-exposure, undo or sign-out");
+        return refusal(400, "invalid-request", "action must be add, enable, disable, remove, set-enabled, set-exposure, set-in-project, undo or sign-out");
     }
   } catch (error) {
     return refusal(500, "internal", errorMessage(error));

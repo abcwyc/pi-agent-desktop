@@ -32,8 +32,11 @@ test("model scope warnings can be dismissed and link to provider setup (#48)", a
 test("patch diffs in chat follow the diff display setting", async () => {
   const messageView = await read("./MessageView.tsx");
   const splitPatch = messageView.slice(messageView.indexOf("function SplitPatchView("), messageView.indexOf("function SplitFilesView("));
-  assert.match(splitPatch, /const \{ mode \} = useDiffViewMode\(\);/);
+  // The setting reaches the view through usePatchLayout; only a phone overrides it (F7).
+  assert.match(splitPatch, /const mode = usePatchLayout\(\);/);
   assert.match(splitPatch, /<SplitFilesView files=\{files\} mode=\{mode\} \/>/);
+  const layout = messageView.slice(messageView.indexOf("function usePatchLayout("), messageView.indexOf("function ApplyPatchDiffView("));
+  assert.match(layout, /const \{ mode \} = useDiffViewMode\(\);[\s\S]*?return isMobile \? "unified" : mode;/);
 });
 
 test("the file viewer forwards whole-file @mentions to the text viewer", async () => {
@@ -52,7 +55,7 @@ test("the right-panel file tree refreshes when a run ends", async () => {
   const shell = await read("./AppShell.tsx");
   const explorer = shell.slice(shell.indexOf("<FileExplorer\n"));
   assert.match(explorer.slice(0, 400), /refreshKey=\{explorerRefreshKey\}/);
-  assert.match(shell, /const handleAgentEnd = useCallback\(\(\) => \{[\s\S]{0,120}setExplorerRefreshKey\(/);
+  assert.match(shell, /const handleAgentEnd = useCallback\(\((?:end\?: AgentEndInfo)?\) => \{[\s\S]{0,120}setExplorerRefreshKey\(/);
 });
 
 test("the sidebar scrollbar hides again and a failed list load is reported", async () => {

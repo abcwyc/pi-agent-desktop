@@ -1,3 +1,4 @@
+import { isBlockingExtensionUiRequest } from "./extension-ui-queue";
 import type { BlockingExtensionUiRequest, ExtensionUiRequest } from "./types";
 
 interface WindowNotificationLike {
@@ -32,21 +33,9 @@ export function shouldShowBrowserNotification(
   return attentionState.visibilityState !== "visible" || !attentionState.hasFocus();
 }
 
-export function isBlockingExtensionUiRequest(
-  request: ExtensionUiRequest,
-): request is BlockingExtensionUiRequest {
-  switch (request.method) {
-    case "select":
-    case "confirm":
-    case "input":
-    case "editor":
-      return true;
-    case "custom":
-      return request.closed !== true;
-    default:
-      return false;
-  }
-}
+// The classification lives with the request queues (lib/extension-ui-queue.ts),
+// where the server's awaiting-input snapshot shares it.
+export { isBlockingExtensionUiRequest };
 
 export function claimExtensionAttentionNotification(
   request: ExtensionUiRequest,
@@ -81,7 +70,8 @@ export async function showBrowserNotification(
       if (registration) {
         await registration.showNotification(options.title, {
           ...notificationOptions,
-          data: { url: options.sessionUrl },
+          // shownAt lets the service worker tell this completion's push from a later task's (#1515).
+          data: { url: options.sessionUrl, shownAt: Date.now() },
         });
         return "service-worker";
       }

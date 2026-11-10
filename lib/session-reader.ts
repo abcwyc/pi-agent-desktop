@@ -7,15 +7,18 @@ import { readdir } from "fs/promises";
 import { isAbsolute, join, normalize as normalizePath, relative, resolve as resolvePath, sep } from "path";
 import type { AgentMessage, ImageContent, SessionEntry, SessionHeader, SessionInfo, SessionContext } from "./types";
 import { normalizeToolCalls } from "./normalize";
-import { getThinkingPreview } from "./message-display";
+import { withoutMessageSignatures } from "./message-signatures";
+import { getThinkingPreview, isMessageGroupAnchor } from "./message-display";
 import { projectIdentityKey } from "./project-identity";
 import { sessionPathKey } from "./session-path";
+import { skillExpansionToCommand } from "./slash-display";
 import { MAX_TOOL_RESULT_IMAGE_BYTES, TOOL_RESULT_IMAGE_MIMES } from "./tool-result-images";
 import { projectToolResultDetails, slimToolResultMessage } from "./tool-result-details";
 import { openSlimSessionManager } from "./session-slim-load";
 import { resolveProject, type ProjectInfo } from "./worktree";
 import { readSubagentRun, SUBAGENT_META_TYPE } from "./subagents";
-import { listSessionsIncremental, type ScannedSessionInfo } from "./session-list-scanner";
+import { readSideRelation } from "./side-session";
+import { checkSessionMembership, listSessionsIncremental, scanSessionFileInfo, type ScannedSessionInfo } from "./session-list-scanner";
 import { isChatFolderPath, isChatWorkspacePath } from "./chat-workspace";
 
 export { getAgentDir };
@@ -200,23 +203,55 @@ export function mergeSessionLists(
 }
 
 type ScannedSubagent = NonNullable<ReturnType<typeof readSubagentRun>>;
+type ScannedSide = NonNullable<ReturnType<typeof readSideRelation>>;
+
+/**
+ * A subagent's run or a side chat's parent, read from its file, per scanned
+ * row. The scanner hands back the same row object while the file's size and
+ * mtime stay the same and a new one once they change, so the row is the cache
+ * key: every list rebuild re-read ~140 subagent files synchronously (~36 ms of
+ * blocked event loop) though only the session that just ran had changed.
+ */
+const scannedSubagentRuns = new WeakMap<ScannedSessionInfo, { subagent: ScannedSubagent | null; side: ScannedSide | null }>();
 
 function resolveScannedSessionRelation(
   scanned: ScannedSessionInfo,
   pathToId: Map<string, string>,
-): { originSessionId?: string; subagent: ScannedSubagent | null } {
+): { originSessionId?: string; subagent: ScannedSubagent | null; side: ScannedSide | null } {
   const originSessionId = scanned.parentSessionPath
     ? pathToId.get(sessionPathKey(scanned.parentSessionPath))
     : undefined;
-  if (!scanned.parentSessionPath) return { originSessionId, subagent: null };
+  if (!scanned.parentSessionPath) return { originSessionId, subagent: null, side: null };
 
+  const cached = scannedSubagentRuns.get(scanned);
+  if (cached !== undefined) return { originSessionId, ...cached };
   try {
-    const subagent = readSubagentRun(readSessionRelationEntries(scanned.path), scanned.id, scanned.path);
-    return { originSessionId, subagent };
+    const relationEntries = readSessionRelationEntries(scanned.path);
+    const subagent = readSubagentRun(relationEntries, scanned.id, scanned.path);
+    const side = subagent ? null : readSideRelation(relationEntries);
+    const resolved = { subagent, side };
+    scannedSubagentRuns.set(scanned, resolved);
+    return { originSessionId, ...resolved };
   } catch {
-    // Malformed or concurrently removed session.
-    return { originSessionId, subagent: null };
+    // Malformed or concurrently removed session: read it again next time.
+    return { originSessionId, subagent: null, side: null };
   }
+}
+
+/**
+ * The list's first message is for the row title and the subagent filter, never
+ * the whole prompt: a pasted document or an expanded skill made one row 300 KB
+ * and the list several MB, fetched again by every open tab after each run. A
+ * skill expansion goes as the /skill: command its row shows; any other text is
+ * cut to CATALOG_FIRST_MESSAGE_MAX code units, never splitting a surrogate pair.
+ */
+const CATALOG_FIRST_MESSAGE_MAX = 500;
+
+export function catalogFirstMessage(text: string): string {
+  const display = skillExpansionToCommand(text) ?? text;
+  if (display.length <= CATALOG_FIRST_MESSAGE_MAX) return display;
+  const last = display.charCodeAt(CATALOG_FIRST_MESSAGE_MAX - 1);
+  return display.slice(0, last >= 0xd800 && last <= 0xdbff ? CATALOG_FIRST_MESSAGE_MAX - 1 : CATALOG_FIRST_MESSAGE_MAX);
 }
 
 function mapScannedSession(
@@ -224,7 +259,7 @@ function mapScannedSession(
   pathToId: Map<string, string>,
 ): SessionInfo {
   cacheSessionPath(scanned.id, scanned.path);
-  const { originSessionId, subagent } = resolveScannedSessionRelation(scanned, pathToId);
+  const { originSessionId, subagent, side } = resolveScannedSessionRelation(scanned, pathToId);
   const detailsPending = scanned.detailsPending === true;
   return {
     path: scanned.path,
@@ -239,13 +274,15 @@ function mapScannedSession(
     // real "(no messages)" session until the details arrive.
     firstMessage: detailsPending && !scanned.firstMessage
       ? ""
-      : scanned.firstMessage || "(no messages)",
+      : catalogFirstMessage(scanned.firstMessage || "(no messages)"),
     parentSessionId: originSessionId,
     ...(subagent
       ? { relation: { kind: "subagent" as const, parentSessionId: subagent.parentSessionId, profile: subagent.profile, description: subagent.description, status: subagent.status } }
-      : scanned.parentSessionPath
-        ? { relation: { kind: "fork" as const, ...(originSessionId ? { originSessionId } : {}) } }
-        : {}),
+      : side
+        ? { relation: { kind: "side" as const, ...side } }
+        : scanned.parentSessionPath
+          ? { relation: { kind: "fork" as const, ...(originSessionId ? { originSessionId } : {}) } }
+          : {}),
     transient: false,
     ...(detailsPending ? { detailsPending: true } : {}),
   };
@@ -255,6 +292,17 @@ async function buildSessionList(scanned: ScannedSessionInfo[]): Promise<SessionI
   const pathToId = new Map<string, string>();
   for (const session of scanned) pathToId.set(sessionPathKey(session.path), session.id);
   return attachSessionProjectInfo(scanned.map((session) => mapScannedSession(session, pathToId)));
+}
+
+/**
+ * One session's catalogue row, read the way listAllSessions() reads it
+ * (project info, `modified` as the last message time), so the row a caller
+ * shows at once is not moved by the next list refresh. Only the file itself
+ * is scanned: a fork's `originSessionId` is the caller's to add.
+ */
+export async function readSessionInfo(filePath: string): Promise<SessionInfo | null> {
+  const scanned = await scanSessionFileInfo(filePath);
+  return scanned ? (await buildSessionList([scanned]))[0] ?? null : null;
 }
 
 async function loadAllSessions(): Promise<SessionInfo[]> {
@@ -426,6 +474,9 @@ export function invalidateSessionListCache(): void {
 }
 
 export function getSessionListVersion(): number {
+  // Session files another process (the pi CLI) creates or deletes bump no
+  // version. Every poll of the version may start a filename check instead.
+  void checkSessionMembership(defaultSessionsDir(), invalidateSessionListCache);
   return globalThis.__piSessionListGeneration ?? 0;
 }
 
@@ -700,7 +751,7 @@ export function getLatestResponseModel(entries: SessionEntry[]): SessionContext[
   return null;
 }
 
-function getSessionSettings(entries: SessionEntry[], leafId?: string | null): Pick<SessionContext, "thinkingLevel" | "model"> {
+export function getSessionSettings(entries: SessionEntry[], leafId?: string | null): Pick<SessionContext, "thinkingLevel" | "model"> {
   if (leafId === null) return { thinkingLevel: "off", model: null };
   const branch = sliceActiveBranch(entries, leafId ?? null, entries.length);
   let thinkingLevel: string | undefined;
@@ -747,6 +798,7 @@ export function buildSessionContext(
     entries, leafId ?? null, tail && tail > 0 ? tail : entries.length, excludeLeaf, wholeTurns,
   );
   const hasMore = Boolean(tail && tail > 0 && sliced[0]?.parentId);
+  const turnsBefore = hasMore ? countTurnsBefore(entries, sliced[0]) : 0;
 
   // Convert messages and their IDs together to keep fork/navigation targets aligned.
   const messages: AgentMessage[] = [];
@@ -764,8 +816,46 @@ export function buildSessionContext(
     entryIds,
     oldestEntryId: sliced[0]?.id ?? null,
     hasMore,
+    turnsBefore,
     ...getSessionSettings(entries, leafId),
   };
+}
+
+/**
+ * The fields of entryToUiMessage()'s result that isMessageGroupAnchor() reads,
+ * without converting the entry's body.
+ */
+function turnAnchorShape(entry: SessionEntry): Parameters<typeof isMessageGroupAnchor>[0] | null {
+  switch (entry.type) {
+    case "message":
+      return entry.message.role === "system" ? null : entry.message as AgentMessage;
+    case "compaction":
+      return { role: "custom", customType: "compaction", display: true };
+    case "branch_summary":
+      return entry.summary ? { role: "user" } : null;
+    case "custom_message":
+      return { role: "custom", customType: entry.customType, display: entry.display };
+    default:
+      return null;
+  }
+}
+
+/**
+ * Turns on the branch above `oldest`, the first entry of a page: the anchors
+ * the chat would group by (#791). The minimap numbers loaded turns from it, so
+ * a turn keeps its number as older pages load.
+ */
+function countTurnsBefore(entries: SessionEntry[], oldest: SessionEntry): number {
+  const byId = new Map<string, SessionEntry>();
+  for (const e of entries) byId.set(e.id, e);
+  let turns = 0;
+  let current = oldest.parentId ? byId.get(oldest.parentId) : undefined;
+  while (current) {
+    const shape = turnAnchorShape(current);
+    if (shape && isMessageGroupAnchor(shape)) turns++;
+    current = current.parentId ? byId.get(current.parentId) : undefined;
+  }
+  return turns;
 }
 
 /**
@@ -950,7 +1040,8 @@ function entryToUiMessage(
       if (entry.message.role === "system") return null;
       // Tool-result details are projected to the fields the UI renders:
       // extensions can persist megabytes there (see lib/tool-result-details.ts).
-      const normalized = slimToolResultMessage(normalizeToolCalls(entry.message));
+      // Provider signatures are dropped too: the browser never needs them (upstream #1193).
+      const normalized = slimToolResultMessage(normalizeToolCalls(withoutMessageSignatures(entry.message)));
       let message = options.deferToolResultImages
         ? deferToolResultBase64Images(normalized, options.sessionId, entry.id)
         : normalized;

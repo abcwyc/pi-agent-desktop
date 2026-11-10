@@ -19,5 +19,9 @@ export async function GET() {
   );
   const oauthProviders = buildOAuthProviderList(inputs);
   const apiKeyProviders = buildApiKeyProviderList(inputs);
-  return Response.json({ providers: oauthProviders, oauthProviders, apiKeyProviders });
+  // Every runtime provider, not only those with a chat model: the Models
+  // sidebar also labels a configured provider with no models (e.g. a
+  // classifier-only built-in such as TypeSafe).
+  const providerNames = Object.fromEntries(inputs.map((provider) => [provider.id, provider.name]));
+  return Response.json({ providers: oauthProviders, oauthProviders, apiKeyProviders, providerNames });
 }

@@ -1,9 +1,27 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
+import type { DroppedItem } from "@/lib/file-upload-client";
 
 function hasDraggedFiles(event: React.DragEvent): boolean {
   return Array.from(event.dataTransfer.types).includes("Files");
+}
+
+/** A drop's files, with dropped folders named instead (they cannot be read as one file). */
+export function droppedItems(dataTransfer: DataTransfer): DroppedItem[] {
+  const items: DroppedItem[] = [];
+  for (const item of Array.from(dataTransfer.items)) {
+    if (item.kind !== "file") continue;
+    const entry = item.webkitGetAsEntry?.();
+    if (entry?.isDirectory) {
+      items.push({ kind: "folder", name: entry.name });
+      continue;
+    }
+    const file = item.getAsFile();
+    if (file) items.push({ kind: "file", file });
+  }
+  if (items.length > 0) return items;
+  return Array.from(dataTransfer.files).map((file) => ({ kind: "file", file }));
 }
 
 export function useDragDrop(onDrop: (files: File[]) => void) {
@@ -20,6 +38,7 @@ export function useDragDrop(onDrop: (files: File[]) => void) {
   const handleDragOver = useCallback((e: React.DragEvent) => {
     if (!hasDraggedFiles(e)) return;
     e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
   }, []);
 
   const handleDragLeave = useCallback(() => {

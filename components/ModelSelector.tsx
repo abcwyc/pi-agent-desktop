@@ -8,6 +8,8 @@ import { SelectorRow } from "./SelectorRow";
 
 export interface ModelSelectorOption {
   provider: string;
+  /** The provider's display name (DeepSeek, not deepseek); the id when it has none (M4). */
+  providerName?: string;
   modelId: string;
   name: string;
 }
@@ -45,7 +47,8 @@ export function filterModelOptions(options: ModelSelectorOption[], query: string
   if (!normalizedQuery) return options;
 
   return options.filter((option) => (
-    `${option.name} ${option.modelId}`
+    // Name, id, the provider's name and id, and provider/modelId all match (upstream #1308, #1514).
+    `${option.name} ${option.modelId} ${option.provider} ${option.providerName ?? ""} ${option.provider}/${option.modelId}`
       .toLocaleLowerCase()
       .includes(normalizedQuery)
   ));
@@ -78,12 +81,12 @@ export function ModelSelector({
   const sortedOptions = useMemo(() => [...options].sort(compareModelOptions), [options]);
   const filteredOptions = filterModelOptions(sortedOptions, filter);
   const showFilter = sortedOptions.length > MODEL_FILTER_THRESHOLD;
-  const modelsByProvider: { provider: string; options: ModelSelectorOption[] }[] = [];
+  const modelsByProvider: { provider: string; label: string; options: ModelSelectorOption[] }[] = [];
 
   for (const option of filteredOptions) {
     const group = modelsByProvider.find((item) => item.provider === option.provider);
     if (group) group.options.push(option);
-    else modelsByProvider.push({ provider: option.provider, options: [option] });
+    else modelsByProvider.push({ provider: option.provider, label: option.providerName || option.provider, options: [option] });
   }
 
   const currentName = selectedLabel ?? (value
@@ -311,8 +314,8 @@ export function ModelSelector({
               ) : modelsByProvider.map((group, index) => (
                 <div key={group.provider}>
                   {modelsByProvider.length > 1 && (
-                    <div style={{ padding: "6px 12px 4px", borderTop: index > 0 || onClear ? "1px solid var(--border)" : "none", color: "var(--text-dim)", fontSize: "var(--fs-micro)", fontWeight: "var(--fw-semibold)", letterSpacing: 0, textTransform: "uppercase" }}>
-                      {group.provider}
+                    <div style={{ padding: "6px 12px 4px", borderTop: index > 0 || onClear ? "1px solid var(--border)" : "none", color: "var(--text-dim)", fontSize: "var(--fs-micro)", fontWeight: "var(--fw-semibold)", letterSpacing: 0 }}>
+                      {group.label}
                     </div>
                   )}
                   {group.options.map((option) => {

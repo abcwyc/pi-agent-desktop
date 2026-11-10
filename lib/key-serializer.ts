@@ -1,9 +1,10 @@
 // One promise chain per key, kept on globalThis under `storeKey`: route
 // handlers are bundled separately and hot reload re-evaluates modules, so a
 // module-level map would give each copy its own chain. Used by the `mcp.json`
-// writer (one chain per file) and by trusting a fresh folder (one per folder);
-// each keeps its own `Symbol.for` name, so a process that already holds a
-// chain under it keeps using it.
+// writer (one chain per file), by trusting a fresh folder (one per folder) and
+// by the shared model runtime's refresh queue (one per built runtime); each keeps
+// its own `Symbol.for` name, so a process that already holds a chain under it
+// keeps using it.
 
 /**
  * Runs `task` after every earlier task for the same key under `storeKey` has

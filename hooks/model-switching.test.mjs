@@ -31,8 +31,9 @@ test("session reloads cannot clear an in-flight optimistic model", () => {
 });
 
 test("a completed model switch reloads canonical session state and reports failures", () => {
-  assert.match(switchSource, /modelSwitchPendingRef\.current = false;\s*await loadSession\(sid\)/);
-  assert.match(switchSource, /setCurrentModelOverride\(previousOverride\)[\s\S]*?await loadSession\(sid, false, true\)/);
+  // Idle, the file settles the model; mid-run (C2) the live state does, so the stream keeps its messages.
+  assert.match(switchSource, /modelSwitchPendingRef\.current = false;\s*if \(midRun\) \{\s*setCurrentModelOverride\(null\);\s*await syncLiveState\(\);\s*\} else \{[\s\S]*?await loadSession\(sid\);/);
+  assert.match(switchSource, /setCurrentModelOverride\(previousOverride\)[\s\S]*?if \(midRun\) await syncLiveState\(\);\s*else await loadSession\(sid, false, true\);/);
   assert.match(switchSource, /setCurrentModelOverride\(previousOverride\)/);
   assert.match(switchSource, /Failed to switch model:/);
 });

@@ -52,7 +52,7 @@ test("selecting a result carries the entry id so the chat can jump to the match"
   // forwards them to AppShell.handleSelectSession -> setSearchTarget.
   assert.match(searchSource, /onSelectSession\(session, entryId, blockIndex\)/);
   assert.match(source, /onSelectSession\(s, false, entryId, blockIndex\)/);
-  assert.match(routeSource, /searchSessionContents\(sessions, query, request\.signal\)/);
+  assert.match(routeSource, /searchSessionContents\(searchable, query, request\.signal\)/);
 });
 
 test("content-search rows label chats without exposing the hidden workspace path", () => {

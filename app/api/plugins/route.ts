@@ -13,6 +13,7 @@ import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-acces
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 import { getProjectTrustStatus } from "@/lib/project-trust";
 import { isPluginSourceCheckable } from "@/lib/plugin-updates";
+import { invalidateModelRuntimeWithExtensions } from "@/lib/model-runtime";
 import type {
   PluginDiagnostic,
   PluginPackageInfo,
@@ -511,5 +512,13 @@ export async function POST(req: Request) {
     return NextResponse.json(await readPlugins(body.cwd));
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+  } finally {
+    // The provider lists share one extension-loaded runtime, and a package can
+    // add or drop a provider; an update that failed halfway may have, too. An
+    // in-place update keeps the package's path, so its new code shows after
+    // /reload, or once a session start in a project has moved the SDK's
+    // extension factory cache, when the runtime is next built (at the latest
+    // when it expires).
+    invalidateModelRuntimeWithExtensions();
   }
 }

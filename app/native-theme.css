@@ -1477,6 +1477,21 @@ html.dark .conversation-navigator-preview {
   outline-offset: -1px;
 }
 
+/* A2: where a dragged tab will land, as a bar on the side it goes to. */
+.file-tab.is-drop-before::before,
+.file-tab.is-drop-after::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.file-tab.is-drop-before::before { left: -2px; }
+.file-tab.is-drop-after::after { right: -2px; }
+
 .file-tab-icon {
   display: flex;
   flex: 0 0 auto;
@@ -2715,6 +2730,58 @@ html:not(.dark) .session-item.is-selected .session-item-time {
 
 /* "…" popover menu on session rows: keep the delete item red on hover
    (the generic .native-popover hover rule would repaint it as plain text) */
+/* File tree drop (F4): the folder row under a file drag, and the bottom hint. */
+.file-tree-drop-target {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  outline: var(--hairline) dashed var(--accent);
+  outline-offset: -1px;
+}
+.file-tree-drop-hint {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: var(--hairline) solid var(--border);
+  background: var(--bg-panel);
+  font-size: var(--fs-micro);
+  color: var(--accent);
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Git changes header: list / tree switch (F2). */
+.file-changes-view-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.file-changes-view-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.file-changes-view-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* The project menu's "Delete all sessions…" (S6) reads red like the session delete. */
+/* Scoped past the shared .app-menu row rule, which sets every row's color. */
+.app-menu.sidebar-project-context-menu button.is-danger[role="menuitem"] {
+  color: var(--danger);
+}
+.app-menu.sidebar-project-context-menu button.is-danger[role="menuitem"]:hover:not(:disabled),
 .session-item-menu button.is-danger:hover:not(:disabled) {
   background: color-mix(in srgb, var(--danger) 9%, transparent) !important;
   color: var(--danger) !important;
@@ -3763,12 +3830,6 @@ html.dark {
 }
 .app-suggestion-menu button { min-height: var(--menu-row-height); }
 
-/* Keep the mobile-only section picker hidden on desktop after replacing select. */
-.settings-mobile-section-picker.app-select-trigger { display: none; }
-@media (max-width: 640px) {
-  .settings-mobile-section-picker.app-select-trigger { display: inline-flex; }
-}
-
 .app-menu-copy {
   display: flex;
   flex: 1;
@@ -4384,6 +4445,24 @@ html.dark {
 @media (prefers-reduced-motion: reduce) {
   .settings-dialog-backdrop,
   .settings-dialog-surface {
+    animation: none;
+  }
+}
+
+/* P1: a phone shows Settings full screen, one level at a time, as upstream's
+   settings.css does; the desktop card sizing and scrim above would otherwise
+   win, since this file loads last. */
+@media (max-width: 640px) {
+  .settings-dialog-backdrop {
+    background: var(--bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .settings-dialog-surface {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    box-shadow: none;
     animation: none;
   }
 }
@@ -6693,6 +6772,52 @@ html.dark {
   .markdown-file-preview {
     padding: 22px 18px 52px !important;
   }
+}
+
+/* Settings › Models: where a dragged model would land (M5). */
+.config-sidebar-item[data-drop="before"] { box-shadow: inset 0 2px 0 var(--accent); }
+.config-sidebar-item[data-drop="after"] { box-shadow: inset 0 -2px 0 var(--accent); }
+
+/* Markdown audio/video a reply links to (C9, upstream #1281). */
+.markdown-body .markdown-media {
+  display: block;
+  max-width: 100%;
+  margin: 6px 0;
+  border-radius: var(--radius-sm);
+}
+.markdown-body audio.markdown-media { width: min(100%, 420px); }
+
+/* Patch views: unchanged lines a diff leaves out between hunks (F7, upstream #1304). */
+.patch-diff-gap {
+  padding: 2px 10px;
+  color: var(--text-dim);
+  background: var(--bg-panel);
+  border-top: var(--hairline) solid var(--border);
+  border-bottom: var(--hairline) solid var(--border);
+  font-family: var(--font-ui, inherit);
+  font-size: var(--fs-micro);
+}
+
+/* File viewer: a binary file offers its download instead of decoded bytes (F3, upstream #1401). */
+.file-viewer-binary {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  color: var(--text-muted);
+  font-size: var(--fs-body);
+  text-align: center;
+}
+.file-viewer-binary .file-viewer-binary-download {
+  display: inline-flex;
+  align-items: center;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
 }
 
 /* File viewer markdown preview — larger headings */
@@ -9951,6 +10076,21 @@ html.dark .terminal-panel {
   --terminal-magenta: #d8a0ed;
   --terminal-cyan: #67d5df;
 }
+/* Phone extra keys (F6) on the fork's terminal surface. */
+.terminal-extra-keys {
+  border-top: var(--hairline) solid var(--border);
+  background: var(--surface);
+}
+.terminal-extra-keys button {
+  color: var(--text);
+  font-size: var(--fs-caption);
+}
+.terminal-extra-keys button:active {
+  background: var(--bg-hover);
+}
+.terminal-extra-keys button.is-active {
+  color: var(--accent);
+}
 .terminal-panel-header {
   background: var(--surface);
   border-color: var(--border);
@@ -10044,6 +10184,70 @@ html.dark .terminal-panel {
 }
 .composer-clear-button:hover { background: var(--bg-hover); color: var(--text); }
 .composer-clear-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.composer-side-chat-button:disabled { opacity: 0.45; cursor: not-allowed; }
+.composer-side-chat-button:disabled:hover { background: transparent; color: inherit; }
+
+/* C1: a side chat in a right-panel tab fills the panel like the main chat its column. */
+.session-chat-panel {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.session-chat-panel-status {
+  padding: 24px 16px;
+  color: var(--text-dim);
+  font-size: var(--fs-caption);
+  text-align: center;
+}
+
+/* C1: the Agents panel's row actions (New side chat, tab, delete) and the delete confirmation. */
+.agent-row-button {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.agent-row-button:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
+.agent-row-button[aria-pressed="true"] { color: var(--accent); }
+.agent-row-button.is-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 9%, transparent); color: var(--danger); }
+.agent-row-button:disabled { opacity: 0.4; cursor: not-allowed; }
+.agent-row-button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.agent-row-confirm {
+  height: 26px;
+  padding: 0 10px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: var(--fs-caption);
+  cursor: pointer;
+}
+.agent-row-confirm.is-danger { border-color: color-mix(in srgb, var(--danger) 45%, transparent); color: var(--danger); }
+.agent-row-confirm.is-danger:hover { background: color-mix(in srgb, var(--danger) 9%, transparent); }
+
+/* C1: where a side chat's own messages start, below the history it inherited. */
+.side-chat-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  color: var(--text-dim);
+  font-size: var(--fs-caption);
+}
+.side-chat-divider > span[aria-hidden="true"] {
+  flex: 1;
+  height: var(--hairline);
+  background: var(--border);
+}
 @media (pointer: coarse) { .composer-clear-button { width: 44px; height: 44px; } }
 
 

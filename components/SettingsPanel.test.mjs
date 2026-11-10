@@ -5,6 +5,7 @@ import test from "node:test";
 const panelSource = (await readFile(new URL("./SettingsPanel.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const appearanceSource = (await readFile(new URL("./AppearanceSettings.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const cssSource = (await readFile(new URL("../app/settings.css", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+const nativeThemeSource = (await readFile(new URL("../app/native-theme.css", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const globalCssSource = (await readFile(new URL("../app/globals.css", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const shellSource = (await readFile(new URL("./AppShell.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const sidebarSource = (await readFile(new URL("./SessionSidebar.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
@@ -80,7 +81,8 @@ test("restores the settings section and each list detail selection", async () =>
 test("keeps visited settings sections mounted and contains nested Escape handling", async () => {
   const modelsSource = ((await readFile(new URL("./ModelsConfig.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n")).replace(/\r\n/g, "\n");
   assert.match(panelSource, /mountedSections\.has\(id\)/);
-  assert.match(panelSource, /hidden=\{section !== id\}/);
+  // A phone hides every section on its list of sections (P1).
+  assert.match(panelSource, /hidden=\{section !== id \|\| phone\.level === "home"\}/);
   // Settings closes on an Escape nothing nearer handled (lib/stacked-dialog.test.mjs pins the phases).
   assert.match(panelSource, /useEffect\(\(\) => listenForPanelEscape\(document, \(\) => \{ if \(!busy\) onClose\(\); \}\), \[onClose, busy\]\);/);
   assert.doesNotMatch(panelSource, /addEventListener\("keydown"/);
@@ -196,13 +198,14 @@ test("groups chat display controls together without row backgrounds", () => {
 test("keeps General free of divider rows", () => {
   assert.match(panelSource, /className="settings-dialog-header"/);
   assert.match(cssSource, /\.settings-dialog-header \{[\s\S]*?display: flex[\s\S]*?align-items: center[\s\S]*?min-height: 50px/);
-  assert.doesNotMatch(panelSource, /sections\.find\(\(item\) => item\.id === section\)/);
   assert.doesNotMatch(panelSource, /<section style=\{\{[^}]*borderBottom/);
   assert.doesNotMatch(panelSource, /borderLeft: index > 0/);
 });
 
-test("uses top navigation on desktop and one compact section picker on mobile", () => {
-  assert.match(panelSource, /className="settings-mobile-section-picker"/);
+test("uses top navigation on desktop and a drill-down of full-screen levels on a phone (P1)", () => {
+  assert.doesNotMatch(panelSource, /settings-mobile-section-picker/);
+  assert.match(panelSource, /className="settings-phone-home"/);
+  assert.match(panelSource, /className="settings-phone-back"/);
   assert.match(panelSource, /className="settings-section-tabs"/);
   assert.match(panelSource, /className="settings-section-tab"/);
   assert.match(cssSource, /\.settings-section-tab \{[\s\S]*?width: 96px/);
@@ -212,9 +215,10 @@ test("uses top navigation on desktop and one compact section picker on mobile", 
   assert.match(cssSource, /\.settings-section-tab:focus-visible:not\(\[aria-current="page"\]\)/);
   assert.match(cssSource, /\.settings-section-tab:focus-visible\[aria-current="page"\][\s\S]*?outline: none/);
   assert.match(cssSource, /@media \(max-width: 640px\)[\s\S]*?\.settings-section-tabs \{[\s\S]*?display: none/);
-  assert.match(cssSource, /@media \(max-width: 640px\)[\s\S]*?\.settings-mobile-section-picker \{[\s\S]*?display: block/);
+  // The phone header is upstream's Back | title | close grid; the picker's overrides are gone.
+  assert.doesNotMatch(nativeThemeSource, /settings-mobile-section-picker/);
   assert.doesNotMatch(panelSource, /width: isMobile \? "100%" : 188/);
-  assert.match(panelSource, /<main className="settings-dialog-main">/);
+  assert.match(panelSource, /<main ref=\{mainRef\} className="settings-dialog-main">/);
   assert.doesNotMatch(panelSource, /<style>/);
   assert.doesNotMatch(panelSource, /style=\{\{/);
 });
@@ -247,4 +251,8 @@ test("keeps password authentication to one login field and one settings action",
   assert.match(panelSource, /t\("auth\.logOut"\)/);
   assert.match(loginSource, /className="web-login-composer"[\s\S]*?type="password"[\s\S]*?<button type="submit"/);
   assert.match(globalCssSource, /\.web-login-composer \{[\s\S]*?display: flex;[\s\S]*?border-radius: 14px/);
+});
+
+test("a phone's Settings is full screen: the fork's card sizing stops at the phone breakpoint (P1)", () => {
+  assert.match(nativeThemeSource, /@media \(max-width: 640px\) \{\s*\.settings-dialog-backdrop \{\s*background: var\(--bg\);[\s\S]*?\.settings-dialog-surface \{\s*width: 100%;\s*height: 100%;\s*border-radius: 0;/);
 });

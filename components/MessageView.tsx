@@ -7,10 +7,11 @@ import { ImagePreview } from "./ImagePreview";
 import { ThinkingIcon } from "./ThinkingIcon";
 import { copyText } from "@/lib/clipboard";
 import { useI18n } from "@/hooks/useI18n";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import { useDiffViewMode } from "@/hooks/useDiffViewMode";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
 import { getAssistantErrorMessage, getThinkingPreview, hasAssistantAnswer, isAssistantTruncated, isEmptyThinkingBlock } from "@/lib/message-display";
-import { parseUnifiedPatch, type SplitDiffCell, type SplitDiffFile } from "@/lib/patch";
+import { diffGapLabel, parseUnifiedPatch, type SplitDiffCell, type SplitDiffFile } from "@/lib/patch";
 import { applyPatchPreviewToFiles, applyPatchResultHasFailures, extractApplyPatchPaths, getApplyPatchInputText, parseApplyPatchInput } from "@/lib/apply-patch";
 import { isApplyPatchToolName, isEditToolName, isWriteToolName } from "@/lib/tool-names";
 import { isToolCallExpanded, setToolCallExpanded } from "@/lib/tool-call-expansion";
@@ -1324,13 +1325,20 @@ function PairedDiffResult({ diff }: {
   );
 }
 
-function ApplyPatchDiffView({ files }: { files: SplitDiffFile[] }) {
+// Two columns of code do not fit a phone; it always reads the patch as one column (upstream #1325).
+function usePatchLayout(): "split" | "unified" {
   const { mode } = useDiffViewMode();
+  const isMobile = useIsMobile();
+  return isMobile ? "unified" : mode;
+}
+
+function ApplyPatchDiffView({ files }: { files: SplitDiffFile[] }) {
+  const mode = usePatchLayout();
   return <SplitFilesView files={files} mode={mode} />;
 }
 
 function SplitPatchView({ text }: { text: string }) {
-  const { mode } = useDiffViewMode();
+  const mode = usePatchLayout();
   const files = useMemo(() => parseUnifiedPatch(text), [text]);
   if (!files) return <PatchTextView text={text} />;
   return <SplitFilesView files={files} mode={mode} />;
@@ -1389,6 +1397,7 @@ function SplitFilesView({ files, mode = "split" }: { files: SplitDiffFile[]; mod
             <div>
               {file.rows.flatMap((row, rowIndex) => {
                 if (row.type === "hunk") return [];
+                if (row.type === "gap") return [<DiffGapRow key={`${rowIndex}-g`} count={row.count} />];
                 const cells = [];
                 const { left, right } = row;
                 if (left.type === "removed") {
@@ -1409,6 +1418,9 @@ function SplitFilesView({ files, mode = "split" }: { files: SplitDiffFile[]; mod
                 if (row.type === "hunk") {
                   return null;
                 }
+                if (row.type === "gap") {
+                  return <DiffGapRow key={rowIndex} count={row.count} spanBoth />;
+                }
 
                 return (
                   <div key={rowIndex} style={{ display: "contents" }}>
@@ -1421,6 +1433,16 @@ function SplitFilesView({ files, mode = "split" }: { files: SplitDiffFile[]; mod
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+/** Unchanged lines a patch leaves out between two hunks (upstream #1304). */
+function DiffGapRow({ count, spanBoth }: { count: number | null; spanBoth?: boolean }) {
+  const { t } = useI18n();
+  return (
+    <div className="patch-diff-gap" style={spanBoth ? { gridColumn: "1 / -1" } : undefined}>
+      {count === null ? "⋯" : diffGapLabel(count, t)}
     </div>
   );
 }
@@ -1970,7 +1992,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
                 })}
               </div>
             )}
-             {text ? <MarkdownBody className="markdown-custom-message" cwd={cwd} onOpenFile={onOpenFile}>{text}</MarkdownBody> : <span style={{ color: "var(--text-dim)", fontSize: "var(--fs-caption)" }}>{t("i18n.noMessage")}</span>}
+             {text ? <MarkdownBody className="markdown-custom-message" keepTextLayout cwd={cwd} onOpenFile={onOpenFile}>{text}</MarkdownBody> : <span style={{ color: "var(--text-dim)", fontSize: "var(--fs-caption)" }}>{t("i18n.noMessage")}</span>}
           </div>
         ) : (
           <button

@@ -1,3 +1,4 @@
+import { pageStreamLabel, registerPageStream } from "@/lib/page-stream-registry";
 import { hasTerminal, subscribeTerminal, type TerminalEvent } from "@/lib/terminal-manager";
 
 export const dynamic = "force-dynamic";
@@ -20,9 +21,12 @@ export async function GET(
       let closed = false;
       let heartbeat: ReturnType<typeof setInterval> | null = null;
       let unsubscribe: (() => void) | null = null;
+      // The Debug panel's connected pages: which page holds this stream (`?holder=`).
+      const releasePage = registerPageStream(pageStreamLabel("terminal", req));
       const cleanup = (closeController: boolean) => {
         if (closed) return;
         closed = true;
+        releasePage();
         if (heartbeat) clearInterval(heartbeat);
         unsubscribe?.();
         req.signal.removeEventListener("abort", abort);

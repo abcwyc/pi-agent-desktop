@@ -6,6 +6,7 @@ import type {
   McpConfigFieldRef,
   McpConfigFileInfo,
   McpErrorResponse,
+  McpOverrideKey,
   McpRefusalReason,
   McpServerInfo,
   ProjectMcpListing,
@@ -15,6 +16,7 @@ import type {
 import {
   mcpFieldLabel,
   mcpFileProblemDetail,
+  mcpOverrideNotice,
   mcpServerHasHiddenCharacters,
   mcpServerTarget,
   mcpVariableChips,
@@ -394,6 +396,10 @@ function McpVariableChips({ server }: { server: McpServerInfo }) {
 
 function McpServerItem({ server }: { server: McpServerInfo }) {
   const { t } = useI18n();
+  const overrideText = (keys: McpOverrideKey[]) => {
+    const notice = mcpOverrideNotice(keys);
+    return t(notice.key, notice.params);
+  };
   const target = mcpServerTarget(server);
   // A refused entry never connects, so nothing in it runs or is sent.
   const connects = server.invalidError === undefined;
@@ -432,6 +438,7 @@ function McpServerItem({ server }: { server: McpServerInfo }) {
         </p>
       )}
       {server.replacesGlobal && <p className="project-trust-mcp-line is-warning">{t("mcp.server.replacesGlobal")}</p>}
+      {server.override && <p className="project-trust-mcp-line is-warning">{overrideText(server.override.keys)}</p>}
       {server.masked && <p className="project-trust-mcp-line is-dim">{t("mcp.server.masked")}</p>}
     </li>
   );

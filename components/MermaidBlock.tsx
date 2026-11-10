@@ -349,7 +349,8 @@ interface CodeBlockProps {
 export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction, isStreaming }: CodeBlockProps) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
-  const [wrap, setWrap] = useState(false);
+  // Long lines wrap by default, as pi's TUI shows them (C10, upstream #1369).
+  const [wrap, setWrap] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const lineCount = codeLineCount(code);
   // A block keeps growing while it streams, so it only folds once complete.

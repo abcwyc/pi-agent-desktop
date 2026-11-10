@@ -1,5 +1,5 @@
-import type { AgentMessage, AgentUsage, SessionEntry, SessionMessage } from "./types";
 import { getUsageCostBreakdown, mergeUsageBreakdown, type UsageCostBreakdownEntry } from "./usage-breakdown";
+import type { AgentMessage, AgentUsage, SessionContext, SessionEntry, SessionMessage } from "./types";
 
 export interface SessionFileStats {
   userMessages: number;
@@ -17,6 +17,18 @@ export interface SessionFileStats {
   cost: number;
   /** Cost per model that answered, as pi's `/session` lists it (lib/usage-breakdown.ts). */
   costBreakdown?: UsageCostBreakdownEntry[];
+}
+
+/** One session's totals for the agent switcher (POST /api/sessions/stats). */
+export interface SessionUsageSummary {
+  tokens: SessionFileStats["tokens"];
+  cost: number;
+  toolCalls: number;
+  /** Estimated active time across all entries, as the stats popover shows it. */
+  totalActiveMs: number;
+  /** Recorded settings of this session's active branch, not its profile defaults. */
+  model?: SessionContext["model"];
+  thinkingLevel?: string;
 }
 
 function emptyStats(): SessionFileStats {

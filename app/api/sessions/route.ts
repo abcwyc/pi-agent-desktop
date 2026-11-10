@@ -8,9 +8,11 @@ import {
   mergeSessionLists,
 } from "@/lib/session-reader";
 import {
+  getAwaitingInputRpcSessionIds,
   getCompletionNotificationSuppressedRpcSessionIds,
   getRpcSessionInfos,
   getRunningRpcSessionIds,
+  withSubagentDisplayStatus,
 } from "@/lib/rpc-manager";
 import { startServerPerf } from "@/lib/perf";
 import { attachScheduledRelations } from "@/lib/scheduled-tasks/run-index";
@@ -52,7 +54,7 @@ export async function GET(req: Request) {
       void pruneEmptyChatFolders(undefined, { keep: inUse }).catch(() => undefined);
     }
     perf?.span("scan+projects");
-    const sessions = attachScheduledRelations(mergeSessionLists(persistedSessions, runtimeSessions))
+    const sessions = withSubagentDisplayStatus(attachScheduledRelations(mergeSessionLists(persistedSessions, runtimeSessions)))
       .map((session) => {
         const firstMessage = sessionListFirstMessage(session.firstMessage);
         return firstMessage === session.firstMessage ? session : { ...session, firstMessage };
@@ -61,6 +63,7 @@ export async function GET(req: Request) {
       sessions,
       sessionListVersion,
       runningSessionIds: getRunningRpcSessionIds(),
+      awaitingInputSessionIds: getAwaitingInputRpcSessionIds(),
       completionNotificationSuppressedSessionIds: getCompletionNotificationSuppressedRpcSessionIds(),
       chatWorkspaceCwd,
     };

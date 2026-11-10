@@ -150,3 +150,36 @@ export function streamReducer(
       return state;
   }
 }
+
+/**
+ * The streaming state outside React: a chunk re-renders only the components
+ * that subscribe to the part of it they show, not everything around the reply.
+ * Listeners run synchronously in `dispatch`, so their state updates batch with
+ * the ones the same event makes (message_end appends the reply and ends the
+ * stream in one render).
+ */
+export interface StreamingStore {
+  getState(): StreamingState;
+  dispatch(action: StreamAction): void;
+  subscribe(listener: () => void): () => void;
+}
+
+export function createStreamingStore(): StreamingStore {
+  let state = INITIAL_STREAMING_STATE;
+  const listeners = new Set<() => void>();
+  return {
+    getState: () => state,
+    dispatch(action) {
+      const next = streamReducer(state, action);
+      if (next === state) return;
+      state = next;
+      for (const listener of listeners) listener();
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+}

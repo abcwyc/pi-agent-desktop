@@ -224,3 +224,26 @@ test("a status recorded before the entry changed is not shown for the changed en
   await writeFile(globalPath, `${JSON.stringify({ mcpServers: globalServers }, null, 2)}\n`);
   assert.equal((await get()).find((server) => server.name === "lint").status, undefined);
 });
+
+test("a project override is tested as the global server it changes, and its status is the override's row", async () => {
+  await writeFile(projectPath, `${JSON.stringify({ mcpServers: { lint: { exposure: "direct" }, pw: { enabled: true }, nothing: { enabled: false } } }, null, 2)}\n`);
+  // Untrusted, the override is the repository's word like any project entry.
+  assert.equal((await post({ scope: "project", name: "lint", cwd })).body.reason, "project-untrusted");
+  store.set(cwd, true);
+
+  const { status, body } = await post({ scope: "project", name: "lint", cwd });
+  assert.equal(status, 200);
+  assert.equal(body.result.state, "connected", body.result.error);
+  const servers = await get(`?cwd=${encodeURIComponent(cwd)}`);
+  const override = servers.find((server) => server.scope === "project" && server.name === "lint");
+  assert.equal(override.status?.state, "connected", "recorded under the override, for the config it connects");
+  assert.equal(body.configKey, override.configKey);
+  assert.equal(servers.find((server) => server.scope === "global" && server.name === "lint").status, undefined);
+
+  // What the global entry carries counts: an override is refused for it as the global entry would be.
+  assert.equal((await post({ scope: "project", name: "pw", cwd })).body.reason, "web-password");
+  // And one with nothing to override is refused in the loader's words.
+  const orphan = await post({ scope: "project", name: "nothing", cwd });
+  assert.deepEqual([orphan.status, orphan.body.reason], [409, "server-invalid"]);
+  assert.equal(orphan.body.error, 'server "nothing" needs "command" or "url", or a global server to override');
+});

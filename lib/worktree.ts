@@ -1,5 +1,5 @@
 import { execFile } from "child_process";
-import { existsSync, mkdirSync, realpathSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync } from "fs";
 import { basename, dirname, join, resolve } from "path";
 import { promisify } from "util";
 import { allowFileRoot } from "./allowed-roots";
@@ -11,9 +11,10 @@ const execFileAsync = promisify(execFile);
 // Project resolution: cwd → { projectRoot, branch }
 //
 // A worktree's `git rev-parse --git-common-dir` points at the *main* repo's
-// .git directory, so its parent is the project root shared by all worktrees.
-// Non-git directories resolve to themselves. Results are cached on globalThis
-// (hot-reload safe) with a short TTL; add/remove worktree invalidates eagerly.
+// .git directory, so its parent is the project root shared by all worktrees
+// (a bare clone is its own root). Non-git directories resolve to themselves.
+// Results are cached on globalThis (hot-reload safe) with a short TTL;
+// add/remove worktree invalidates eagerly.
 // ============================================================================
 
 export interface ProjectInfo {
@@ -66,6 +67,24 @@ async function git(cwd: string, args: string[], timeoutMs = 10_000): Promise<str
   return stdout.trim();
 }
 
+/** Spawn failures that clear up on their own: out of fds, processes or memory. */
+const TRANSIENT_SPAWN_CODES = new Set(["EMFILE", "ENFILE", "EAGAIN", "ENOMEM"]);
+
+/**
+ * A git run that never gave its answer: the spawn failed for want of
+ * resources, or git was killed (the timeout). Anything git itself exits with
+ * (outside a repository, at a mount point, dubious ownership, a broken .git)
+ * and a missing git binary are the folder's answer for now, cached like a
+ * resolved repo; caching them also keeps a permanently broken cwd from
+ * spawning git and logging on every session list.
+ */
+function isTransientGitError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const { code, killed, signal } = error as { code?: unknown; killed?: unknown; signal?: unknown };
+  return killed === true || (typeof signal === "string" && signal !== "")
+    || (typeof code === "string" && TRANSIENT_SPAWN_CODES.has(code));
+}
+
 function realPathOrSelf(filePath: string): string {
   try {
     return realpathSync(filePath);
@@ -75,16 +94,46 @@ function realPathOrSelf(filePath: string): string {
 }
 
 /**
+ * The folder a repository's worktrees group under, from its common git dir.
+ * A checkout's `.git` stands in that folder, and so does a bare repo that a
+ * `.git` file beside it points at (`project/.bare`). Any other bare clone
+ * (`parent/repo.git`) is its own root: its parent may hold other repositories,
+ * whose worktrees would otherwise all land in one project.
+ */
+function repoRootFromCommonDir(commonDir: string): string {
+  const parent = dirname(commonDir);
+  if (basename(commonDir) === ".git") return parent;
+  try {
+    const match = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(join(parent, ".git"), "utf8"));
+    if (match && samePath(realPathOrSelf(resolve(parent, match[1])), realPathOrSelf(commonDir))) return parent;
+  } catch {
+    // No `.git` file beside it (a `.git` directory belongs to another repo).
+  }
+  return commonDir;
+}
+
+/**
  * addWorktree() places worktrees in `<repoRoot>-worktrees/<dir>`. When such a
  * directory no longer exists (worktree removed), group its sessions back
  * under the main repo instead of letting them dangle as a phantom project.
  * The dir name is the sanitized branch name — close enough for display.
+ *
+ * Inference is by that naming convention and a sibling that is a repository
+ * (`<repoRoot>/.git`, or a bare clone), never by `git worktree list`: `git worktree remove`
+ * deletes the directory *and* its admin entry, so nothing survives to ask. It names one
+ * folder and nothing else — the parent of the cwd with a `-worktrees` suffix stripped.
+ * `/api/models`, which answers *for* such a cwd, takes the repo as just another cwd and
+ * re-checks it against the allowed roots itself.
  */
-function inferRemovedWorktree(cwd: string): ProjectInfo | null {
+export function inferRemovedWorktree(cwd: string): ProjectInfo | null {
   const parent = dirname(cwd);
   if (!parent.endsWith("-worktrees")) return null;
   const repoRoot = parent.slice(0, -"-worktrees".length);
-  if (!repoRoot || !existsSync(join(repoRoot, ".git"))) return null;
+  if (!repoRoot) return null;
+  // A bare clone has no `.git`; git takes HEAD, objects/ and refs/ for a git dir.
+  const isRepo = existsSync(join(repoRoot, ".git"))
+    || ["HEAD", "objects", "refs"].every((name) => existsSync(join(repoRoot, name)));
+  if (!isRepo) return null;
   return { projectRoot: realPathOrSelf(repoRoot), branch: basename(cwd), isWorktree: true, isTopLevel: true };
 }
 
@@ -97,6 +146,10 @@ function inferRemovedWorktree(cwd: string): ProjectInfo | null {
  * every project cwd) therefore never wait on git subprocesses once a cwd has
  * been resolved once. Concurrent refreshes for the same cwd share one promise.
  * add/removeWorktree invalidate eagerly via invalidateProjectCache().
+ *
+ * Transient git failures are the exception: the caller gets a cwd-only
+ * fallback for that request only, never cached, so a failing git cannot pin
+ * a phantom project identity (and the error is logged).
  */
 export async function resolveProject(cwd: string): Promise<ProjectInfo> {
   const cache = getProjectCache();
@@ -110,7 +163,16 @@ export async function resolveProject(cwd: string): Promise<ProjectInfo> {
     return cached.info;
   }
 
-  const info = await resolveProjectUncached(cwd);
+  let info: ProjectInfo;
+  try {
+    info = await resolveProjectUncached(cwd);
+  } catch (error) {
+    // Transient git failure (fd exhaustion, a killed git): serve a cwd-only
+    // fallback for this request only, never cached, so it cannot become a
+    // lasting project identity. The next request retries.
+    console.error(`[pi-web] resolveProject: git failed for ${cwd}, not cached: ${error instanceof Error ? error.message : String(error)}`);
+    return { projectRoot: cwd, branch: null, isWorktree: false, isTopLevel: false };
+  }
   cache.set(cwd, { info, expiresAt: Date.now() + PROJECT_CACHE_TTL_MS });
   return info;
 }
@@ -159,14 +221,17 @@ async function resolveProjectUncached(cwd: string): Promise<ProjectInfo> {
     // worktree switcher.
     const isTopLevel = samePath(toplevel, realCwd);
     const isWorktreeTopLevel = !samePath(gitDir, commonDir) && isTopLevel;
-    const topLevelProjectRoot = isWorktreeTopLevel ? dirname(commonDir) : toplevel;
+    const topLevelProjectRoot = isWorktreeTopLevel ? repoRootFromCommonDir(commonDir) : toplevel;
     info = {
       projectRoot: isTopLevel ? realPathOrSelf(topLevelProjectRoot) : cwd,
       branch: ref && ref !== "HEAD" ? ref : null,
       isWorktree: isWorktreeTopLevel,
       isTopLevel,
     };
-  } catch {
+  } catch (error) {
+    // A transient failure propagates so resolveProject keeps it out of the
+    // cache; whatever git itself answered is this folder's identity for now.
+    if (isTransientGitError(error)) throw error;
     info = { projectRoot: cwd, branch: null, isWorktree: false, isTopLevel: false };
   }
 
@@ -181,29 +246,25 @@ async function resolveProjectUncached(cwd: string): Promise<ProjectInfo> {
 // common dir, so callers can pass session cwds directly.
 // ============================================================================
 
-/** Main repo root (parent of the shared .git dir), or throws for non-git dirs */
+/** Main repo root (parent of the shared .git dir, or a bare clone), or throws for non-git dirs */
 async function getRepoRoot(cwd: string): Promise<string> {
   const commonDir = await git(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
-  return realPathOrSelf(dirname(toNativePath(commonDir)));
+  return realPathOrSelf(repoRootFromCommonDir(toNativePath(commonDir)));
 }
 
-export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {
+/** Every worktree git has registered, `missing` when it is prunable or its folder is gone. */
+async function listRegisteredWorktrees(cwd: string): Promise<{ path: string; branch: string | null; missing: boolean }[]> {
   const out = await git(cwd, ["worktree", "list", "--porcelain"]);
-  const worktrees: WorktreeInfo[] = [];
-  let current: (Partial<WorktreeInfo> & { prunable?: boolean }) | null = null;
+  const worktrees: { path: string; branch: string | null; missing: boolean }[] = [];
+  let current: { path: string; branch?: string; prunable?: boolean } | null = null;
 
   const flush = () => {
     if (current?.path) {
-      // Prunable worktrees point at missing/broken gitdirs and cannot be
-      // browsed or selected usefully. Also skip vanished paths even if git has
-      // not marked them prunable yet.
-      if (!current.prunable && existsSync(current.path)) {
-        worktrees.push({
-          path: current.path,
-          branch: current.branch ?? null,
-          isMain: worktrees.length === 0,
-        });
-      }
+      worktrees.push({
+        path: current.path,
+        branch: current.branch ?? null,
+        missing: current.prunable === true || !existsSync(current.path),
+      });
     }
     current = null;
   };
@@ -222,6 +283,15 @@ export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {
   }
   flush();
   return worktrees;
+}
+
+export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {
+  // Prunable worktrees point at missing/broken gitdirs and cannot be browsed
+  // or selected usefully. Also skip vanished paths even if git has not marked
+  // them prunable yet.
+  return (await listRegisteredWorktrees(cwd))
+    .filter((worktree) => !worktree.missing)
+    .map(({ path, branch }, index) => ({ path, branch, isMain: index === 0 }));
 }
 
 function findWorktreeByPath(worktrees: readonly WorktreeInfo[], candidate: string): WorktreeInfo | undefined {
@@ -381,6 +451,19 @@ export async function fetchRemote(cwd: string): Promise<void> {
   }
 }
 
+/**
+ * A branch git will not check out twice: it is the branch of another worktree.
+ * `missing`: that worktree's folder is gone, and git keeps the branch until
+ * `git worktree prune` clears the entry (never run here).
+ */
+export class WorktreeBranchInUseError extends Error {
+  constructor(readonly branch: string, readonly worktreePath: string, readonly missing: boolean) {
+    super(missing
+      ? `Branch '${branch}' belongs to a worktree whose folder is gone: ${worktreePath}; git worktree prune clears it`
+      : `Branch '${branch}' is already checked out at ${worktreePath}`);
+  }
+}
+
 export async function addWorktree(cwd: string, branch: string): Promise<{ path: string; branch: string }> {
   const trimmed = branch.trim();
   if (!trimmed) throw new Error("Branch name is required");
@@ -389,6 +472,11 @@ export async function addWorktree(cwd: string, branch: string): Promise<{ path: 
   if (!dirName) throw new Error(`Invalid branch name: ${branch}`);
 
   const repoRoot = await getRepoRoot(cwd);
+  // Before the folder check: a branch pi-web already made a worktree for also
+  // has its folder, and the answer is where that checkout is, not the folder.
+  // Missing entries too: a deleted folder's entry still holds the branch.
+  const holder = (await listRegisteredWorktrees(repoRoot)).find((worktree) => worktree.branch === trimmed);
+  if (holder) throw new WorktreeBranchInUseError(trimmed, holder.path, holder.missing);
   const baseDir = `${resolve(repoRoot)}-worktrees`;
   const worktreePath = join(baseDir, dirName);
   if (existsSync(worktreePath)) {
@@ -457,7 +545,12 @@ export async function removeWorktree(cwd: string, worktreePath: string, force = 
  * deliberately not matched: offering a single force there would just fail.
  */
 export function worktreeRemovalRequiresForce(message: string): boolean {
-  return /contains modified or untracked files|is dirty|containing submodules/i.test(message);
+  return worktreeHasUncommittedFiles(message) || /containing submodules/i.test(message);
+}
+
+/** The refusal is about modified or untracked files, not initialized submodules. */
+export function worktreeHasUncommittedFiles(message: string): boolean {
+  return /contains modified or untracked files|is dirty/i.test(message);
 }
 
 function extractGitError(error: unknown): string {

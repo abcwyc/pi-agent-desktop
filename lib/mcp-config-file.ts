@@ -6,6 +6,7 @@ import lockfile from "proper-lockfile";
 import { serializeByKey } from "./key-serializer";
 import {
   globalMcpConfigPath,
+  isMcpOverrideEntry,
   jsonErrorMessage,
   locateProjectMcpConfig,
   PROJECT_MCP_CONFIG_MAX_BYTES,
@@ -19,7 +20,8 @@ import {
 // file is parsed, the edit applied to the parsed object, and the whole document
 // written back with the indentation of its first indented line ("  " when
 // none) and always a trailing newline; `enabled: true` and `exposure:
-// "codemode"` delete their key, and every key Pi Web does not know is kept.
+// "codemode"` delete their key (except in a project override, which keeps
+// them), and every key Pi Web does not know is kept.
 // What the SDK lacks and this adds: a lock (proper-lockfile, plus an
 // in-process queue so Pi Web's own writes never wait on each other's lock), an
 // atomic write (a temporary file in the real directory, renamed over the real
@@ -35,7 +37,7 @@ export type McpConfigFileTarget =
   | { scope: "global"; agentDir: string }
   | { scope: "project"; cwd: string; allowedRoots: Set<string> };
 
-/** The SDK's server patch: `enabled: true` and `exposure: "codemode"` remove their key. */
+/** The SDK's server patch: `enabled: true` and `exposure: "codemode"` remove their key, except in a project override. */
 export interface McpServerConfigPatch {
   enabled?: boolean;
   exposure?: McpExposure;
@@ -118,24 +120,27 @@ function defineEntry(target: Record<string, unknown>, key: string, value: unknow
 /**
  * The SDK's `updateMcpServerConfig()` patch on one entry, in place: `enabled:
  * true` deletes the key and `false` sets it, `exposure: "codemode"` deletes
- * the key and any other sets it. Returns whether the entry changed; one that
- * already says what the patch says is left alone, so its file is not rewritten.
+ * the key and any other sets it. An override (`isMcpOverrideEntry()`) keeps
+ * the defaults written, since they replace the global server's values.
+ * Returns whether the entry changed; one that already says what the patch
+ * says is left alone, so its file is not rewritten.
  */
 export function patchMcpServerEntry(entry: Record<string, unknown>, patch: McpServerConfigPatch): boolean {
+  const keepDefaults = isMcpOverrideEntry(entry);
   let changed = false;
   if (patch.enabled !== undefined) {
-    if (patch.enabled) {
+    if (patch.enabled && !keepDefaults) {
       if (Object.hasOwn(entry, "enabled")) {
         delete entry.enabled;
         changed = true;
       }
-    } else if (entry.enabled !== false) {
-      defineEntry(entry, "enabled", false);
+    } else if (entry.enabled !== patch.enabled) {
+      defineEntry(entry, "enabled", patch.enabled);
       changed = true;
     }
   }
   if (patch.exposure !== undefined) {
-    if (patch.exposure === "codemode") {
+    if (patch.exposure === "codemode" && !keepDefaults) {
       if (Object.hasOwn(entry, "exposure")) {
         delete entry.exposure;
         changed = true;
@@ -451,6 +456,36 @@ export async function setMcpServerExposure(
     const entry = servers[name];
     if (!isRecord(entry)) return { changed: false, value: { name, outcome: "not-an-object" } };
     const changed = patchMcpServerEntry(entry, { exposure });
+    return { changed, value: { name, outcome: changed ? "changed" : "unchanged" } };
+  });
+}
+
+/**
+ * Turns a global server on or off in one project's file, as `/mcp`'s "Enable
+ * / Disable in this project" does with the SDK's `updateMcpServerConfig(path,
+ * name, { enabled }, { override: true })`: a file that does not define the
+ * server gets an override entry (appended, `enabled` written either way),
+ * and an override already there is patched. A full entry of that name is the
+ * project's own server, which a switch of its own changes: `name-taken`.
+ */
+export async function setMcpServerEnabledInProject(
+  target: Extract<McpConfigFileTarget, { scope: "project" }>,
+  name: string,
+  enabled: boolean,
+): Promise<McpConfigEditOutcome<McpEnabledOutcome<never>>> {
+  return editMcpConfigFile<McpEnabledOutcome<never>>(target, ({ document, servers, path }) => {
+    const existing = ownServerEntry(servers, name);
+    if (existing === undefined) {
+      const entry: Record<string, unknown> = {};
+      patchMcpServerEntry(entry, { enabled });
+      insertMcpServerEntry(document, name, entry);
+      return { changed: true, value: { name, outcome: "changed" } };
+    }
+    if (!isRecord(existing)) return { changed: false, value: { name, outcome: "not-an-object" } };
+    if (!isMcpOverrideEntry(existing)) {
+      throw new McpConfigWriteError("name-taken", path, `${path} already defines MCP server "${name}"`, name);
+    }
+    const changed = patchMcpServerEntry(existing, { enabled });
     return { changed, value: { name, outcome: changed ? "changed" : "unchanged" } };
   });
 }

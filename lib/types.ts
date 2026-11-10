@@ -78,7 +78,10 @@ export interface AssistantMessage {
   responseModel?: string;
   stopReason?: string;
   errorMessage?: string;
+  /** When the request started. */
   timestamp?: number;
+  /** From `timestamp` until the response ended, measured by pi (pi 1.1); absent for older messages. */
+  durationMs?: number;
   usage?: AgentUsage;
 }
 
@@ -90,6 +93,8 @@ export interface ToolResultMessage {
   isError?: boolean;
   details?: unknown;
   timestamp?: number;
+  /** How long the tool ran, measured by pi with a monotonic clock (pi 1.1); absent for older results. */
+  durationMs?: number;
   usage?: AgentUsage;
 }
 
@@ -405,9 +410,9 @@ export interface SessionInfo {
   worktreeBranch?: string;
   /** True while the sidebar has only header/stat metadata for this session. */
   detailsPending?: boolean;
-  parentSessionId?: string; // source session for a fork, or parent session for a subagent
+  parentSessionId?: string; // source session for a fork, or parent session for a subagent or side chat
   /** How this session relates to another session. Forks remain top-level in the
-   *  UI; only subagent relations form a visible parent/child tree. */
+   *  UI; subagent and side relations form a visible parent/child tree. */
   relation?:
     | { kind: "fork"; originSessionId?: string }
     /** Output of a scheduled task's run. Attached by /api/sessions from the run
@@ -419,7 +424,8 @@ export interface SessionInfo {
         profile: string;
         description: string;
         status: SubagentSessionStatus;
-      };
+      }
+    | { kind: "side"; parentSessionId: string };
   /** Main repo root shared by all worktrees of this cwd (cwd itself for non-git dirs).
    *  Always set by the server; optional because the client builds transient
    *  SessionInfo objects before the first refresh. Fall back to cwd. */
@@ -444,6 +450,8 @@ export interface SessionContext {
   entryIds: string[]; // parallel to messages — the session entry id for each message
   oldestEntryId: string | null;
   hasMore: boolean;
+  /** Turns on the branch before `oldestEntryId`, not loaded (the minimap numbers from it). */
+  turnsBefore: number;
   thinkingLevel: string;
   model: { provider: string; modelId: string } | null;
 }

@@ -83,7 +83,9 @@ test("collapses secondary composer chrome while the mobile keyboard is open", ()
   assert.match(chatInputSource, /className=\{compact \? undefined : "chat-input-shell"\}/);
   assert.match(chatWindowSource, /className="chat-window chat-content /);
   // Phone landscape exceeds the 640px breakpoint but has the least height.
-  assert.match(cssSource, /@media \(max-width: 640px\), \(pointer: coarse\) and \(max-height: 500px\) \{\s*html\[data-keyboard-open\] \.chat-input-controls,\s*html\[data-keyboard-open\] \.extension-status-shelf \{\s*display: none !important;/);
+  // upstream splits the rule so its model picker can stay open (#1271).
+  assert.match(cssSource, /@media \(max-width: 640px\), \(pointer: coarse\) and \(max-height: 500px\) \{\s*html\[data-keyboard-open\] \.extension-status-shelf \{\s*display: none !important;/);
+  assert.match(cssSource, /html\[data-keyboard-open\] \.chat-input-controls:not\(:has\(\.model-selector \[role="listbox"\]\)\) \{\s*display: none !important;/);
   assert.match(cssSource, /html\[data-keyboard-open\] \.chat-content \{\s*padding-bottom: 0 !important;/);
   assert.match(cssSource, /html\[data-keyboard-open\] \.chat-input-shell \{\s*padding-bottom: 6px !important;/);
   // The main composer's send is icon-only (phone and desktop) but keeps an
@@ -116,11 +118,12 @@ test("keeps Settings › MCP usable in the 190px phone sidebar", () => {
   assert.match(cssRule(settingsCssSource, ".mcp-add-input"), /width: 100%;[\s\S]*?min-width: 0;/);
   assert.match(cssRule(settingsCssSource, ".mcp-add-note"), /overflow-wrap: anywhere;/);
   assert.match(cssRule(settingsCssSource, ".config-add-source-input.is-multiline"), /resize: vertical;[\s\S]*?overflow: auto;/);
-  // Every .mcp-* rule targets a class the panel (its Sign-in row, its add pane) renders, and every
-  // class it renders has a rule, so a rename cannot leave a phone rule silently dead.
+  // Every .mcp-* class the panel (its Sign-in row, its add pane) renders has a rule, so a rename
+  // cannot leave a class unstyled. app/settings.css is upstream's byte for byte and may also style
+  // classes of upstream's own MCP detail layout, which the fork does not ship.
   const styled = new Set([...settingsCssSource.matchAll(/\.(mcp-[a-z-]+)/g)].map((match) => match[1]));
   const rendered = new Set([...`${mcpConfigSource}\n${mcpSignInSource}\n${mcpAddSource}`.matchAll(/className=(?:"([^"]*)"|\{`([^`]*)`\})/g)]
     .flatMap((match) => (match[1] ?? match[2]).split(/\s+/))
     .filter((name) => name.startsWith("mcp-")));
-  assert.deepEqual([...styled].sort(), [...rendered].sort());
+  assert.deepEqual([...rendered].filter((name) => !styled.has(name)).sort(), []);
 });

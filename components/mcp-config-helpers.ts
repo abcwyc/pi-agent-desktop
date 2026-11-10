@@ -12,6 +12,7 @@ import type {
   McpConfigFileInfo,
   McpConfigFileProblem,
   McpErrorResponse,
+  McpOverrideKey,
   McpProjectInfo,
   McpRefusalReason,
   McpResponse,
@@ -47,7 +48,7 @@ export function mcpServerKey(server: Pick<McpServerInfo, "scope" | "name">): str
  * entry pi refuses, one Pi Web refuses because it references PI_WEB_PASSWORD,
  * one turned off in the file, a project entry of a project whose servers may
  * not be read, a global entry the trusted project's entry of the same name
- * replaces, and MCP being off on this server. Only an entry the file lets
+ * replaces or overrides, and MCP being off on this server. Only an entry the file lets
  * connect then shows its last known status (`mcpStatusRowState()`), from the
  * last Test of the entry as the file holds it now or from what an open
  * session reported since: `connected`, `needs-auth`, `failed`, and from a
@@ -61,6 +62,7 @@ export type McpServerRowState =
   | "disabled"
   | "not-trusted"
   | "replaced"
+  | "overridden"
   | "mcp-off"
   | "connected"
   | "needs-auth"
@@ -76,6 +78,7 @@ export const MCP_SERVER_ROW_STATES: readonly McpServerRowState[] = [
   "disabled",
   "not-trusted",
   "replaced",
+  "overridden",
   "mcp-off",
   "connected",
   "needs-auth",
@@ -126,8 +129,9 @@ export function mcpServerRowState(server: McpServerInfo, context: McpRowContext)
   if (server.webPasswordField) return "web-password";
   if (!server.enabled) return "disabled";
   if (server.scope === "project" && !context.projectServersLoad) return "not-trusted";
-  // The project's entry replaces this one only where it is read.
+  // The project's entry replaces this one, or its override changes it, only where it is read.
   if (server.scope === "global" && server.shadowedByProject && context.projectServersLoad) return "replaced";
+  if (server.scope === "global" && server.overriddenByProject && context.projectServersLoad) return "overridden";
   if (!context.mcpAvailable) return "mcp-off";
   return server.status ? mcpStatusRowState(server.status) : "on";
 }
@@ -139,6 +143,7 @@ export const MCP_ROW_STATE_LABEL_KEYS: Record<McpServerRowState, string> = {
   disabled: "mcp.state.disabled",
   "not-trusted": "mcp.state.not-trusted",
   replaced: "mcp.state.replaced",
+  overridden: "mcp.state.overridden",
   "mcp-off": "mcp.state.mcp-off",
   connected: "mcp.state.connected",
   "needs-auth": "mcp.state.needs-auth",
@@ -171,6 +176,7 @@ export const MCP_ROW_STATE_DETAIL_KEYS: Partial<Record<McpServerRowState, string
   disabled: "mcp.server.disabled",
   "not-trusted": "mcp.stateDetail.not-trusted",
   replaced: "mcp.server.shadowedByProject",
+  overridden: "mcp.server.overriddenByProject",
   "mcp-off": "mcp.stateDetail.mcp-off",
   disconnected: "mcp.stateDetail.disconnected",
   conflict: "mcp.stateDetail.conflict",
@@ -192,6 +198,7 @@ export const MCP_ROW_STATE_BADGE_KEYS: Partial<Record<McpServerRowState, string>
   disabled: "mcp.stateShort.disabled",
   "not-trusted": "mcp.stateShort.not-trusted",
   replaced: "mcp.stateShort.replaced",
+  overridden: "mcp.stateShort.overridden",
   "needs-auth": "mcp.stateShort.needs-auth",
   failed: "mcp.stateShort.failed",
   connecting: "mcp.stateShort.connecting",
@@ -1073,6 +1080,35 @@ export function mcpWriteBlock(scope: McpScope, data: Pick<McpResponse, "mcp" | "
   return undefined;
 }
 
+/** What a global server's "This project" row offers: a link to the project's override of it, or a switch for the project alone. */
+export type McpInProjectView =
+  | { kind: "switch" }
+  /** `applies` is false for an override pi refuses, which leaves the global server as it is. */
+  | { kind: "override"; key: string; keys: McpOverrideKey[]; applies: boolean };
+
+/**
+ * The "This project" row of a global server, Settings' counterpart of `/mcp`'s
+ * "Enable / Disable in this project" (pi 1.0.1): only while a project whose
+ * file sessions read is listed (`mcpProjectServersLoad()`) and the server is
+ * one pi loads, since an override of anything else is skipped. A project
+ * entry of the name is linked instead when it overrides the server, and the
+ * row is left out when it is a server of its own (it replaces this one, or pi
+ * refuses it) or the project file cannot be listed.
+ */
+export function mcpInProjectView(
+  server: McpServerInfo,
+  data: Pick<McpResponse, "project" | "servers" | "files">,
+): McpInProjectView | undefined {
+  if (server.scope !== "global" || server.invalidError !== undefined || server.notAnObject) return undefined;
+  if (!mcpProjectServersLoad(data.project)) return undefined;
+  const file = data.files.find((item) => item.scope === "project");
+  if (!file || file.problems.some((problem) => problem.reason !== "auto-enable-codemode-invalid")) return undefined;
+  const entry = data.servers.find((item) => item.scope === "project" && item.name === server.name);
+  if (!entry) return { kind: "switch" };
+  if (!entry.override) return undefined;
+  return { kind: "override", key: mcpServerKey(entry), keys: entry.override.keys, applies: server.overriddenByProject === true };
+}
+
 /** The sentence a notice adds when what it reports also keeps the panel from changing servers. */
 export const MCP_READ_ONLY_KEYS: Record<McpWriteBlock, string> = {
   "mcp-off": "mcp.readOnly.mcp-off",
@@ -1125,6 +1161,7 @@ export function mcpGroupSwitchChecked(servers: readonly McpSwitchable[]): boolea
 export type McpActionRequest =
   | { action: "enable" | "disable" | "remove" | "sign-out"; scope: McpScope; name: string }
   | { action: "set-exposure"; scope: McpScope; name: string; exposure: NonNullable<McpServerInfo["exposure"]> }
+  | { action: "set-in-project"; name: string; enabled: boolean }
   | { action: "set-enabled"; enabled: boolean; servers: McpServerRef[] }
   | { action: "undo"; token: string }
   | {

@@ -66,7 +66,7 @@ export interface EnabledModelsState {
   /**
    * Patterns that match no available model, so nothing here can tell what they
    * were for — a provider without a usable credential, a renamed or deleted
-   * model, a typo, another machine's config. Preserved by every edit.
+   * model, a typo, another machine's config. Preserved by every edit but `prune`.
    */
   stalePatterns: string[];
 }
@@ -77,6 +77,8 @@ export interface EnabledModelsModelView {
   /** `provider/modelId`, the reference used by every edit. */
   ref: string;
   enabled: boolean;
+  /** The context budget currently resolved by pi, including models.json overrides. */
+  contextWindow?: number;
   /** Thinking level pinned by a `:level` pattern; read-only in pi-web. */
   thinkingPin?: string;
 }
@@ -444,7 +446,10 @@ export function constrainProviderEntries(input: EnabledModelsInput): EnabledMode
  * Every other operation preserves them, because an entry usually goes unmatched
  * for a reason that can reverse itself (a provider signed out, a catalog not
  * refreshed yet). This one is the user saying they are gone for good, so it is
- * the only way to clean up after a provider renamed its models.
+ * the only way to clean up after a provider renamed its models. A signed-out
+ * provider's entries go too: pi warns about them on every start, and the panel
+ * lists no switch for a provider without available models, so keeping them
+ * here left no way to remove them but editing settings.json (#1427 kept them).
  */
 export function pruneStaleEnabledModels(input: EnabledModelsInput): EnabledModelsEdit {
   const kept = toEntries(input.resolutions).filter((entry) => entry.matched.length > 0);

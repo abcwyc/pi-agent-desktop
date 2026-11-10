@@ -22,6 +22,8 @@ export interface ContextUsage {
 export interface ModelLike {
   id: string;
   provider: string;
+  /** Dollars per million tokens. */
+  cost?: { input: number; output: number; cacheRead: number; cacheWrite: number };
 }
 
 export interface ToolInfo {
@@ -166,7 +168,7 @@ export interface AgentSessionLike {
   readonly model: ModelLike | undefined;
   readonly modelRuntime: {
     getModel: (provider: string, modelId: string) => ModelLike | undefined;
-    refresh: (options?: { allowNetwork?: boolean }) => Promise<unknown>;
+    refresh: (options?: { allowNetwork?: boolean; providers?: string[]; signal?: AbortSignal }) => Promise<unknown>;
   };
   readonly sessionManager: SessionManager;
   readonly settingsManager: SettingsManager;
@@ -225,6 +227,8 @@ export interface AgentSessionLike {
   }): Promise<{ output: string; exitCode?: number; cancelled?: boolean; truncated?: boolean; fullOutputPath?: string }>;
   abortBash(): void;
   readonly isBashRunning: boolean;
+  /** An auto-retry waiting out its backoff; optional because test sessions leave it out. */
+  readonly isRetrying?: boolean;
   setModel(model: ModelLike): Promise<void>;
   navigateTree(targetId: string, options?: NavigateTreeOptions): Promise<NavigateTreeResult>;
   /** Command-capable context bound to this session, handed to an extension's `withSession()` callback. */

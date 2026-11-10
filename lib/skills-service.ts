@@ -5,7 +5,10 @@ import { getProjectTrustStatus, projectTrustReloadOptions } from "@/lib/project-
 
 export async function loadSkillsWithInstallInfo(cwd: string): Promise<SkillsResponse> {
   const agentDir = getAgentDir();
-  const loader = new DefaultResourceLoader({ cwd, agentDir });
+  // Extensions add skills only through `resources_discover` at session_start,
+  // which a listing never runs, so loading them here would only import every
+  // extension for nothing (#1226).
+  const loader = new DefaultResourceLoader({ cwd, agentDir, noExtensions: true });
   await loader.reload(projectTrustReloadOptions(cwd, agentDir));
   const { skills, diagnostics } = loader.getSkills();
   return {

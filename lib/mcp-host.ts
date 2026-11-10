@@ -11,9 +11,11 @@ import {
   type McpTransportFactory,
 } from "@earendil-works/pi-coding-agent";
 import type { McpHostInactiveInfo, McpScope, McpSessionState, McpSessionStatus } from "./api-types";
+import type { DebugMcpHost } from "./debug-types";
 import { isBuiltinMcpCommand, isMcpExtensionCommand } from "./mcp-command";
 import { canonicalJson, mcpConfigKey, mcpEntryConfigKey } from "./mcp-config-key";
 import { scrubMcpLoadError } from "./mcp-json-error";
+import { isMcpOverrideEntry, mcpOverrideRefusal } from "./mcp-override";
 import {
   forgetMcpHostInactive,
   forgetMcpStatus,
@@ -70,7 +72,7 @@ const PROMPT_WAIT_MS = 10_000;
  * extension's own runtime load is a cache hit.
  */
 const REPLACE_WAIT_MS = 5_000;
-const LIST_METHODS = new Set(["tools/list", "resources/list", "resources/templates/list"]);
+const LIST_METHODS = new Set(["tools/list"]);
 
 /**
  * PI_WEB_MCP_IDLE_MS: how long a session's MCP servers stay connected after its
@@ -207,11 +209,12 @@ interface ObservedTransport {
 /**
  * Report when a connection is ready, meaning the extension has registered its
  * tools, or when its transport closed first. The client sends `initialize`,
- * then `notifications/initialized`, then lists tools and resources when the
- * server's capabilities offer them, a page at a time; the extension registers
- * the tools in the same microtask chain that settles the last list. So once
- * every list request is answered and a macrotask passed without another one,
- * the tools are registered. Listening adds a listener and an own `send` on the
+ * then `notifications/initialized`, then lists tools when the server's
+ * capabilities offer them, a page at a time (resources only when a resource
+ * tool asks, since pi 1.2); the extension registers the tools in the same
+ * microtask chain that settles the last list. So once every list request is
+ * answered and a macrotask passed without another one, the tools are
+ * registered. Listening adds a listener and an own `send` on the
  * instance; the transport keeps its class, which the SDK checks.
  */
 export function watchConnection(transport: ObservedTransport, done: (outcome: "ready" | "closed") => void): void {
@@ -249,8 +252,8 @@ export function watchConnection(transport: ObservedTransport, done: (outcome: "r
     if (!isRecord(message) || message.method !== undefined || message.id === undefined) return;
     if (expectsLists === undefined && isRecord(message.result) && isRecord(message.result.capabilities)) {
       const { capabilities } = message.result;
-      // As the SDK decides: tools when the capability is set, resources when it is present.
-      expectsLists = Boolean(capabilities.tools) || capabilities.resources !== undefined;
+      // As the SDK decides: tools when the capability is set.
+      expectsLists = Boolean(capabilities.tools);
       check();
       return;
     }
@@ -533,6 +536,8 @@ class HostInstance {
   private inactiveReport: { sessionId: string; info: McpHostInactiveInfo } | undefined;
   private queue: Promise<void> = Promise.resolve();
   private idleTimer: NodeJS.Timeout | undefined;
+  /** When `idleTimer` fires, for the debug panel; a timer keeps no deadline of its own. */
+  private idleDeadline: number | undefined;
   /** Between agent_start and agent_end; the idle timer never runs meanwhile. */
   private runActive = false;
   /** Prompts waiting in prepareForPrompt(); nor does it run while one waits. */
@@ -709,6 +714,29 @@ class HostInstance {
     return states.sort((a, b) => a.name.localeCompare(b.name) || a.scope.localeCompare(b.scope));
   }
 
+  /**
+   * For the debug panel: states, counts and the idle deadline. Never a config, a configKey, an
+   * abandoned key, a transport or the context; it reads fields and touches no timer.
+   */
+  debugSnapshot(): DebugMcpHost {
+    const servers = [...this.attempts].map(([name, attempt]) => ({
+      name,
+      scope: attempt.scope,
+      state: SESSION_STATES[attempt.state],
+      hasError: Boolean(attempt.error),
+      released: attempt.released,
+    }));
+    return {
+      active: this.active,
+      disposed: this.disposed,
+      runActive: this.runActive,
+      idleMs: this.options.idleMs,
+      idleReleaseAt: this.idleDeadline ?? null,
+      servers: servers.sort((a, b) => a.name.localeCompare(b.name) || a.scope.localeCompare(b.scope)),
+      problems: this.problems.size,
+    };
+  }
+
   /** Unregister everything, for idle and for a host whose session goes away. */
   release(): Promise<void> {
     return this.enqueue(async () => {
@@ -741,6 +769,18 @@ class HostInstance {
    */
   private entryConfigKey(name: string, value: unknown): string {
     return mcpEntryConfigKey(value, this.options.internals.validateMcpServerConfig?.(name, value));
+  }
+
+  /**
+   * The status key of an untrusted project's entry, as Settings keys it: an
+   * override that would apply (`global` is the loaded global entry of its
+   * name) by the global entry with its keys, which is what it describes.
+   */
+  private projectEntryConfigKey(name: string, value: unknown, global: McpServerConfig | undefined): string {
+    if (isRecord(value) && isMcpOverrideEntry(value) && mcpOverrideRefusal(name, value, global !== undefined) === undefined) {
+      return this.entryConfigKey(name, { ...global, ...value });
+    }
+    return this.entryConfigKey(name, value);
   }
 
   /** Writes what this session sees of `target` to the status store, and returns the record. */
@@ -870,12 +910,14 @@ class HostInstance {
     // After the SDK's read, so a file that landed since the trust read is reported too.
     if (!projectReadable) {
       const entries = untrustedProjectServerEntries(ctx.cwd);
+      // The global entries an override would change, as `loadMcpConfig()` handed them over.
+      const globals = new Map((loaded?.servers ?? []).map((entry) => [entry.name, entry.config]));
       for (const [name, value] of entries.slice(0, MCP_UNTRUSTED_REPORT_MAX)) {
         // One entry the host cannot key (`mcpConfigKey()` is total, so this is a guard) never drops the others.
         try {
           this.problems.set(`project\0${name}`, {
             status: { name, scope: "project", state: "not-trusted" },
-            target: { scope: "project", sourcePath: projectPath, name, configKey: this.entryConfigKey(name, value) },
+            target: { scope: "project", sourcePath: projectPath, name, configKey: this.projectEntryConfigKey(name, value, globals.get(name)) },
             report: { state: "not-trusted" },
           });
         } catch (error) {
@@ -898,7 +940,10 @@ class HostInstance {
     }
     for (const entry of loaded.servers) {
       if (entry.config.enabled === false) continue;
-      const scope = entry.scope === "project" ? "project" : "global";
+      // A global server a project override changes (pi 1.0.1) is the override's: Settings lists
+      // it as the project entry, with the global entry's config and the override's keys.
+      const override = entry.override;
+      const scope = entry.scope === "project" || override !== undefined ? "project" : "global";
       // Each entry is keyed in its own try: one the host cannot key never stops the others,
       // global servers included, from connecting.
       try {
@@ -906,7 +951,7 @@ class HostInstance {
           config: withReachableExposure(entry.config, this.options.codemodeAvailable()),
           scope,
           // The validator's copy of the entry (aliases resolved), which Settings keys it by too.
-          target: { scope, sourcePath: entry.source, name: entry.name, configKey: mcpConfigKey(entry.config) },
+          target: { scope, sourcePath: override ?? entry.source, name: entry.name, configKey: mcpConfigKey(entry.config) },
         });
       } catch (error) {
         logConfigErrorOnce(`${entry.source}: server "${entry.name}" is not connected: ${errorMessage(error)}`);
@@ -967,13 +1012,16 @@ class HostInstance {
   private clearIdle(): void {
     clearTimeout(this.idleTimer);
     this.idleTimer = undefined;
+    this.idleDeadline = undefined;
   }
 
   private armIdle(): void {
     this.clearIdle();
     if (this.runActive || this.preparing > 0 || this.options.idleMs <= 0 || this.attempts.size === 0) return;
+    this.idleDeadline = Date.now() + this.options.idleMs;
     this.idleTimer = setTimeout(() => {
       this.idleTimer = undefined;
+      this.idleDeadline = undefined;
       if (this.ctx && !this.ctx.isIdle()) return;
       void this.release();
     }, this.options.idleMs);
@@ -1077,6 +1125,11 @@ export class McpHost {
 
   serverStates(): McpHostServerStatus[] {
     return this.current?.serverStates() ?? [];
+  }
+
+  /** The current load's state for the debug panel; null before the extension factory ran. */
+  debugSnapshot(): DebugMcpHost | null {
+    return this.current?.debugSnapshot() ?? null;
   }
 
   /** Unregister every server now, as the idle timer does. */

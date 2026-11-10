@@ -112,9 +112,10 @@ test("CodeBlock folds a long block behind an expand button once complete", () =>
   assert.doesNotMatch(short, /markdown-code-fold/);
 });
 
-test("CodeBlock offers a wrap switch", () => {
+test("CodeBlock wraps long lines by default and offers to turn it off (C10)", () => {
   const html = renderCode({ code: "x", lang: "text" });
-  assert.match(html, /aria-pressed="false"[^>]*>Wrap</);
+  assert.match(html, /aria-pressed="true"[^>]*>No wrap</);
+  assert.match(html, /markdown-code-body[^"]* is-wrapped/);
 });
 
 test("MermaidBlock handles Chinese characters in diagram", () => {

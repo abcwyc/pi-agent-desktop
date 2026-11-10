@@ -26,7 +26,7 @@ function dispatchNotificationClick(data) {
   return { pending, wasClosed: () => closed };
 }
 
-function dispatchPush(payload, clients) {
+function dispatchPush(payload, clients, getNotifications = async () => []) {
   let pending;
   const shown = [];
   self.clients = {
@@ -35,6 +35,7 @@ function dispatchPush(payload, clients) {
   };
   self.registration = {
     showNotification: async (title, options) => { shown.push({ title, options }); },
+    getNotifications,
   };
   listeners.get("push")({
     data: { json: () => payload },
@@ -60,15 +61,61 @@ test("push always shows a notification, even when a window is visible", async ()
 
   // iOS revokes the push subscription when a push is handled without a
   // notification, so the notification must never be suppressed.
+  assert.equal(event.shown.length, 1);
+  const shownAt = event.shown[0].options.data.shownAt;
+  assert.equal(typeof shownAt, "number");
   assert.deepEqual(event.shown, [{
     title: "Session complete",
     options: {
       body: "Task finished.",
-      data: { url: "/?session=session-1" },
+      data: { url: "/?session=session-1", shownAt },
       tag: "pi-session-complete:session-1",
       renotify: true,
     },
   }]);
+});
+
+const completionPush = {
+  title: "Session complete",
+  body: "Task finished.",
+  url: "/?session=session-1",
+  tag: "pi-session-complete:session-1",
+};
+
+function existingNotifications(list) {
+  return async ({ tag }) => list.filter((notification) => notification.tag === tag);
+}
+
+test("push quietly replaces the page's notification of the same completion (#1515)", async () => {
+  const event = dispatchPush(completionPush, [], existingNotifications([
+    { tag: "pi-session-complete:session-1", data: { url: "/?session=session-1", shownAt: Date.now() - 600 } },
+  ]));
+  await event.pending;
+
+  // Still shown, which iOS requires, but without a second alert.
+  assert.equal(event.shown.length, 1);
+  assert.equal(event.shown[0].options.tag, "pi-session-complete:session-1");
+  assert.equal(event.shown[0].options.renotify, false);
+});
+
+test("push alerts again over an earlier task's notification (#701)", async () => {
+  const event = dispatchPush(completionPush, [], existingNotifications([
+    { tag: "pi-session-complete:session-1", data: { url: "/?session=session-1", shownAt: Date.now() - 60_000 } },
+    { tag: "pi-session-complete:session-1", data: { url: "/?session=session-1" } },
+    { tag: "pi-session-complete:session-2", data: { url: "/?session=session-2", shownAt: Date.now() } },
+  ]));
+  await event.pending;
+
+  assert.equal(event.shown.length, 1);
+  assert.equal(event.shown[0].options.renotify, true);
+});
+
+test("push alerts when the browser cannot list notifications", async () => {
+  const event = dispatchPush(completionPush, [], async () => { throw new Error("unsupported"); });
+  await event.pending;
+
+  assert.equal(event.shown.length, 1);
+  assert.equal(event.shown[0].options.renotify, true);
 });
 
 test("push ignores malformed payloads", async () => {
@@ -157,14 +204,64 @@ function installOfflineStub() {
 
 function dispatchFetch(url, { mode = "cors", method = "GET" } = {}) {
   let pending;
+  const background = [];
   const request = new Request(url, { method });
   Object.defineProperty(request, "mode", { value: mode });
   listeners.get("fetch")({
     request,
     respondWith: (promise) => { pending = promise; },
+    waitUntil: (promise) => { background.push(promise); },
   });
-  return pending;
+  return { pending, background };
 }
+
+test("install precaches offline assets but not the runtime manifest", async () => {
+  let pending;
+  let precached;
+  let skipped = false;
+  globalThis.caches = {
+    open: async () => ({ addAll: async (urls) => { precached = urls; } }),
+  };
+  self.skipWaiting = async () => { skipped = true; };
+  listeners.get("install")({ waitUntil: (promise) => { pending = promise; } });
+  await pending;
+
+  assert.deepEqual(precached, [
+    "/offline.html",
+    "/icons/icon-192.png",
+    "/icons/icon-512.png",
+    "/icons/apple-touch-icon.png",
+  ]);
+  assert.equal(skipped, true);
+});
+
+test("manifest requests bypass the worker even with query strings and old cached entries", async () => {
+  const stale = new Response('{"name":"Old Pi"}');
+  let cacheReads = 0;
+  globalThis.caches = {
+    match: async () => { cacheReads++; return stale.clone(); },
+    open: async () => assert.fail("manifest must not be cached"),
+  };
+  const networkRequests = [];
+  globalThis.fetch = async (request) => {
+    networkRequests.push(request.url);
+    return new Response('{"name":"New Pi"}');
+  };
+
+  for (const path of ["/manifest.webmanifest", "/manifest.webmanifest?v=old"]) {
+    for (const mode of ["cors", "navigate"]) {
+      const url = `https://pi.test${path}`;
+      const { pending, background } = dispatchFetch(url, { mode });
+      assert.equal(pending, undefined, "no respondWith: leave the request to the browser");
+      assert.deepEqual(background, []);
+      // Model the browser's normal network fallback when respondWith is absent.
+      const response = await fetch(new Request(url));
+      assert.deepEqual(await response.json(), { name: "New Pi" });
+    }
+  }
+  assert.equal(cacheReads, 0, "old cached manifests must never be read");
+  assert.equal(networkRequests.length, 4);
+});
 
 /** fetch() that never settles until the signal it was handed is aborted. */
 function installHungNetwork() {
@@ -191,7 +288,7 @@ test("a stalled navigation falls back to offline.html", async () => {
 
   mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    const pending = dispatchFetch("https://pi.test/", { mode: "navigate" });
+    const { pending } = dispatchFetch("https://pi.test/", { mode: "navigate" });
     await flushMicrotasks();
     mock.timers.tick(8000);
     const response = await pending;
@@ -209,7 +306,7 @@ test("a stalled static asset request is bounded as well", async () => {
 
   mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    const pending = dispatchFetch("https://pi.test/_next/static/chunks/app.js");
+    const { pending } = dispatchFetch("https://pi.test/_next/static/chunks/app.js");
     // cacheFirst awaits the cache lookup before it reaches the network.
     await flushMicrotasks();
     mock.timers.tick(8000);
@@ -219,6 +316,47 @@ test("a stalled static asset request is bounded as well", async () => {
   } finally {
     mock.timers.reset();
   }
+});
+
+test("a cache miss responds before the cache write finishes", async () => {
+  let releaseWrite;
+  let writeStarted = false;
+  globalThis.caches = {
+    match: async () => undefined,
+    open: async () => ({
+      put: () => {
+        writeStarted = true;
+        return new Promise((resolve) => { releaseWrite = resolve; });
+      },
+    }),
+  };
+  // fetch() to a same-origin URL yields type "basic"; a constructed Response
+  // defaults to "default", which cacheFirst deliberately skips.
+  globalThis.fetch = async () => {
+    const response = new Response("chunk", {
+      status: 200,
+      headers: { "Content-Type": "text/javascript" },
+    });
+    Object.defineProperty(response, "type", { value: "basic" });
+    return response;
+  };
+
+  const { pending, background } = dispatchFetch("https://pi.test/_next/static/chunks/app.js");
+  const response = await pending;
+
+  // The regression this guards: the SW script URL is versioned, so a version
+  // bump leaves the cache cold and every chunk misses at once. Awaiting each
+  // write held the responses behind Cache Storage I/O, which pushed
+  // navigations past the offline-fallback budget even though the server was
+  // healthy. The response must never wait for the write.
+  assert.equal(await response.text(), "chunk");
+
+  await flushMicrotasks();
+  assert.equal(writeStarted, true, "the write must still happen");
+  assert.equal(background.length, 1, "the write must be kept alive with waitUntil");
+
+  releaseWrite();
+  await background[0];
 });
 
 test("a response that arrives in time is not cut off mid-stream", async () => {
@@ -234,7 +372,8 @@ test("a response that arrives in time is not cut off mid-stream", async () => {
 
   mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    const response = await dispatchFetch("https://pi.test/", { mode: "navigate" });
+    const { pending } = dispatchFetch("https://pi.test/", { mode: "navigate" });
+    const response = await pending;
     // The budget only covers time to first byte: a long-lived body keeps
     // streaming past it (Next.js streams its SSR payload).
     mock.timers.tick(60000);

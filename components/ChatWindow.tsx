@@ -6,6 +6,8 @@ import type { UnavailableWorkspaceNotice } from "@/lib/workspace-availability";
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecutionMessage, BlockingExtensionUiRequest, ExtensionUiRequest, LeafChangeOptions, SessionInfo, SessionTreeNode, SessionWorkspaceKind, ToolResultMessage } from "@/lib/types";
 import { normalizeCustomPanelLines } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
+import { isHiddenRelation, SIDE_BOUNDARY_MESSAGE_TYPE } from "@/lib/session-family";
+import { EXTENSION_DIALOG_BASE_WIDTH, fitExtensionDialogWidth } from "@/lib/extension-dialog-fit";
 import { countToolCallBlocks, getAssistantErrorMessage, getDisplayableAssistantBlocks, hasAssistantAnswer, isAssistantTruncated, isMessageGroupAnchor, splitFinalAssistantBlocks } from "@/lib/message-display";
 import { ConversationFind } from "./ConversationFind";
 import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
@@ -22,7 +24,7 @@ import { AnsiText } from "./AnsiText";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { phaseLabel } from "@/lib/chat-phase-label";
-import { useAgentSession, type NoticeItem } from "@/hooks/useAgentSession";
+import { useAgentSession, type AgentEndInfo, type NoticeItem } from "@/hooks/useAgentSession";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { useScrollbarVisibility } from "@/hooks/useScrollbarVisibility";
 import { useArtifactPublisher } from "@/hooks/useArtifactPublisher";
@@ -57,7 +59,8 @@ interface Props {
   sessionRunning?: boolean;
   newSessionCwd: string | null;
   newSessionDraftKey: string | null;
-  onAgentEnd?: () => void;
+  /** A run ended; `aborted` when it was stopped rather than finished. */
+  onAgentEnd?: (end: AgentEndInfo) => void;
   onAttentionNeeded?: (request: BlockingExtensionUiRequest) => void;
   onSessionCreated?: (session: SessionInfo, sourceDraftKey: string) => void;
   onSessionForked?: (newSessionId: string) => void;
@@ -86,7 +89,10 @@ interface Props {
   /** Open the provider/auth configuration modal (offered by the scope-warning banner). */
   onOpenModelsConfig?: () => void;
   onOpenSession?: (sessionId: string) => void;
-  onAskInNewChat?: (prompt: string, sourceSessionId: string, sourceEntryId: string) => Promise<void>;
+  /** A right-panel tab (a side chat, C1): the page's global Esc stays with the main chat. */
+  panel?: boolean;
+  /** C1: a side chat was forked from this chat; the page opens its tab and sends `prompt` there. */
+  onSideSession?: (session: SessionInfo, prompt: string | null) => void;
   quoteSelectionEnabled?: boolean;
   conversationNavigatorEnabled?: boolean;
   initialPrompt?: string;
@@ -266,12 +272,12 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = fa
   );
 }
 
-export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTargetHandled, initialScrollPosition, onScrollPositionChange, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked, modelsRefreshKey, workspaceUnavailable, onRecheckWorkspace, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemToolsChange, onSystemInfoLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onOpenSettings, onOpenModelsConfig, onContextUsageChange, onOpenFile, onOpenSession, onAskInNewChat, onSelectProject, projectOptions, onProjectChange, onProjectFilesImported, quoteSelectionEnabled = true, conversationNavigatorEnabled = true, initialPrompt, onInitialPromptConsumed, soundEnabled = true, playDoneSound = () => {}, unlockAudio }: Props) {
+export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTargetHandled, initialScrollPosition, onScrollPositionChange, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked, modelsRefreshKey, workspaceUnavailable, onRecheckWorkspace, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemToolsChange, onSystemInfoLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onOpenSettings, onOpenModelsConfig, onContextUsageChange, onOpenFile, onOpenSession, panel = false, onSideSession, onSelectProject, projectOptions, onProjectChange, onProjectFilesImported, quoteSelectionEnabled = true, conversationNavigatorEnabled = true, initialPrompt, onInitialPromptConsumed, soundEnabled = true, playDoneSound = () => {}, unlockAudio }: Props) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const chatOnly = workspaceKind === "chat" || session?.workspaceKind === "chat";
   const messageRefs = useRef<Record<number, HTMLDivElement | null>>({});
-  const completionNotificationsEnabled = session?.relation?.kind !== "subagent";
+  const completionNotificationsEnabled = !isHiddenRelation(session?.relation);
 
   // Wrap onAgentEnd to play the completion sound. This is more reliable than
   // wrapping handleAgentEventRef because useAgentSession overwrites that ref
@@ -282,11 +288,12 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   const soundEnabledRef = useRef(soundEnabled);
   soundEnabledRef.current = soundEnabled;
   const extensionDialogShownRef = useRef(false);
-  const wrappedOnAgentEnd = useCallback(() => {
-    if (completionNotificationsEnabled && soundEnabledRef.current) {
+  const wrappedOnAgentEnd = useCallback((end: AgentEndInfo) => {
+    // A stopped run did not finish anything: no completion sound (pi's `agent_settled.aborted`).
+    if (!end.aborted && completionNotificationsEnabled && soundEnabledRef.current) {
       playDoneSoundRef.current();
     }
-    onAgentEnd?.();
+    onAgentEnd?.(end);
   }, [completionNotificationsEnabled, onAgentEnd]);
 
   const initialScrollPositionRef = useRef(searchTarget ? null : initialScrollPosition ?? null);
@@ -315,7 +322,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     sessionIdRef, scrollContainerRef,
     lastUserMsgRef, promptAnchorActive,
     branchSummaryPending, handleAbortBranchSummary, routedModel,
-    handleSend, handleAbort, handleAbortRetry, handleFork, handleEditContent, cancelEdit, handleModelChange,
+    handleSend, handleAbort, handleAbortRetry, startSideChat, handleFork, handleEditContent, cancelEdit, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction, handleQueuedMessageAction,
     retryLoad,
     dismissModelScopeWarnings,
@@ -324,7 +331,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     handleToolPresetChange, handleChatAccessRebuilt, handleThinkingLevelChange, handleSetDefaultModel, handleSetDefaultThinkingLevel, loadSlashCommands, scrollUserMsgToTop,
     loadContext, activeLeafId, scrollToBottom, scrollToMessage,
   } = useAgentSession({
-    session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked,
+    session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked, onSideSession,
     chatWorkspace: chatOnly,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemToolsChange, onSystemInfoLoaderChange, onSessionStatsPanelOpen,
     onOpenSettings,
@@ -406,12 +413,8 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
 
   useEffect(() => {
     if (!quoteInputOpen || !quotedSelection) return;
-    quoteChatInputRef.current?.insertIfEmpty(buildQuotedSelection(
-      quotedSelection.text,
-      t("chat.quoteIntro"),
-      t("chat.quoteQuestion"),
-    ));
-  }, [quoteInputOpen, quotedSelection, t]);
+    quoteChatInputRef.current?.insertIfEmpty(buildQuotedSelection(quotedSelection.text));
+  }, [quoteInputOpen, quotedSelection]);
 
   useLayoutEffect(() => {
     const popover = quotePopoverRef.current;
@@ -457,37 +460,53 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     };
   }, [quotedSelection, quoteInputOpen, quoteSubmitting, closeQuotedSelection]);
 
-  const askSelectionHere = useCallback(() => {
+  // C3 (upstream): the selection goes into the composer as a Markdown quote at
+  // the caret, in a paragraph of its own, with a blank line to type after.
+  const quoteSelectionHere = useCallback(() => {
     if (!quotedSelection) return;
-    chatInputRef?.current?.insertText(buildQuotedSelection(
-      quotedSelection.text,
-      t("chat.quoteIntro"),
-      t("chat.quoteQuestion"),
-    ));
-    window.getSelection()?.removeAllRanges();
+    chatInputRef?.current?.insertQuote(buildQuotedSelection(quotedSelection.text));
+    // No `removeAllRanges()` here: inserting focuses the composer, and that
+    // focus already collapses the page's selection. Calling it afterwards also
+    // clears the composer's own selection and drops its caret to offset 0
+    // (upstream #1319), so the quote would be typed in front of instead of after.
     closeQuotedSelection();
-  }, [chatInputRef, quotedSelection, closeQuotedSelection, t]);
+  }, [chatInputRef, quotedSelection, closeQuotedSelection]);
 
-  const askSelectionInNewChat = useCallback(async (prompt: string) => {
-    const sourceSessionId = sessionIdRef.current ?? session?.id;
-    if (quoteSubmitting || !prompt.trim() || !quotedSelection?.sourceEntryId || !sourceSessionId || !onAskInNewChat) return;
+  // C1: "Ask in side chat" forks this session, named after the selection, and
+  // sends the quote and question there; the main chat stays where it is.
+  const askSelectionInSideChat = useCallback(async (prompt: string) => {
+    if (quoteSubmitting || !prompt.trim() || !quotedSelection) return;
     setQuoteSubmitting(true);
     setQuoteError(null);
     unlockAudio?.();
     try {
-      await onAskInNewChat(
-        prompt,
-        sourceSessionId,
-        quotedSelection.sourceEntryId,
-      );
-      closeQuotedSelection();
+      const refusal = await startSideChat(prompt, quotedSelection.text);
+      if (refusal === null) {
+        closeQuotedSelection();
+        return;
+      }
+      quoteChatInputRef.current?.restoreSubmission(prompt);
+      setQuoteError(refusal);
     } catch (error) {
       quoteChatInputRef.current?.restoreSubmission(prompt);
       setQuoteError(error instanceof Error ? error.message : String(error));
     } finally {
       setQuoteSubmitting(false);
     }
-  }, [onAskInNewChat, quotedSelection, quoteSubmitting, session?.id, sessionIdRef, closeQuotedSelection, unlockAudio]);
+  }, [quotedSelection, quoteSubmitting, closeQuotedSelection, startSideChat, unlockAudio]);
+
+  // C1: the composer's Side chat button while a run streams sends the draft there.
+  const askInSideChat = useCallback(async (message: string) => {
+    let refusal: string | null;
+    try {
+      refusal = await startSideChat(message);
+    } catch (error) {
+      refusal = error instanceof Error ? error.message : String(error);
+    }
+    if (refusal === null) return;
+    chatInputRef?.current?.restoreSubmission(message);
+    addNotice({ type: "error", message: refusal });
+  }, [addNotice, chatInputRef, startSideChat]);
 
   const initialPromptSentRef = useRef(false);
   useEffect(() => {
@@ -529,9 +548,10 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   }, [completionNotificationsEnabled, extensionDialog]);
 
   // Register the abort handler for the global Esc shortcut
+  // A side chat's tab leaves it to the main chat (C1).
   useEffect(() => {
-    registerAbortHandler(sessionBusy ? handleAbort : null);
-  }, [sessionBusy, handleAbort]);
+    if (!panel) registerAbortHandler(sessionBusy ? handleAbort : null);
+  }, [panel, sessionBusy, handleAbort]);
 
   // --- Lazy-load historical messages ---
   // Only render the last N messages initially. When the user scrolls to the
@@ -1162,6 +1182,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
       onClearDraft={cancelEdit}
       onAttachFiles={onAttachFiles}
       onAbort={handleAbort}
+      onSideChat={onSideSession && !isHiddenRelation(session?.relation) ? askInSideChat : undefined}
       onSteer={agentRunning ? handleSteer : undefined}
       onFollowUp={agentRunning ? handleFollowUp : undefined}
       onPromptWithStreamingBehavior={agentRunning ? handlePromptWithStreamingBehavior : undefined}
@@ -1411,6 +1432,8 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
 
               const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; writtenFiles?: WrittenFile[]; recoverTruncation?: boolean } = {}): ReactNode => {
                 const msg = options.messageOverride ?? messages[idx];
+                // C1: a side chat's hidden boundary message is drawn as the line where it starts.
+                if (msg.role === "custom" && msg.customType === SIDE_BOUNDARY_MESSAGE_TYPE) return <SideChatDivider key="side-chat-divider" />;
                 const isVisible = isMessageGroupAnchor(msg) || msg.role === "assistant";
                 const currentRefIdx = visibleRefIndexByMessage.get(idx);
                 const keyPrefix = options.keyPrefix ?? "message";
@@ -1660,7 +1683,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
               style={{ width: "100%", minWidth: 0, margin: 0, padding: 0, border: "none", display: "flex", flexDirection: "column", gap: 10 }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ flex: 1, minWidth: 0, fontSize: "var(--fs-caption)", fontWeight: "var(--fw-semibold)" }}>{t("chat.askInNewChat")}</span>
+                <span style={{ flex: 1, minWidth: 0, fontSize: "var(--fs-caption)", fontWeight: "var(--fw-semibold)" }}>{t("chat.askInSideChat")}</span>
                 <button type="button" className="file-viewer-icon-button" title={t("i18n.close")} aria-label={t("i18n.close")} disabled={quoteSubmitting} onClick={closeQuotedSelection} style={{ border: "none" }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
                 </button>
@@ -1668,7 +1691,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
               <ChatInput
                 ref={quoteChatInputRef}
                 compact
-                onSend={askSelectionInNewChat}
+                onSend={askSelectionInSideChat}
                 onAbort={closeQuotedSelection}
                 isStreaming={false}
               />
@@ -1678,29 +1701,33 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
           <button
             type="button"
             className="file-viewer-icon-button"
-            title={t("chat.askInCurrent")}
-            aria-label={t("chat.askInCurrent")}
+            title={t("chat.quoteSelection")}
+            aria-label={t("chat.quoteSelection")}
             onPointerDown={(event) => event.preventDefault()}
-            onClick={askSelectionHere}
+            onClick={quoteSelectionHere}
             style={{ width: "auto", height: 35, flex: "0 0 auto", gap: 5, padding: "0 10px", border: "none", fontSize: "var(--fs-caption)", fontWeight: "var(--fw-medium)" }}
           >
-            <span aria-hidden="true" style={{ fontSize: "var(--fs-title)" }}>@</span>
-            <span>{t("chat.askInCurrent")}</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z" />
+              <path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z" />
+            </svg>
+            <span>{t("chat.quoteSelection")}</span>
           </button>
-          {onAskInNewChat && quotedSelection.sourceEntryId && !bashRunning && (
+          {/* A tab offers only Quote: a side chat does not nest. */}
+          {onSideSession && !isHiddenRelation(session?.relation) && (
             <button
               type="button"
               className="file-viewer-icon-button"
-              title={t("chat.askInNewChat")}
-              aria-label={t("chat.askInNewChat")}
+              title={t("chat.askInSideChat")}
+              aria-label={t("chat.askInSideChat")}
               onPointerDown={(event) => event.preventDefault()}
               onClick={() => { setQuoteInputOpen(true); window.getSelection()?.removeAllRanges(); }}
               style={{ width: "auto", height: 35, flex: "0 0 auto", gap: 5, padding: "0 10px", border: "none", fontSize: "var(--fs-caption)", fontWeight: "var(--fw-medium)" }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M6 3v12M18 9a9 9 0 0 1-9 9" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" />
+                <path d="M21 12a8 8 0 0 1-8 8H5.5a2 2 0 0 1-1.4-3.4A8 8 0 1 1 21 12z" />
               </svg>
-              <span>{t("chat.askInNewChat")}</span>
+              <span>{t("chat.askInSideChat")}</span>
             </button>
           )}
           </>}
@@ -1911,6 +1938,17 @@ function ExtensionWaitingCount({ count }: { count: number }) {
   );
 }
 
+/** Corner brackets pointing outward; when expanded they point inward (restore). */
+function ExtensionSizeIcon({ expanded }: { expanded: boolean }) {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {expanded
+        ? <path d="M3.5 1v2.5H1M6.5 1v2.5H9M6.5 9v-2.5H9M3.5 9v-2.5H1" />
+        : <path d="M1 3.5V1h2.5M6.5 1H9v2.5M9 6.5V9H6.5M3.5 9H1V6.5" />}
+    </svg>
+  );
+}
+
 function ExtensionDialog({
   request,
   waitingCount,
@@ -1924,6 +1962,42 @@ function ExtensionDialog({
   const { t } = useI18n();
   const [value, setValue] = useState(request.method === "editor" ? request.prefill ?? "" : "");
   const [collapsed, setCollapsed] = useState(false);
+  // #947: dialogs open at the historical width and grow only when their own content
+  // cannot fit (a code block or table that would scroll sideways), so no extension has
+  // to ask for room and the extension API stays pi's. Maximize is the user's own override.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [fitWidth, setFitWidth] = useState<number | null>(null);
+  const [full, setFull] = useState(false);
+  const toggleFull = useCallback(() => setFull((prev) => !prev), []);
+  useLayoutEffect(() => {
+    if (collapsed) return;
+    const dialog = dialogRef.current;
+    const body = bodyRef.current;
+    if (!dialog || !body) return;
+    let disposed = false;
+    const fit = () => {
+      if (disposed) return;
+      const blocks = body.querySelectorAll<HTMLElement>("pre, .markdown-table-wrap");
+      if (blocks.length === 0) return;
+      const needed = fitExtensionDialogWidth(
+        dialog.offsetWidth,
+        Array.from(blocks, (block) => block.scrollWidth - block.clientWidth),
+      );
+      // Only ever grow: shrinking again would make the dialog jump while it is read.
+      if (needed !== null) setFitWidth((prev) => (prev !== null && prev >= needed ? prev : needed));
+    };
+    fit();
+    // Highlighted code replaces its plain fallback after the first paint, and a web
+    // font can change glyph widths once it arrives.
+    const mutations = new MutationObserver(fit);
+    mutations.observe(body, { childList: true, subtree: true, characterData: true });
+    void document.fonts?.ready.then(fit);
+    return () => {
+      disposed = true;
+      mutations.disconnect();
+    };
+  }, [collapsed]);
   const [now, setNow] = useState(() => Date.now());
   const focusFirstOption = useCallback((element: HTMLDivElement | null) => element?.focus(), []);
   const summary = getExtensionDialogSummary(request);
@@ -2014,12 +2088,14 @@ function ExtensionDialog({
         </button>
       ) : (
       <div
+        ref={dialogRef}
         role="dialog"
         aria-label={request.title}
         style={{
           pointerEvents: "auto",
-          width: "min(560px, 100%)",
-          maxHeight: "min(760px, 100%)",
+          // "Full" fills the content region above the composer, keeping the overlay's padding.
+          width: full ? "100%" : `min(${fitWidth ?? EXTENSION_DIALOG_BASE_WIDTH}px, 100%)`,
+          maxHeight: full ? "100%" : "min(760px, 100%)",
           display: "flex",
           flexDirection: "column",
           border: "var(--hairline) solid var(--border)",
@@ -2040,6 +2116,27 @@ function ExtensionDialog({
               {countdown}
             </div>
           </div>
+          <button
+            type="button"
+            onClick={toggleFull}
+            title={full ? t("chat.extensionRestoreSize") : t("chat.extensionMaximize")}
+            aria-label={full ? t("chat.extensionRestoreSize") : t("chat.extensionMaximize")}
+            aria-pressed={full}
+            style={{
+              display: "grid",
+              placeItems: "center",
+              width: 28,
+              height: 28,
+              borderRadius: "var(--radius-sm)",
+              border: "var(--hairline) solid var(--border)",
+              background: "var(--bg-panel)",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            <ExtensionSizeIcon expanded={full} />
+          </button>
           <button
             type="button"
             onClick={() => setCollapsed(true)}
@@ -2066,6 +2163,7 @@ function ExtensionDialog({
         </div>
 
         <div
+          ref={bodyRef}
           style={{
             padding: 14,
             flex: "1 1 auto", minHeight: 0, overflowY: "auto",
@@ -2344,7 +2442,11 @@ function ExtensionCustomPanel({
         style={{
           pointerEvents: "auto",
           position: "relative",
-          width: "min(920px, 100%)",
+          // #947: the extension already wrapped its lines to the width it asked for;
+          // show them whole when that is wider than the usual 920px instead of scrolling.
+          width: "max-content",
+          minWidth: "min(920px, 100%)",
+          maxWidth: "100%",
           maxHeight: "min(760px, 100%)",
           display: "flex",
           flexDirection: "column",
@@ -2469,3 +2571,13 @@ function ExtensionCustomPanel({
   );
 }
 
+function SideChatDivider() {
+  const { t } = useI18n();
+  return (
+    <div role="separator" className="side-chat-divider">
+      <span aria-hidden="true" />
+      <span>{t("sideChat.divider")}</span>
+      <span aria-hidden="true" />
+    </div>
+  );
+}

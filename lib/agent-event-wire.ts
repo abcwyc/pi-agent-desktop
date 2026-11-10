@@ -1,10 +1,18 @@
 import type { JsonAgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { slimToolExecutionResult, slimToolResultMessage } from "./tool-result-details";
+import { withoutContentSignatures, withoutMessageSignatures } from "./message-signatures";
 
 export interface AgentEventLike {
   type: string;
   [key: string]: unknown;
 }
+
+/**
+ * How often an agent event stream sends `{ type: "heartbeat" }`. It is a data event, not an SSE
+ * comment, so the browser's EventSource sees it: a stream silent for a few of these is dead
+ * (a half-open connection, a proxy that dropped it), and `AgentEventConnection` reconnects.
+ */
+export const AGENT_EVENT_HEARTBEAT_MS = 30_000;
 
 type JsonMessageUpdateEvent = Extract<
   JsonAgentSessionEvent,
@@ -151,14 +159,30 @@ export function toClientAgentEvent(
   // whole prompt plus every tool schema and are never rendered, so drop them
   // before they cost the browser bandwidth.
   if (isSystemMessageEvent(event)) return null;
+  if (event.type === "message_start" || event.type === "message_end") {
+    const message = withoutMessageSignatures(event.message);
+    if (message !== event.message) return { ...event, message };
+  }
+  // The agent loop announces a finished message (a tool result, a delivered
+  // user message) with `message_start` and `message_end` back to back. The
+  // browser builds only an assistant reply from its start and reads nothing
+  // but the role of the others, so their body (an image read's base64) went
+  // out twice.
+  if (event.type === "message_start" && isObject(event.message) && event.message.role !== "assistant") {
+    return { type: "message_start", message: { role: event.message.role } };
+  }
 
   if (event.type === "message_update") {
-    const assistantMessageEvent = event.assistantMessageEvent;
-    if (
-      typeof assistantMessageEvent !== "object"
-      || assistantMessageEvent === null
-      || Array.isArray(assistantMessageEvent)
-    ) return null;
+    const rawAssistantMessageEvent = event.assistantMessageEvent;
+    if (!isObject(rawAssistantMessageEvent)) return null;
+    let assistantMessageEvent = rawAssistantMessageEvent;
+
+    if ("toolCall" in assistantMessageEvent) {
+      const toolCall = withoutContentSignatures(assistantMessageEvent.toolCall);
+      if (toolCall !== assistantMessageEvent.toolCall) {
+        assistantMessageEvent = { ...assistantMessageEvent, toolCall };
+      }
+    }
 
     if (!("partial" in assistantMessageEvent)) {
       return {

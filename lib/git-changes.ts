@@ -13,6 +13,7 @@ import {
   parseGitPorcelainV1,
   type GitPorcelainEntry,
 } from "./git-status";
+import { resolveExistingPath } from "./paths";
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 10_000;
@@ -44,8 +45,12 @@ function toGitPath(filePath: string): string {
   return filePath.split(path.sep).join("/");
 }
 
-async function readStatusEntries(repositoryRoot: string): Promise<GitPorcelainEntry[]> {
+async function readStatusEntries(
+  repositoryRoot: string,
+  gitConfig: readonly string[] = [],
+): Promise<GitPorcelainEntry[]> {
   const output = await git(repositoryRoot, [
+    ...gitConfig,
     "status",
     "--porcelain=v1",
     "-z",
@@ -111,13 +116,19 @@ export async function getGitStatus(cwd: string): Promise<GitStatusResponse> {
     };
   }
 
+  // Git names the repository by its real path, while the cwd may reach it through a
+  // link (`/tmp` and `/var/folders/…` are links on macOS): compare real paths, and
+  // report each file under the cwd as given, the way the file tree lists it.
+  const realRoot = resolveExistingPath(repositoryRoot);
+  const realCwd = resolveExistingPath(cwd);
   const [entries, trackedLineStats] = await Promise.all([
     readStatusEntries(repositoryRoot),
-    readTrackedLineStats(repositoryRoot, cwd),
+    readTrackedLineStats(realRoot, realCwd),
   ]);
   const files = entries.flatMap((entry): GitFileStatus[] => {
-    const filePath = path.resolve(repositoryRoot, entry.path);
-    if (!isWithinPath(cwd, filePath)) return [];
+    const realFilePath = path.resolve(realRoot, entry.path);
+    if (!isWithinPath(realCwd, realFilePath)) return [];
+    const filePath = path.join(cwd, path.relative(realCwd, realFilePath));
     const classified = classifyGitStatus(entry);
     return [{
       filePath,
@@ -166,12 +177,14 @@ async function createTrackedFilePatch(
   repositoryRoot: string,
   relativePath: string,
   originalPath?: string,
+  gitConfig: readonly string[] = [],
 ): Promise<string | null> {
   const paths = originalPath && originalPath !== relativePath
     ? [originalPath, relativePath]
     : [relativePath];
   try {
     return await git(repositoryRoot, [
+      ...gitConfig,
       "diff",
       "--no-color",
       "--no-ext-diff",
@@ -185,19 +198,43 @@ async function createTrackedFilePatch(
   }
 }
 
+// The file's own repository, not the cwd's: a session may start in a plain folder
+// holding several repositories. A deleted file's folder may be gone too, so start
+// from its nearest existing ancestor; fall back to the cwd.
+async function findFileRepositoryRoot(cwd: string, filePath: string): Promise<string | null> {
+  let directory = path.dirname(path.resolve(filePath));
+  while (!fs.existsSync(directory)) {
+    const parent = path.dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
+  }
+  return (await findRepositoryRoot(directory)) ?? (await findRepositoryRoot(cwd));
+}
+
 export async function getGitFileDiff(cwd: string, filePath: string): Promise<GitFileDiffResponse> {
-  const repositoryRoot = await findRepositoryRoot(cwd);
-  if (!repositoryRoot || !isWithinPath(repositoryRoot, filePath)) return { supported: false };
+  const repositoryRoot = await findFileRepositoryRoot(cwd, filePath);
+  if (!repositoryRoot) return { supported: false };
+  // Git names the repository by its real path, while the file and the cwd may be named
+  // through a link: compare real paths. A file whose real path leaves the repository
+  // stays out; the route has already checked that real path against the allowed roots.
+  const realRoot = resolveExistingPath(repositoryRoot);
+  const realFilePath = resolveExistingPath(filePath);
+  if (!isWithinPath(realRoot, realFilePath)) return { supported: false };
+  // Reading the index runs a repository-configured fsmonitor hook. Opening a
+  // file in another checkout (one nested in the cwd, say) must not run its hook,
+  // as expanding that folder in the file tree does not (lib/file-tree-visibility.ts);
+  // the cwd's own repository keeps its fsmonitor.
+  const gitConfig = isWithinPath(realRoot, resolveExistingPath(cwd)) ? [] : ["-c", "core.fsmonitor=false"];
 
   const resolvedFilePath = path.resolve(filePath);
-  const relativePath = toGitPath(path.relative(repositoryRoot, resolvedFilePath));
-  const entries = await readStatusEntries(repositoryRoot);
+  const relativePath = toGitPath(path.relative(realRoot, realFilePath));
+  const entries = await readStatusEntries(repositoryRoot, gitConfig);
   const entry = entries.find((candidate) => candidate.path === relativePath);
   if (!entry) return { supported: false };
 
   const { status } = classifyGitStatus(entry);
   if (status === "deleted") {
-    const patch = await createTrackedFilePatch(repositoryRoot, relativePath, entry.originalPath);
+    const patch = await createTrackedFilePatch(repositoryRoot, relativePath, entry.originalPath, gitConfig);
     if (!patch?.includes("\n@@ ")) return { supported: false };
     return { supported: true, status, patch };
   }
@@ -218,7 +255,7 @@ export async function getGitFileDiff(cwd: string, filePath: string): Promise<Git
   if (status === "untracked") {
     patch = createAddedFilePatch(relativePath, newContent);
   } else {
-    const trackedPatch = await createTrackedFilePatch(repositoryRoot, relativePath, entry.originalPath);
+    const trackedPatch = await createTrackedFilePatch(repositoryRoot, relativePath, entry.originalPath, gitConfig);
     if (trackedPatch === null) {
       if (status !== "added") return { supported: false };
       patch = createAddedFilePatch(relativePath, newContent);

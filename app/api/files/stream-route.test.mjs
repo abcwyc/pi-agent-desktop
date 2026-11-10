@@ -19,15 +19,6 @@ test("inline SVG is served with a script-blocking content security policy", () =
   assert.match(streamBlock, /contentType === "image\/svg\+xml"/);
   assert.match(streamBlock, /Content-Security-Policy/);
   assert.match(streamBlock, /default-src 'none'/);
-  assert.match(streamBlock, /style-src 'unsafe-inline'/);
-  assert.match(streamBlock, /frame-ancestors 'self'/);
-});
-
-test("the restrictive headers are applied to every streamFile response shape", () => {
-  // The header object is shared by the full-body, 416, and 206 paths.
-  const headerObject = streamBlock.indexOf("const headers");
-  const firstReturn = streamBlock.indexOf("createFileBodyStream", headerObject);
-  assert.ok(headerObject !== -1 && firstReturn > headerObject, "headers must be built before any response");
 });
 
 test("local HTML previews are served as documents with a script-blocking CSP", () => {

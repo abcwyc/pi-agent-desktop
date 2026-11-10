@@ -2,6 +2,9 @@
 @import "tailwindcss";
 /* demo/ is a separate project; keep its sources out of this app's class scan. */
 @source not "../demo";
+/* Agent worktrees: scanning them makes webpack snapshot their symlinked
+   node_modules, which crashes `next build` with "reading 'length'". */
+@source not "../.claude";
 
 @theme {
   --color-bg: var(--bg);
@@ -121,6 +124,165 @@ html[data-theme="pine"],
   --bg-subtle: rgba(210,236,219,0.04);
 }
 
+[data-theme="sand"] {
+  color-scheme: light;
+  --bg: #faf6ee;
+  --bg-panel: #f1ebdf;
+  --bg-hover: #ebe3d4;
+  --bg-selected: #e4dac8;
+  --border: #cdbfa6;
+  --text: #2e2a22;
+  --text-muted: #5c5243;
+  --text-dim: #665b4b;
+  --accent: #7a4f10;
+  --accent-hover: #613f0b;
+  --accent-contrast: #ffffff;
+  --user-bg: #f2e8d5;
+  --assistant-bg: #faf6ee;
+  --tool-bg: #f5efe4;
+  --bg-subtle: rgba(92,70,30,0.04);
+}
+
+html[data-theme="slate"],
+[data-theme="slate"] {
+  color-scheme: dark;
+  --bg: #161b26;
+  --bg-panel: #1d2331;
+  --bg-hover: #262d3d;
+  --bg-selected: #2f3749;
+  --border: #435069;
+  --text: #e3e8f2;
+  --text-muted: #bcc5d6;
+  --text-dim: #a7b1c5;
+  --accent: #8ccfe0;
+  --accent-hover: #b3e2ec;
+  --accent-contrast: #0f2229;
+  --user-bg: #232c3f;
+  --assistant-bg: #161b26;
+  --tool-bg: #1b2130;
+  --bg-subtle: rgba(200,215,245,0.04);
+}
+
+html[data-theme="dusk"],
+[data-theme="dusk"] {
+  color-scheme: dark;
+  --bg: #1e1a24;
+  --bg-panel: #26212e;
+  --bg-hover: #302a39;
+  --bg-selected: #3a3345;
+  --border: #54496a;
+  --text: #ebe6f0;
+  --text-muted: #c9c0d4;
+  --text-dim: #b5abc3;
+  --accent: #cdb4f0;
+  --accent-hover: #e0d0f7;
+  --accent-contrast: #261a38;
+  --user-bg: #2e2638;
+  --assistant-bg: #1e1a24;
+  --tool-bg: #241f2b;
+  --bg-subtle: rgba(225,210,245,0.04);
+}
+
+[data-theme="lilac"] {
+  color-scheme: light;
+  --bg: #f8f6fc;
+  --bg-panel: #efebf6;
+  --bg-hover: #e8e2f2;
+  --bg-selected: #e0d8ed;
+  --border: #c4b8d8;
+  --text: #2b2635;
+  --text-muted: #574d68;
+  --text-dim: #625873;
+  --accent: #6a43a8;
+  --accent-hover: #56348c;
+  --accent-contrast: #ffffff;
+  --user-bg: #ece4f7;
+  --assistant-bg: #f8f6fc;
+  --tool-bg: #f3eff9;
+  --bg-subtle: rgba(60,30,110,0.04);
+}
+
+html[data-theme="ember"],
+[data-theme="ember"] {
+  color-scheme: dark;
+  --bg: #1f1a16;
+  --bg-panel: #28211c;
+  --bg-hover: #322a23;
+  --bg-selected: #3d332b;
+  --border: #5a4a3d;
+  --text: #ede4da;
+  --text-muted: #cfc0b0;
+  --text-dim: #bba996;
+  --accent: #e8b27a;
+  --accent-hover: #f2cba0;
+  --accent-contrast: #2b1a0c;
+  --user-bg: #33291f;
+  --assistant-bg: #1f1a16;
+  --tool-bg: #251f1a;
+  --bg-subtle: rgba(245,220,190,0.04);
+}
+
+/* High contrast: every text token reaches WCAG AAA (7:1) on every surface. */
+[data-theme="contrast-light"] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --bg-panel: #f3f3f3;
+  --bg-hover: #e6e6e6;
+  --bg-selected: #d9d9d9;
+  --border: #5c5c5c;
+  --text: #000000;
+  --text-muted: #1f1f1f;
+  --text-dim: #2e2e2e;
+  --accent: #0034a0;
+  --accent-hover: #002678;
+  --accent-contrast: #ffffff;
+  --user-bg: #eaf0ff;
+  --assistant-bg: #ffffff;
+  --tool-bg: #f7f7f7;
+  --bg-subtle: rgba(0,0,0,0.05);
+}
+
+html[data-theme="contrast-dark"],
+[data-theme="contrast-dark"] {
+  color-scheme: dark;
+  --bg: #000000;
+  --bg-panel: #0f0f0f;
+  --bg-hover: #1f1f1f;
+  --bg-selected: #2e2e2e;
+  --border: #a3a3a3;
+  --text: #ffffff;
+  --text-muted: #ebebeb;
+  --text-dim: #d6d6d6;
+  --accent: #ffd60a;
+  --accent-hover: #ffe566;
+  --accent-contrast: #000000;
+  --user-bg: #1a1a1a;
+  --assistant-bg: #000000;
+  --tool-bg: #0d0d0d;
+  --bg-subtle: rgba(255,255,255,0.06);
+}
+
+/* Zenburn's own colors (Jani Nurminen's low-contrast scheme); dim text lifted for WCAG AA. */
+html[data-theme="zenburn"],
+[data-theme="zenburn"] {
+  color-scheme: dark;
+  --bg: #3f3f3f;
+  --bg-panel: #383838;
+  --bg-hover: #474747;
+  --bg-selected: #4f4f4f;
+  --border: #6f6f6f;
+  --text: #dcdccc;
+  --text-muted: #cfcfbf;
+  --text-dim: #c6c6b6;
+  --accent: #f0dfaf;
+  --accent-hover: #f8eccb;
+  --accent-contrast: #3f3f3f;
+  --user-bg: #4a4a42;
+  --assistant-bg: #3f3f3f;
+  --tool-bg: #3a3a3a;
+  --bg-subtle: rgba(220,220,204,0.04);
+}
+
 /* WebKit reports dvh/innerHeight without the status-bar strip for installed
    home-screen apps even though the layout still starts at the screen's top.
    In standalone mode there is no browser toolbar to make vh unstable, and vh
@@ -185,7 +347,8 @@ html, body {
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-ui);
+  font-weight: var(--font-ui-weight);
   font-size: 14px;
   overscroll-behavior: none;
 }
@@ -193,6 +356,147 @@ html, body {
 body {
   display: flex;
   flex-direction: column;
+}
+
+/* Light text on a dark background renders heavier with subpixel smoothing
+   (macOS); grayscale smoothing keeps it at the light theme's weight. */
+html.dark {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* The ANSI palette extension output is drawn in (components/AnsiText.tsx): the
+   terminal's light and dark palettes (lib/terminal-theme.ts), by the app's scheme.
+   Extension UI gets pi's theme for a terminal that reports no colors, which
+   paints with these 16 (lib/extension-ui-theme.ts). */
+:root {
+  --ansi-black: #24292f;
+  --ansi-red: #cf222e;
+  --ansi-green: #116329;
+  --ansi-yellow: #7d4e00;
+  --ansi-blue: #0969da;
+  --ansi-magenta: #8250df;
+  --ansi-cyan: #1b7c83;
+  --ansi-white: #6e7781;
+  --ansi-bright-black: #57606a;
+  --ansi-bright-red: #a40e26;
+  --ansi-bright-green: #1a7f37;
+  --ansi-bright-yellow: #633c01;
+  --ansi-bright-blue: #218bff;
+  --ansi-bright-magenta: #a475f9;
+  --ansi-bright-cyan: #3192aa;
+  --ansi-bright-white: #8c959f;
+}
+
+html.dark {
+  --ansi-black: #1d222b;
+  --ansi-red: #f87171;
+  --ansi-green: #4ade80;
+  --ansi-yellow: #facc15;
+  --ansi-blue: #60a5fa;
+  --ansi-magenta: #c084fc;
+  --ansi-cyan: #22d3ee;
+  --ansi-white: #e5e7eb;
+  --ansi-bright-black: #6b7280;
+  --ansi-bright-red: #fca5a5;
+  --ansi-bright-green: #86efac;
+  --ansi-bright-yellow: #fde047;
+  --ansi-bright-blue: #93c5fd;
+  --ansi-bright-magenta: #d8b4fe;
+  --ansi-bright-cyan: #67e8f9;
+  --ansi-bright-white: #ffffff;
+}
+
+.ansi-black-fg { color: var(--ansi-black); }
+.ansi-red-fg { color: var(--ansi-red); }
+.ansi-green-fg { color: var(--ansi-green); }
+.ansi-yellow-fg { color: var(--ansi-yellow); }
+.ansi-blue-fg { color: var(--ansi-blue); }
+.ansi-magenta-fg { color: var(--ansi-magenta); }
+.ansi-cyan-fg { color: var(--ansi-cyan); }
+.ansi-white-fg { color: var(--ansi-white); }
+.ansi-bright-black-fg { color: var(--ansi-bright-black); }
+.ansi-bright-red-fg { color: var(--ansi-bright-red); }
+.ansi-bright-green-fg { color: var(--ansi-bright-green); }
+.ansi-bright-yellow-fg { color: var(--ansi-bright-yellow); }
+.ansi-bright-blue-fg { color: var(--ansi-bright-blue); }
+.ansi-bright-magenta-fg { color: var(--ansi-bright-magenta); }
+.ansi-bright-cyan-fg { color: var(--ansi-bright-cyan); }
+.ansi-bright-white-fg { color: var(--ansi-bright-white); }
+.ansi-black-bg { background-color: var(--ansi-black); }
+.ansi-red-bg { background-color: var(--ansi-red); }
+.ansi-green-bg { background-color: var(--ansi-green); }
+.ansi-yellow-bg { background-color: var(--ansi-yellow); }
+.ansi-blue-bg { background-color: var(--ansi-blue); }
+.ansi-magenta-bg { background-color: var(--ansi-magenta); }
+.ansi-cyan-bg { background-color: var(--ansi-cyan); }
+.ansi-white-bg { background-color: var(--ansi-white); }
+.ansi-bright-black-bg { background-color: var(--ansi-bright-black); }
+.ansi-bright-red-bg { background-color: var(--ansi-bright-red); }
+.ansi-bright-green-bg { background-color: var(--ansi-bright-green); }
+.ansi-bright-yellow-bg { background-color: var(--ansi-bright-yellow); }
+.ansi-bright-blue-bg { background-color: var(--ansi-bright-blue); }
+.ansi-bright-magenta-bg { background-color: var(--ansi-bright-magenta); }
+.ansi-bright-cyan-bg { background-color: var(--ansi-bright-cyan); }
+.ansi-bright-white-bg { background-color: var(--ansi-bright-white); }
+
+/* Scroll-edge fades: a scroller with more content past an edge fades its last
+   pixels there, so a cut row or column reads as "more this way". A
+   scroll-driven animation sizes each side's fade from the scroll position:
+   none while the scroller rests on that edge, full once it is
+   --scroll-fade-size away, and none at all when nothing overflows (the
+   timeline is inactive and the properties keep their initial 0px). No script
+   and no re-render on scroll. Browsers without scroll-driven animations
+   (Firefox, Safari before 26) show no fade. */
+@property --scroll-fade-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --scroll-fade-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@keyframes scroll-fade-start {
+  from { --scroll-fade-start: 0px; }
+  to { --scroll-fade-start: var(--scroll-fade-size); }
+}
+@keyframes scroll-fade-end {
+  from { --scroll-fade-end: var(--scroll-fade-size); }
+  to { --scroll-fade-end: 0px; }
+}
+@supports (animation-timeline: scroll()) {
+  .session-tree-scroll,
+  .sidebar-files-scroll,
+  .markdown-table-wrap {
+    animation-name: scroll-fade-start, scroll-fade-end;
+    animation-duration: auto;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+    animation-range: 0px var(--scroll-fade-size), calc(100% - var(--scroll-fade-size)) 100%;
+    mask-repeat: no-repeat;
+  }
+  /* Vertical lists. The classic scrollbar's strip stays unmasked, so the thumb
+     never fades near the ends (--session-tree-scrollbar is its measured
+     width; 0 for an overlay scrollbar). */
+  .session-tree-scroll,
+  .sidebar-files-scroll {
+    --scroll-fade-size: 20px;
+    --scroll-fade-gutter: var(--session-tree-scrollbar, 0px);
+    animation-timeline: scroll(self block);
+    mask-image:
+      linear-gradient(to bottom, transparent, #000 var(--scroll-fade-start), #000 calc(100% - var(--scroll-fade-end)), transparent),
+      linear-gradient(#000, #000);
+    mask-size: calc(100% - var(--scroll-fade-gutter)) 100%, var(--scroll-fade-gutter) 100%;
+    mask-position: left top, right top;
+  }
+  /* Tables that scroll sideways (code fences wrap instead). */
+  .markdown-table-wrap {
+    --scroll-fade-size: 28px;
+    animation-timeline: scroll(self inline);
+    mask-image: linear-gradient(to right, transparent, #000 var(--scroll-fade-start), #000 calc(100% - var(--scroll-fade-end)), transparent);
+  }
 }
 
 .web-login-page {
@@ -328,14 +632,47 @@ html.dark .web-login-error {
   cursor: not-allowed;
 }
 
+/* The terminal has its own light/dark choice (lib/terminal-theme.ts), apart
+   from the app theme. Its backgrounds match the xterm palettes there. */
 .terminal-panel {
+  --terminal-bg: #111318;
+  --terminal-header-bg: #181b21;
+  --terminal-border: #2f3540;
+  --terminal-button-border: #343a46;
+  --terminal-hover-bg: #242932;
+  --terminal-muted: #9ca3af;
+  --terminal-strong: #e5e7eb;
+  --terminal-key: #d7dce5;
+  --terminal-accent: #60a5fa;
+  --terminal-error-border: #5f2424;
+  --terminal-error-bg: #321b1b;
+  --terminal-error-text: #fca5a5;
+  --terminal-scrollbar: 156, 163, 175;
   display: grid;
   grid-template-rows: 38px auto minmax(0, 1fr);
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
-  background: #111318;
+  background: var(--terminal-bg);
+  color-scheme: dark;
+}
+
+.terminal-panel[data-terminal-theme="light"] {
+  --terminal-bg: #fbfbfc;
+  --terminal-header-bg: #f3f4f6;
+  --terminal-border: #e5e7eb;
+  --terminal-button-border: #d1d5db;
+  --terminal-hover-bg: #e5e7eb;
+  --terminal-muted: #6b7280;
+  --terminal-strong: #111827;
+  --terminal-key: #1f2937;
+  --terminal-accent: #2563eb;
+  --terminal-error-border: #fecaca;
+  --terminal-error-bg: #fef2f2;
+  --terminal-error-text: #b91c1c;
+  --terminal-scrollbar: 107, 114, 128;
+  color-scheme: light;
 }
 
 .terminal-panel-header {
@@ -344,11 +681,18 @@ html.dark .web-login-error {
   justify-content: space-between;
   min-width: 0;
   padding: 0 10px 0 13px;
-  border-bottom: 1px solid #2f3540;
-  background: #181b21;
-  color: #9ca3af;
+  border-bottom: 1px solid var(--terminal-border);
+  background: var(--terminal-header-bg);
+  color: var(--terminal-muted);
   font-family: var(--font-mono);
   font-size: 11px;
+}
+
+.terminal-panel-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
 }
 
 .terminal-panel-path {
@@ -383,31 +727,31 @@ html.dark .web-login-error {
   height: 27px;
   flex-shrink: 0;
   padding: 0 8px;
-  border: 1px solid #343a46;
+  border: 1px solid var(--terminal-button-border);
   border-radius: 5px;
   background: transparent;
-  color: #9ca3af;
+  color: var(--terminal-muted);
   cursor: pointer;
   font: inherit;
 }
 
 .terminal-panel-exit {
   padding: 7px 12px;
-  color: #9ca3af;
+  color: var(--terminal-muted);
   font-family: var(--font-mono);
   font-size: 11px;
 }
 
 .terminal-panel-header button:hover {
-  background: #242932;
-  color: #e5e7eb;
+  background: var(--terminal-hover-bg);
+  color: var(--terminal-strong);
 }
 
 .terminal-panel-error {
   padding: 7px 12px;
-  border-bottom: 1px solid #5f2424;
-  background: #321b1b;
-  color: #fca5a5;
+  border-bottom: 1px solid var(--terminal-error-border);
+  background: var(--terminal-error-bg);
+  color: var(--terminal-error-text);
   font-family: var(--font-mono);
   font-size: 11px;
 }
@@ -424,13 +768,59 @@ html.dark .web-login-error {
   height: 100%;
 }
 
+.terminal-extra-keys {
+  grid-row: 4;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-rows: 36px;
+  padding-bottom: env(safe-area-inset-bottom);
+  border-top: 1px solid var(--terminal-border);
+  background: var(--terminal-header-bg);
+}
+
+.terminal-xterm:has(+ .terminal-extra-keys) {
+  padding-bottom: 6px;
+}
+
+html[data-keyboard-open] .terminal-extra-keys {
+  padding-bottom: 0;
+}
+
+.terminal-extra-keys button {
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--terminal-key);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.terminal-extra-keys button:active {
+  background: var(--terminal-hover-bg);
+}
+
+.terminal-extra-keys .is-rotated {
+  display: inline-block;
+  transform: rotate(90deg);
+}
+
+.terminal-extra-keys button.is-active {
+  color: var(--terminal-accent);
+}
+
 .terminal-xterm-host {
   width: 100%;
   height: 100%;
 }
 
 .terminal-xterm .xterm-viewport {
-  background-color: #111318;
+  background-color: var(--terminal-bg);
 }
 
 /*
@@ -492,16 +882,26 @@ html.dark .web-login-error {
   }
 }
 
-/* The terminal keeps its dark surface in every theme, so --text-dim (a dark
-   grey in the light themes) would disappear against it. */
+/* The file panel's tab strip hides its scrollbar: a scrollbar takes its height
+   out of the 36px bar and squeezes the tabs (#1225). A wheel, a swipe or the
+   arrow keys scroll it, and TabBar keeps the active tab in view. */
+.tabbar-scroll {
+  scrollbar-width: none;
+}
+.tabbar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* The terminal picks its surface apart from the app theme, so --text-dim
+   could disappear against it. */
 .terminal-xterm .xterm-viewport::-webkit-scrollbar-thumb {
-  background-color: rgba(156, 163, 175, 0.45);
+  background-color: rgba(var(--terminal-scrollbar), 0.45);
 }
 .terminal-xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(156, 163, 175, 0.72);
+  background-color: rgba(var(--terminal-scrollbar), 0.72);
 }
 .terminal-xterm .xterm-viewport::-webkit-scrollbar-thumb:active {
-  background-color: rgb(156, 163, 175);
+  background-color: rgb(var(--terminal-scrollbar));
 }
 
 
@@ -547,26 +947,32 @@ html.dark .web-login-error {
   white-space: nowrap;
 }
 
-.extension-widget-triggers {
+/* The widget triggers and the status line are one row that scrolls sideways as a
+   whole. The expanded panel sits above it and stays put. */
+.extension-status-row {
   display: flex;
   flex: 1 1 100%;
   align-items: stretch;
   min-width: 0;
-  height: 35px;
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
-  scrollbar-width: none;
+  scrollbar-width: thin;
 }
 
-.extension-widget-triggers::-webkit-scrollbar {
-  display: none;
+.extension-widget-triggers {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  height: 35px;
 }
 
 .extension-status-shelf.has-widgets.has-status .extension-widget-triggers {
-  flex: 0 0 auto;
-  max-width: 70%;
   border-right: 1px solid var(--border);
+}
+
+.extension-status-row > .extension-status-line {
+  flex: 0 0 auto;
 }
 
 .extension-widget-trigger {
@@ -694,7 +1100,7 @@ button.extension-widget-trigger:focus-visible {
   min-width: 0;
   min-height: 35px;
   max-height: min(144px, 18dvh);
-  padding: 8px 12px;
+  padding: 0;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -702,8 +1108,11 @@ button.extension-widget-trigger:focus-visible {
 }
 
 .extension-status-text {
+  display: flex;
   flex: 1;
+  align-items: stretch;
   min-width: 0;
+  min-height: 35px;
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 11px;
@@ -711,12 +1120,93 @@ button.extension-widget-trigger:focus-visible {
   white-space: pre;
 }
 
+/* Every status is a cell of the status line, told apart from its neighbours by a
+   vertical rule like the widget triggers. A `command:` status is a button cell, as
+   tall as the line, so the whole cell can be clicked. */
+.extension-status-item {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 8px 12px;
+  border-right: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+}
+
+.extension-status-item:last-child {
+  border-right: 0;
+}
+
+.extension-status-command {
+  border-top: 0;
+  border-bottom: 0;
+  border-left: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  line-height: 1.45;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.extension-status-command:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.extension-status-command:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.extension-status-command:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Touch screens get taller cells when there is something to tap, widget triggers
+   included, so the row stays level. */
+@media (pointer: coarse) {
+  .extension-status-shelf.has-commands .extension-status-text {
+    min-height: 44px;
+  }
+
+  .extension-status-shelf.has-commands .extension-widget-triggers,
+  .extension-status-shelf.has-commands .extension-widget-trigger {
+    height: 44px;
+  }
+}
+
+/* The chat's top bar, the sidebar's toolbar row and the file panel's tab bar
+   share one height, so they read as one bar. A phone or touch screen gets a
+   finger's 44px; its icon buttons stay square. The file tree's rows
+   (FileExplorer) grow to 36px there, their row buttons with them. */
 :root {
-  --font-mono: var(--font-noto-mono), 'JetBrains Mono', 'Fira Code', 'Consolas', ui-monospace, 'PingFang SC', 'Microsoft YaHei', monospace;
+  --top-bar-height: 36px;
+  --file-row-height: 24px;
+}
+@media (max-width: 640px), (pointer: coarse) {
+  :root {
+    --top-bar-height: 44px;
+    --file-row-height: 36px;
+  }
+}
+
+:root {
+  --font-ui-default: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono-default: var(--font-noto-mono), 'JetBrains Mono', 'Fira Code', 'Consolas', ui-monospace, 'PingFang SC', 'Microsoft YaHei', monospace;
+  --font-ui: var(--font-ui-default);
+  --font-mono: var(--font-mono-default);
+  --font-ui-weight: 400;
+  --font-mono-weight: 400;
 }
 
 pre, code {
   font-family: var(--font-mono);
+  font-weight: var(--font-mono-weight);
+}
+
+/* Inline code inside a heading or emphasis keeps that surrounding emphasis. */
+.markdown-body :is(h1, h2, h3, h4, h5, h6, strong, b) code {
+  font-weight: inherit;
 }
 
 /* react-markdown output styles */
@@ -735,6 +1225,10 @@ pre, code {
 }
 .markdown-body p { margin: 0 0 8px; }
 .markdown-body p:last-child { margin-bottom: 0; }
+/* A reply ending in a list, code block or table kept that block's bottom
+   margin, so its stats line sat further down than under a paragraph. */
+.markdown-body > :last-child,
+.markdown-body > :is(ul, ol):last-child > li:last-child { margin-bottom: 0; }
 .markdown-body h1, .markdown-body h2, .markdown-body h3,
 .markdown-body h4, .markdown-body h5, .markdown-body h6 {
   font-weight: 600;
@@ -751,6 +1245,8 @@ pre, code {
   margin: 5px 0 8px;
   list-style-position: outside;
 }
+/* Room for the widest bold "N. " marker; MarkdownBody sets the digit count. */
+.markdown-body ol { padding-left: calc(0.8em + var(--ol-marker-digits, 2) * 0.62em); }
 .markdown-body li { margin: 3px 0; padding-left: 2px; }
 .markdown-body ul > li { list-style-type: disc; }
 .markdown-body ol > li { list-style-type: decimal; }
@@ -772,10 +1268,33 @@ pre, code {
   text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 .markdown-body a:hover { text-decoration-color: var(--accent); }
+.markdown-body a[role="link"] { cursor: pointer; }
 .markdown-body img {
   display: block;
   max-width: 100%;
   height: auto;
+  margin: 8px 0;
+  border-radius: 6px;
+}
+/* Firefox draws its audio controls without a background (bare buttons on the
+   page), Chrome inside a grey pill: both get the same frame from the theme. */
+.markdown-body audio {
+  display: block;
+  width: min(360px, 100%);
+  height: 36px;
+  margin: 8px 0;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  clip-path: inset(0 round 18px);
+}
+.markdown-body audio::-webkit-media-controls-enclosure {
+  background: transparent;
+}
+.markdown-body video {
+  display: block;
+  max-width: min(640px, 100%);
+  max-height: 360px;
   margin: 8px 0;
   border-radius: 6px;
 }
@@ -835,13 +1354,17 @@ pre, code {
   background: var(--bg-subtle);
   color: var(--text-muted);
 }
-.markdown-table-wrap {
+.markdown-table-frame {
   width: 100%;
   margin: 8px 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 7px;
+}
+.markdown-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 .markdown-body table {
   border-collapse: separate;
@@ -851,6 +1374,7 @@ pre, code {
 }
 .markdown-table-wrap > table { width: max-content; }
 .markdown-body th, .markdown-body td {
+  max-width: 240px;
   border: 0;
   border-bottom: 1px solid var(--border);
   padding: 6px 10px;
@@ -879,14 +1403,58 @@ pre, code {
 .markdown-body .katex {
   font-size: 1.05em;
 }
+/* A display formula's Copy button (MarkdownBody's MathDisplay): on hover or
+   keyboard focus where the pointer can hover, always shown on touch screens. */
+.markdown-math-display {
+  position: relative;
+}
+.markdown-math-copy {
+  position: absolute;
+  top: 2px;
+  right: 0;
+}
+@media (hover: hover) {
+  .markdown-math-copy {
+    opacity: 0;
+    transition: opacity 0.12s ease;
+  }
+  .markdown-math-display:hover .markdown-math-copy,
+  .markdown-math-copy:focus-visible {
+    opacity: 1;
+  }
+}
 .markdown-user-message p {
   white-space: pre-wrap;
 }
 
+/* The page's mono font ships Latin and Cyrillic only, so arrows, box drawing and
+   blocks fell back to glyphs 12-17px wide in a 7.8px column. These faces take
+   those characters from a system mono font, sized to the 0.6em column. */
+@font-face {
+  font-family: "Terminal Drawing";
+  src: local("Menlo Regular"), local("Menlo-Regular"), local("DejaVu Sans Mono");
+  unicode-range: U+2190-21FF, U+2500-259F;
+  size-adjust: 99.67%;
+}
+@font-face {
+  font-family: "Terminal Drawing Windows";
+  src: local("Consolas");
+  unicode-range: U+2190-21FF, U+2500-259F;
+  size-adjust: 109.09%;
+}
+
+/* Monospace with kept spaces, as an extension's text is laid out for pi's TUI:
+   a status box and its bars only line up in columns. */
 .markdown-custom-message {
+  font-family: "Terminal Drawing", "Terminal Drawing Windows", var(--font-mono);
+  font-size: calc(13px + var(--chat-font-size-offset, 0px));
   line-height: 1.32;
 }
-.markdown-custom-message p { margin: 0; }
+.markdown-custom-message p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.markdown-custom-message p + p { margin-top: 1.32em; }
 .markdown-custom-message h1,
 .markdown-custom-message h2,
 .markdown-custom-message h3,
@@ -905,7 +1473,7 @@ pre, code {
   margin: 3px 0;
   padding: 4px 8px;
 }
-.markdown-custom-message .markdown-table-wrap,
+.markdown-custom-message .markdown-table-frame,
 .markdown-custom-message .markdown-code-block {
   margin: 4px 0;
 }
@@ -928,7 +1496,7 @@ pre, code {
   margin: 4px 0 8px;
 }
 .markdown-compaction-message li { margin: 2px 0; }
-.markdown-compaction-message .markdown-table-wrap,
+.markdown-compaction-message .markdown-table-frame,
 .markdown-compaction-message .markdown-code-block {
   margin: 6px 0;
 }
@@ -985,6 +1553,25 @@ pre, code {
   overflow: hidden;
   background: var(--bg);
   box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 42%, transparent);
+}
+/* Code fences wrap long lines, as pi's TUI does: a line is a row of its number
+   and its text (CodeBlock's renderer), so a wrapped line goes on under its
+   text, and `anywhere` breaks a URL or path that has no space to break at. */
+.markdown-code-line {
+  display: flex;
+}
+/* A zero basis: an `auto` one measures every line's unwrapped width first,
+   which nearly doubled the layout of a reply's fences. */
+.markdown-code-line-text {
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* An extension dialog measures its fences unwrapped (ChatWindow), so it still
+   grows to show them whole where the screen allows. */
+.extension-dialog-measuring .markdown-code-line-text {
+  white-space: pre;
 }
 .markdown-code-header {
   padding: 5px 10px;
@@ -1065,6 +1652,31 @@ pre, code {
 .mermaid-preview-button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
+}
+
+/* A ```svg fence's <img> (components/SvgBlock.tsx). An SVG with neither a
+   viewBox nor a width and height has no size of its own: is-unsized gives it one. */
+.svg-block-image,
+.svg-zoom-image {
+  display: block;
+  height: auto;
+}
+/* An SVG with only a viewBox has a ratio but no size, so it would fill the
+   column: cap its height like a diagram's. */
+.svg-block-image {
+  width: auto;
+  max-width: 100%;
+  max-height: min(360px, 50dvh);
+}
+.svg-block-image.is-unsized {
+  width: 100%;
+  height: 240px;
+}
+.svg-zoom-image {
+  width: 100%;
+}
+.svg-zoom-image.is-unsized {
+  aspect-ratio: 2 / 1;
 }
 
 .image-preview-dialog {
@@ -1367,6 +1979,14 @@ pre, code {
   pointer-events: auto;
 }
 
+/* Below about 370px the labels of a message's actions push its timestamp onto a
+   second line, and its Copy button past the left edge. Every button keeps its title. */
+@media (max-width: 380px) {
+  .message-action-label {
+    display: none;
+  }
+}
+
 .chat-scroll-to-bottom {
   display: inline-flex;
   align-items: center;
@@ -1435,6 +2055,408 @@ pre, code {
       background 0.12s,
       color 0.12s,
       visibility 0s;
+  }
+}
+
+/* The empty new-session page's header above the composer (ChatWindow), on
+   the composer's left edge: the brand (the logo, "Pi Web" and its versions
+   line), then the project and worktree row (NewSessionContextBar) right
+   above the composer card. Nothing on the right. */
+.new-session-hero-inner {
+  margin: 0 auto;
+}
+
+.new-session-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: 20px;
+}
+
+.new-session-logo {
+  flex: none;
+  width: 40px;
+  height: 40px;
+}
+
+.new-session-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-family: var(--font-mono);
+}
+
+.new-session-brand-name {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+/* "web v<app> → v<latest> ↗ · pi v<pi>", on one line: where it is narrow,
+   pi's version gives way (its ellipsis); the version in use and the update
+   link are never cut. */
+.new-session-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.new-session-meta > * {
+  flex: none;
+}
+
+.new-session-meta > .new-session-meta-pi {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Its box shows on hover and focus; the negative margins keep it off the
+   line's layout, and on a coarse pointer they grow the tap target the same
+   way. */
+.new-session-update {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: -3px -4px;
+  padding: 3px 4px;
+  border-radius: 5px;
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.12s;
+}
+
+.new-session-update:hover,
+.new-session-update:focus-visible {
+  background: var(--bg-hover);
+}
+
+/* The ring inside the box, clear of the "→" and "·" beside it. */
+.new-session-update:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.new-session-update svg {
+  flex: none;
+}
+
+/* The project and worktree: a row of their own, under the brand. The
+   project button's own padding is pulled out on the left, so its folder
+   icon stands on the logo's and the composer card's edge. */
+.new-session-context {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  min-width: 0;
+  min-height: 28px;
+  margin: 0 0 6px -6px;
+}
+
+@media (max-width: 640px) {
+  .new-session-brand {
+    margin-bottom: 16px;
+  }
+
+  .new-session-logo {
+    width: 32px;
+    height: 32px;
+  }
+
+  .new-session-brand-name {
+    font-size: 20px;
+  }
+}
+
+@media (pointer: coarse) {
+  .new-session-update {
+    margin-top: -8px;
+    margin-bottom: -8px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+}
+
+/* The project and worktree picker (ProjectWorktreePicker). The files' (the
+   tab's stacked boxes, the row below the sessions), as the sidebar drew it
+   on main: two grey boxes in the header buttons' material, 11px, the
+   project's whole path and the worktree's branch in code type, cut at their
+   left; no icon and no chevron on the project: its path is the box. Above a
+   fresh composer (inline): names as text on the page, see below. */
+.project-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  box-sizing: border-box;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+/* Each box as wide as what it shows. */
+.project-picker-button {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 29px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+/* Above a fresh composer (inline): no box until hovered or open, 12px, the
+   folder icon, the project's name and a chevron; the branch icon (the accent
+   for a linked checkout), the branch and a chevron. The names are what tell
+   projects apart there; the full path is the tooltip and the menu's rows.
+   The row never wraps: the branch gives way first, cut at its left, then
+   the name, cut at its end (shrinking with their text, a long branch took
+   a short name's last pixels), down to minimum widths of their own (never
+   shares of the row: a lone button squeezed to a share of itself would end
+   up 0px wide). "First" takes a factor of a million: at 1000 the other
+   still lost a fraction of a pixel, enough for its ellipsis. */
+.project-picker.is-inline {
+  gap: 2px;
+  font-size: 12px;
+}
+
+.project-picker.is-inline .project-picker-button {
+  gap: 4px;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+}
+
+.project-picker.is-inline .project-picker-button.is-project {
+  min-width: 56px;
+}
+
+.project-picker.is-inline .project-picker-button:not(.is-project) {
+  min-width: 72px;
+  flex-shrink: 1000000;
+}
+
+.project-picker.is-inline .project-picker-button:hover,
+.project-picker.is-inline .project-picker-button[aria-expanded="true"] {
+  background: var(--bg-hover);
+}
+
+/* The project's name (its display name, else its folder's), cut at its
+   end, with its parent folder and "/", dim, only where two projects share
+   the name. The parent gives way first (its ellipsis, a factor of a
+   million as for the branch above), so the name stays whole while there is
+   any parent left to cut. */
+.project-picker-name {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 28ch;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.project-picker-parent {
+  flex: 0 1000000 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-picker-leaf {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+}
+
+.project-picker.is-inline .project-picker-path {
+  max-width: 32ch;
+}
+
+.project-picker-button:hover,
+.project-picker-button[aria-expanded="true"] {
+  background: var(--bg-selected);
+  color: var(--text);
+}
+
+.project-picker-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.project-picker-icon,
+.project-picker-chevron {
+  flex-shrink: 0;
+}
+
+.project-picker-icon {
+  color: var(--text-dim);
+}
+
+.project-picker-button:hover .project-picker-icon,
+.project-picker-button[aria-expanded="true"] .project-picker-icon {
+  color: var(--text-muted);
+}
+
+/* A linked checkout's branch, not the main one's. */
+.project-picker-icon.is-linked,
+.project-picker-button:hover .project-picker-icon.is-linked,
+.project-picker-button[aria-expanded="true"] .project-picker-icon.is-linked {
+  color: var(--accent);
+}
+
+.project-picker-chevron {
+  color: var(--text-dim);
+}
+
+.project-picker-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A project the user named (its group menu's Rename…): the name in the
+   path's color and code type, cut at its end. */
+.project-picker-label.is-alias {
+  color: var(--text);
+  font-family: var(--font-mono);
+}
+
+/* A path or a branch, cut at its left (rtl), the text itself kept left to
+   right: the end is what tells them apart. */
+.project-picker-path {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--font-mono);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+}
+
+.project-picker-path > span {
+  unicode-bidi: plaintext;
+}
+
+/* Clipped text keeps its descenders: at the picker's line-height of 1 its
+   box would cut g, p and y. Centred in a fixed-height button, the taller box
+   moves no glyph. */
+.project-picker-label,
+.project-picker-path,
+.project-picker-name {
+  line-height: normal;
+}
+
+.project-picker-note {
+  flex: none;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+/* Something runs or waits in another project (the files tab). */
+.project-picker-activity {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* No project yet: the box invites the first pick. */
+.project-picker-button.is-empty {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+
+/* No worktree list here (the files tab): a box that says why, and does nothing. */
+.project-picker-button.is-inactive,
+.project-picker-button.is-inactive:hover {
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  cursor: default;
+  opacity: 0.82;
+}
+
+.project-picker-button.is-inactive:hover .project-picker-icon {
+  color: var(--text-dim);
+}
+
+/* The files tab: full width, one under the other, at the top of its head
+   (.sidebar-files-head, app/sidebar.css); the path or branch takes the room
+   before the notes. */
+.project-picker.is-stacked {
+  flex: none;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.project-picker.is-stacked .project-picker-button {
+  width: 100%;
+}
+
+.project-picker.is-stacked .project-picker-label,
+.project-picker.is-stacked .project-picker-path {
+  flex: 1 1 0;
+}
+
+/* The files below the sessions: the two boxes side by side in one row, a
+   little lower. The worktree box is as wide as its branch and notes, up to
+   55% of the row (the row is the head's whole width: a share of it, unlike
+   the bar's); the project box takes the rest, its path cut at its left. */
+.project-picker.is-row {
+  flex: none;
+  flex-direction: row;
+}
+
+.project-picker.is-row .project-picker-button {
+  height: 26px;
+}
+
+.project-picker.is-row .project-picker-button.is-project {
+  flex: 1 1 0;
+}
+
+.project-picker.is-row .project-picker-button:not(.is-project) {
+  flex: 0 1 auto;
+  max-width: 55%;
+}
+
+.project-picker.is-row .project-picker-label,
+.project-picker.is-row .project-picker-path {
+  flex: 1 1 0;
+}
+
+@media (pointer: coarse) {
+  .project-picker-button {
+    min-height: 36px;
   }
 }
 
@@ -1700,25 +2722,6 @@ span.token.table {
 .panel-resize-handle.is-resizing::after {
   background: color-mix(in srgb, var(--text-muted) 70%, var(--border));
 }
-.sidebar-section-resize-handle {
-  outline: none;
-}
-.sidebar-section-resize-handle::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 5px;
-  height: 1px;
-  pointer-events: none;
-  background: transparent;
-  transition: background 0.12s ease;
-}
-.sidebar-section-resize-handle:hover::after,
-.sidebar-section-resize-handle:focus-visible::after,
-.sidebar-section-resize-handle.is-resizing::after {
-  background: color-mix(in srgb, var(--text-muted) 70%, var(--border));
-}
 .right-panel-overlay-backdrop {
   display: none;
 }
@@ -1848,8 +2851,8 @@ span.token.table {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+  width: var(--top-bar-height);
+  height: var(--top-bar-height);
   padding: 0;
   background: var(--bg-selected);
   border: none;
@@ -1939,16 +2942,34 @@ span.token.table {
   }
 }
 
+/* A composer too narrow for the run's button labels, with a panel open beside
+   it: icons only, so the draft keeps the width. A stacked composer has its own
+   row for them and is not a container. */
+.chat-composer-row {
+  container-type: inline-size;
+}
+@container (max-width: 480px) {
+  .chat-composer-run-label {
+    display: none;
+  }
+}
+
 /* While the software keyboard is up (set by useViewportHeight), only a few
    hundred pixels remain above it. Hand them to the conversation: collapse the
-   model/controls row and the extension status shelf, and drop the home
-   indicator inset the keyboard already covers. Both come back when the
-   keyboard closes. Phone landscape is wider than the mobile breakpoint but
-   leaves the least room of all, so short touch screens opt in too; tablets
-   keep their controls because the keyboard leaves them enough height. */
+   model/controls row, the extension status shelf and a fresh composer's
+   project bar, and drop the home indicator inset the keyboard already
+   covers. They come back when the keyboard closes. Phone landscape is wider
+   than the mobile breakpoint but leaves the least room of all, so short
+   touch screens opt in too; tablets keep their controls because the keyboard
+   leaves them enough height. */
 @media (max-width: 640px), (pointer: coarse) and (max-height: 500px) {
-  html[data-keyboard-open] .chat-input-controls,
   html[data-keyboard-open] .extension-status-shelf {
+    display: none !important;
+  }
+  /* Except while its model picker is open: the picker's filter is the field
+     the keyboard is for, and hiding its row would hide the picker (#1271).
+     Its own rule, so a browser without :has() drops only this one. */
+  html[data-keyboard-open] .chat-input-controls:not(:has(.model-selector [role="listbox"])) {
     display: none !important;
   }
   html[data-keyboard-open] .chat-content {
@@ -1956,5 +2977,9 @@ span.token.table {
   }
   html[data-keyboard-open] .chat-input-shell {
     padding-bottom: 6px !important;
+  }
+  /* Tapping it would close the keyboard anyway. */
+  html[data-keyboard-open] .new-session-context {
+    display: none !important;
   }
 }

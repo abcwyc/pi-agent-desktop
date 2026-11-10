@@ -224,6 +224,48 @@
   padding-left: 26px;
 }
 
+.models-sidebar-model-footer {
+  display: flex;
+  align-items: center;
+}
+
+.models-sidebar-model-footer > .config-sidebar-item {
+  flex: 1;
+  width: auto;
+  padding-right: 4px;
+}
+
+.models-sidebar-sort-button {
+  flex-shrink: 0;
+  width: 36px;
+  height: 30px;
+  margin-right: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.models-sidebar-sort-button:not(:disabled):hover,
+.models-sidebar-sort-button:not(:disabled):focus-visible {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.models-sidebar-sort-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.models-sidebar-sort-button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
 .models-sidebar-add-item {
   color: var(--text-dim);
 }
@@ -429,6 +471,32 @@
 .enabled-models-row + .enabled-models-row {
   border-top: 1px solid var(--border);
 }
+
+/* Eight digits wide (ch follows the phones' 16px form text), and no taller
+   than the name and id beside it, so the row keeps its height. */
+.model-context-input {
+  flex-shrink: 0;
+  width: calc(8ch + 16px);
+  height: 24px;
+  box-sizing: border-box;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: right;
+}
+
+.model-context-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.model-context-input::placeholder { color: var(--text-dim); }
+.model-context-input[aria-invalid="true"] { border-color: #ef4444; }
+.model-context-input:disabled { opacity: 0.6; }
 
 .enabled-models-row-text {
   min-width: 0;
@@ -1075,6 +1143,23 @@
   line-height: 1.5;
 }
 
+.skill-instructions {
+  font-size: 13px;
+}
+
+.skill-instructions > :first-child { margin-top: 0; }
+.skill-instructions > :last-child { margin-bottom: 0; }
+
+.skill-instructions-status {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.skill-instructions-status.is-error {
+  color: #ef4444;
+  overflow-wrap: anywhere;
+}
+
 .skill-update-indicator {
   flex-shrink: 0;
   font-size: 13px;
@@ -1494,8 +1579,83 @@
   transform: scale(1.25);
 }
 
-.settings-mobile-section-picker {
-  display: none;
+/* A phone's Back button and list of sections (SettingsPanel); desktops never render them. */
+.settings-phone-back {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  height: 44px;
+  padding: 0 6px 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.settings-phone-back span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-phone-home {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  /* The first row meets the header's line: each row draws only its bottom line. */
+  padding: 0 0 8px;
+  overflow-y: auto;
+}
+
+.settings-phone-home-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px 0 18px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 15px;
+  text-align: left;
+}
+
+.settings-phone-home-item:active:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.settings-phone-home-item:disabled {
+  color: var(--text-dim);
+  cursor: default;
+}
+
+.settings-phone-home-item .settings-section-icon {
+  color: var(--text-muted);
+}
+
+.settings-phone-home-label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-phone-home-note {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.settings-phone-home-chevron {
+  flex-shrink: 0;
+  color: var(--text-dim);
 }
 
 .settings-dialog-close {
@@ -1520,19 +1680,19 @@
   min-height: 0;
 }
 
+/* The page scrolls across the dialog's full width, so its scrollbar sits at the
+   dialog's edge; only the content keeps a readable column, centered so a wide
+   dialog leaves its spare width on both sides. */
 .settings-general {
   width: 100%;
-  max-height: 100%;
-  max-width: 680px;
+  height: 100%;
   padding: 26px clamp(18px, 4vw, 40px) 40px;
   overflow-y: auto;
 }
 
-.settings-general-title {
-  margin: 0;
-  color: var(--text);
-  font-size: 18px;
-  font-weight: 700;
+.settings-general > * {
+  max-width: 600px;
+  margin-inline: auto;
 }
 
 .settings-general-section {
@@ -1540,7 +1700,7 @@
 }
 
 .settings-general-section:first-of-type {
-  margin-top: 24px;
+  margin-top: 0;
 }
 
 .settings-general-heading {
@@ -1557,51 +1717,184 @@
   line-height: 1.5;
 }
 
+/* A note on the options above it, not an introduction to them. */
+.settings-chat-options + .settings-general-description {
+  margin: 6px 0 0;
+}
+
+/* Fifteen columns: System spans the first row; then five light themes and five dark ones
+   (three columns each), and a row of three wide tiles (five columns each). */
 .settings-theme-options {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 3px;
-  width: 100%;
-  max-width: 420px;
-  padding: 3px;
+  grid-template-columns: repeat(15, minmax(0, 1fr));
+  grid-auto-rows: 40px;
+  gap: 10px;
+  max-width: 428px;
+  padding: 4px;
 }
 
 .settings-theme-option {
   position: relative;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
+  grid-column: span 3;
   min-width: 0;
-  min-height: 44px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--text-muted);
+  border-radius: 9px;
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 400;
 }
 
-.settings-theme-option:has(input:checked) {
-  background: var(--bg-selected);
+.settings-theme-option[data-system] {
+  grid-column: 1 / -1;
+}
+
+.settings-theme-option[data-wide] {
+  grid-column: span 5;
+}
+
+.settings-theme-swatch {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.settings-theme-fill {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.settings-theme-name {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  overflow: hidden;
   color: var(--accent);
+  font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
+}
+
+/* "High contrast light" outgrows a third of the row on a phone: let the wide names take two lines. */
+.settings-theme-option[data-wide] .settings-theme-name {
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+}
+
+.settings-theme-system {
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: var(--bg-panel);
+}
+
+.settings-theme-chip {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg);
+}
+
+.settings-theme-system-name {
+  margin-left: 6px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .settings-theme-option:not(:has(input:checked)):hover {
-  background: var(--bg-hover);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--border);
+}
+
+.settings-theme-option:has(input:checked) {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
 }
 
 .settings-theme-option:has(input:focus-visible) {
+  outline: 2px dashed var(--accent);
+  outline-offset: 6px;
+}
+
+.settings-font-rows {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) auto 28px;
+  gap: 12px 8px;
+}
+
+.settings-font-rows > .settings-font-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: max-content minmax(0, 1fr) auto 28px;
+  grid-template-columns: subgrid;
+  row-gap: 0;
+}
+
+.settings-font-rows > .settings-font-row > input[type="range"] {
+  grid-column: 1 / -1;
+}
+
+.settings-chat-range-header.settings-font-header {
+  grid-column: 1 / -1;
+  grid-template-columns: max-content minmax(0, 1fr) auto 28px;
+  grid-template-columns: subgrid;
+}
+
+.settings-chat-range-header.settings-font-header label {
+  padding-right: 4px;
+}
+
+/* A weight's name, not its number: wide enough for the longest so the name field keeps its width while dragging. */
+.settings-chat-range-header.settings-font-header output {
+  min-width: 11ch;
+  font-family: inherit;
+  text-align: right;
+}
+
+/* Drawn in the font it names: the live preview. */
+.settings-chat-range-option .settings-font-input {
+  height: 26px;
+  margin: 0;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-weight: var(--font-ui-weight);
+  font-size: 12px;
+}
+
+.settings-chat-range-option .settings-font-input.is-mono {
+  font-family: var(--font-mono);
+  font-weight: var(--font-mono-weight);
+}
+
+.settings-font-input::placeholder {
+  color: var(--text-dim);
+}
+
+.settings-font-input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
-.settings-theme-option-label {
-  min-width: 0;
-  overflow-wrap: anywhere;
+@media (max-width: 640px) {
+  /* Phones get 16px form text (no focus zoom), so the name field needs the height. */
+  .settings-chat-range-option .settings-font-input {
+    height: 32px;
+  }
 }
 
 .settings-chat-options {
@@ -1791,9 +2084,36 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* A phone shows Settings, and a config panel opened on its own, full
+     screen: the page's own colour under the safe areas, no frame. iOS
+     standalone's fallback insets (end of file) still pad the root. */
+  .settings-dialog-backdrop,
+  .config-panel-root.is-modal {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    background: var(--bg);
+  }
+
+  .config-close-button {
+    width: 44px;
+    height: 44px;
+    font-size: 24px;
+  }
+
+  .settings-dialog-close {
+    position: static;
+    grid-column: 3;
+    justify-self: end;
+  }
+
+  .settings-dialog-surface,
   .config-panel-root.is-modal > .config-panel-surface {
-    width: calc(100vw - 16px);
-    height: calc(100dvh - 16px);
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .config-split-view {
@@ -1822,28 +2142,68 @@
     padding: 14px;
   }
 
-  .settings-dialog-surface {
-    width: calc(100vw - 12px);
-    height: calc(100dvh - 12px);
-  }
-
   .settings-section-tabs {
     display: none;
   }
 
-  .settings-mobile-section-picker {
-    display: block;
-    width: 100%;
-    max-width: 210px;
-    min-width: 0;
-    height: 32px;
-    margin-left: 14px;
-    padding: 0 9px;
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    background: var(--bg-panel);
-    color: var(--text);
+  /* Back, title, close: equal side columns keep the title in the middle
+     whatever Back says; a long title is cut short in its own column. */
+  .settings-dialog-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.8fr) minmax(0, 1fr);
+    align-items: center;
+    padding: 0 4px;
+  }
+
+  .settings-phone-back {
+    grid-column: 1;
+    justify-self: start;
+  }
+
+  .settings-dialog-title {
+    grid-column: 2;
+    overflow: hidden;
     font-size: 16px;
+    text-align: center;
+    text-overflow: ellipsis;
+  }
+
+  /* Inside Settings a split view shows one pane at a time (ConfigSplitView's
+     data-pane): the list fills the screen with rows for a finger, and a row
+     opens its detail in its place. */
+  .config-split-view[data-pane] > .config-sidebar {
+    flex: 1 1 auto;
+    height: auto;
+    border-bottom: 0;
+  }
+
+  .config-split-view[data-pane="list"] > .config-detail,
+  .config-split-view[data-pane="detail"] > .config-sidebar {
+    display: none;
+  }
+
+  .config-split-view[data-pane] .config-sidebar-item,
+  .config-split-view[data-pane] .config-list-action-button {
+    height: 44px;
+    min-height: 44px;
+    font-size: 14px;
+  }
+
+  .config-split-view[data-pane] .models-sidebar-sort-button {
+    width: 40px;
+    height: 44px;
+    font-size: 12px;
+  }
+
+  .config-split-view[data-pane] .config-sidebar-group-label {
+    padding-top: 10px;
+    font-size: 11px;
+  }
+
+  /* A section's settings above its list (Models' enabledModels, Sub-agents'
+     switch) belong to the list level, not to each row's detail. */
+  .settings-section-host[data-phone-level="detail"] :is(.enabled-models-banner, .agents-feature-setting) {
+    display: none;
   }
 }
 
@@ -1940,9 +2300,9 @@
   color: #d97706;
 }
 
+/* Secondary lines keep the pane's one text size; only the color steps back. */
 .mcp-config-line.is-dim {
   color: var(--text-dim);
-  font-size: 11px;
 }
 
 .mcp-config-line.is-error {
@@ -1977,6 +2337,8 @@
   min-width: 0;
 }
 
+/* Literal text (names, a URL or command line, a path) is one mono size across
+   the pane, whether in a chip or a row of its own (.mcp-config-code). */
 .mcp-config-chip {
   max-width: 100%;
   padding: 0 5px;
@@ -2010,12 +2372,17 @@
   white-space: pre-wrap;
 }
 
+.config-detail-grid-value.mcp-config-code {
+  font-size: 11px;
+}
+
+/* Under the Tools row's choice: a little apart from its explanation. */
 .mcp-test-tools {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
-  margin: 0;
+  margin: 4px 0 0;
   padding: 0;
   list-style: none;
 }
@@ -2029,7 +2396,7 @@
 
 .mcp-test-tool-tag {
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 18px;
   white-space: nowrap;
 }
@@ -2068,9 +2435,11 @@
   min-width: 0;
 }
 
+/* Its options are words, not literal text: the interface font, not .mcp-add-input's mono. */
 .mcp-add-input.mcp-exposure-select {
   width: auto;
   max-width: 100%;
+  font-family: inherit;
 }
 
 /* The add pane (components/McpAddServer.tsx). Notes, fields and the failure
@@ -2087,6 +2456,19 @@
   font-family: var(--font-mono);
   font-size: 12px;
   outline: none;
+}
+
+/* macOS draws the native arrow against the border, ignoring the padding: a chevron of
+   our own, in the theme's dim text color, as far from the right edge as the text is from the left. */
+select.mcp-add-input {
+  appearance: none;
+  padding-right: 30px;
+  background-image:
+    linear-gradient(45deg, transparent 40%, var(--text-dim) 40%, var(--text-dim) 60%, transparent 60%),
+    linear-gradient(-45deg, transparent 40%, var(--text-dim) 40%, var(--text-dim) 60%, transparent 60%);
+  background-size: 5px 5px;
+  background-position: right 15px center, right 10px center;
+  background-repeat: no-repeat;
 }
 
 .mcp-add-toggle {

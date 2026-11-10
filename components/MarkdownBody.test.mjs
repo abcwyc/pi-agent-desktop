@@ -37,6 +37,36 @@ function renderMarkdown(markdown, props = {}) {
   );
 }
 
+test("renders CJK sentence emphasis without spaces after closing punctuation", () => {
+  const sentence = "今天天气很好。";
+  const markdown = `**${sentence}**我们去公园散步吧。`;
+  for (const props of [{}, { keepLineBreaks: true }]) {
+    const html = renderMarkdown(markdown, props);
+    assert.ok(html.includes(`<strong>${sentence}</strong>我们`));
+    assert.doesNotMatch(html, /\*\*/);
+  }
+  const preview = renderToStaticMarkup(React.createElement(ReactMarkdown, {
+    remarkPlugins: markdownPreviewRemarkPlugins,
+    rehypePlugins: markdownPreviewRehypePlugins,
+  }, markdown));
+  assert.ok(preview.includes(`<strong>${sentence}</strong>我们`));
+});
+
+test("renders CJK brackets next to prose while preserving nested emphasis", () => {
+  assert.match(renderMarkdown("这是**「重要」**内容。"), /这是<strong>「重要」<\/strong>内容。/);
+  assert.match(renderMarkdown("これは**テスト。**テスト"), /これは<strong>テスト。<\/strong>テスト/);
+  assert.match(renderMarkdown("**outer *inner* text**"), /<strong>outer <em>inner<\/em> text<\/strong>/);
+});
+
+test("keeps CJK emphasis markers literal in code and escaped text", () => {
+  const literal = "**需要。**即使";
+  for (const markdown of [`\`${literal}\``, `\`\`\`\n${literal}\n\`\`\``, "\\*\\*需要。\\*\\*即使"]) {
+    const html = renderMarkdown(markdown);
+    assert.doesNotMatch(html, /<strong>/);
+    assert.ok(html.includes(literal));
+  }
+});
+
 test("opens non-file markdown links in a safe new tab", () => {
   const html = renderMarkdown("[docs](https://example.com/docs)");
 
@@ -397,19 +427,11 @@ test("leaves code and math line endings alone when keeping line breaks", () => {
   assert.match(emphasis, /<em>one<br\/>two<\/em>/);
 });
 
-test("keeps a block that opens a raw-text tag as it renders without line breaks", () => {
-  // A <br> after an unclosed <textarea> or <script> ends rehype-raw's raw-text
-  // state, which glued the lines together or dropped the rest of the block.
-  for (const markdown of [
-    "Use a <textarea> here\nand a button\nplease",
-    "Set <title>My\nPage</title> first\nthen deploy",
-    "add <script>a()\nb()</script> to the page\nthen reload",
-    "some *<style>x\ny</style>* then\nnext",
-  ]) {
-    assert.equal(renderMarkdown(markdown, { keepLineBreaks: true }), renderMarkdown(markdown));
-  }
-
-  assert.match(renderMarkdown("normal <kbd>Ctrl</kbd>\nline two", { keepLineBreaks: true }), /<\/kbd><br\/>line two/);
+test("a user message shows raw-text tags as typed and keeps its line breaks (#1407)", () => {
+  // User messages print their HTML as the characters typed, as pi's TUI does, so a
+  // pasted <textarea> or <script> neither swallows the rest of the block nor vanishes.
+  assert.match(renderMarkdown("Use a <textarea> here\nand a button", { keepLineBreaks: true }), /<p>Use a &lt;textarea&gt; here<br\/>and a button<\/p>/);
+  assert.match(renderMarkdown("add <script>a()\nb()</script> to the page", { keepLineBreaks: true }), /&lt;script&gt;a\(\)<br\/>b\(\)&lt;\/script&gt; to the page/);
   const list = renderMarkdown("- item <textarea>\n  more\n- two\n  lines", { keepLineBreaks: true });
   assert.match(list, /<li>two<br\/>lines<\/li>/);
 });
@@ -445,4 +467,27 @@ test("a marker on its own line leaves no empty paragraph and unknown markers sta
 test("alert markers inside lists stay ordinary quotes", () => {
   const html = renderMarkdown("- item\n\n  > [!NOTE]\n  > nested");
   assert.doesNotMatch(html, /markdown-alert/);
+});
+
+test("an audio or video file a reply links as an image plays in place (C9)", () => {
+  const audio = renderMarkdown("![take 2](media/take2.wav)");
+  assert.match(audio, /<audio class="markdown-media" controls="" preload="metadata" src="\/api\/files\/[^"]*take2\.wav\?type=read" aria-label="take 2"><\/audio>/);
+  assert.doesNotMatch(audio, /<img/);
+  assert.match(renderMarkdown("![](clips/demo.mp4)"), /<video class="markdown-media" controls="" playsInline="" preload="metadata"|<video class="markdown-media" controls="" playsinline="" preload="metadata"/);
+  // A remote clip keeps its URL; an image stays an image.
+  assert.match(renderMarkdown("![](https://example.com/a.mp3?x=1)"), /<audio[^>]*src="https:\/\/example\.com\/a\.mp3\?x=1"/);
+  assert.match(renderMarkdown("![chart](chart.png)"), /<img src="\/api\/files\/[^"]*chart\.png\?type=read" alt="chart"/);
+});
+
+test("a display formula carries a Copy button for its LaTeX (C8)", () => {
+  const html = renderMarkdown("$$\nE = mc^2\n$$");
+  assert.match(html, /<div class="markdown-math-display">[\s\S]*class="katex-display"[\s\S]*<button type="button" class="markdown-code-action markdown-math-copy">Copy<\/button><\/div>/);
+  // Inline math has no button.
+  assert.doesNotMatch(renderMarkdown("Energy is $E = mc^2$ here."), /markdown-math-copy/);
+});
+
+test("an extension message keeps its line breaks and indents, as pi's TUI prints it (C11)", () => {
+  const html = renderMarkdown("Progress\n  ├─ step one\n  └─ step two", { keepTextLayout: true });
+  assert.match(html, /Progress<br\/>/);
+  assert.match(html, /├─ step one<br\/>/);
 });
