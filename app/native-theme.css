@@ -2715,6 +2715,28 @@ html:not(.dark) .session-item.is-selected .session-item-time {
 
 /* "…" popover menu on session rows: keep the delete item red on hover
    (the generic .native-popover hover rule would repaint it as plain text) */
+/* File tree drop (F4): the folder row under a file drag, and the bottom hint. */
+.file-tree-drop-target {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  outline: var(--hairline) dashed var(--accent);
+  outline-offset: -1px;
+}
+.file-tree-drop-hint {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: var(--hairline) solid var(--border);
+  background: var(--bg-panel);
+  font-size: var(--fs-micro);
+  color: var(--accent);
+  user-select: none;
+  pointer-events: none;
+}
+
 /* Git changes header: list / tree switch (F2). */
 .file-changes-view-toggle {
   display: flex;
