@@ -6715,6 +6715,17 @@ html.dark {
   }
 }
 
+/* Patch views: unchanged lines a diff leaves out between hunks (F7, upstream #1304). */
+.patch-diff-gap {
+  padding: 2px 10px;
+  color: var(--text-dim);
+  background: var(--bg-panel);
+  border-top: var(--hairline) solid var(--border);
+  border-bottom: var(--hairline) solid var(--border);
+  font-family: var(--font-ui, inherit);
+  font-size: var(--fs-micro);
+}
+
 /* File viewer: a binary file offers its download instead of decoded bytes (F3, upstream #1401). */
 .file-viewer-binary {
   height: 100%;

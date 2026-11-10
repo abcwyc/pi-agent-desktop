@@ -24,7 +24,7 @@ import { parseFrontmatter } from "@/lib/frontmatter";
 import { markdownPreviewRehypePlugins, markdownPreviewRemarkPlugins, markdownUrlTransform, normalizeDisplayMath } from "@/lib/markdown";
 import { CodeBlock, MermaidBlock } from "./MermaidBlock";
 import { FrontmatterCard } from "./FrontmatterCard";
-import { parseUnifiedPatch } from "@/lib/patch";
+import { diffGapLabel, parseUnifiedPatch } from "@/lib/patch";
 import type { GitFileDiffResponse } from "@/lib/git-types";
 import { getFileIcon } from "./FileIcons";
 import { useI18n } from "@/hooks/useI18n";
@@ -376,7 +376,12 @@ type DiffLine = {
   text: string;
   oldLineNo: number | null;
   newLineNo: number | null;
+} | {
+  // Unchanged lines the diff leaves out between two hunks; null when it carries no numbers.
+  type: "gap";
+  count: number | null;
 };
+type DiffTextLine = Exclude<DiffLine, { type: "gap" }>;
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -390,6 +395,7 @@ function diffLines(patch: string): DiffLine[] {
 
   return files.flatMap((file) => file.rows.flatMap((row): DiffLine[] => {
     if (row.type === "hunk") return [];
+    if (row.type === "gap") return [{ type: "gap", count: row.count }];
     if (row.left.type === "context" && row.right.type === "context") {
       return [{
         type: "unchanged",
@@ -424,7 +430,7 @@ function DiffView({ patch }: { patch: string }) {
   const { t } = useI18n();
   const diff = diffLines(patch);
 
-  const hasChanges = diff.some((l) => l.type !== "unchanged");
+  const hasChanges = diff.some((l) => l.type === "removed" || l.type === "added");
   if (!hasChanges) {
     return (
       <div style={{ padding: "12px 16px", fontSize: "var(--fs-caption)", color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
@@ -435,7 +441,7 @@ function DiffView({ patch }: { patch: string }) {
 
   // Render with context: show 3 lines around each change, collapse the rest
   const CONTEXT = 3;
-  const changed = new Set(diff.flatMap((l, i) => (l.type !== "unchanged" ? [i] : [])));
+  const changed = new Set(diff.flatMap((l, i) => (l.type === "removed" || l.type === "added" ? [i] : [])));
   const visible = new Set<number>();
   for (const ci of changed) {
     for (let j = Math.max(0, ci - CONTEXT); j <= Math.min(diff.length - 1, ci + CONTEXT); j++) {
@@ -443,19 +449,26 @@ function DiffView({ patch }: { patch: string }) {
     }
   }
 
-  const segments: Array<{ hidden: true; count: number } | { hidden: false; lines: DiffLine[] }> = [];
+  const segments: Array<{ hidden: true; count: number | null } | { hidden: false; lines: DiffTextLine[] }> = [];
   let i = 0;
   while (i < diff.length) {
+    const line = diff[i];
+    if (line.type === "gap") {
+      // Between two hunks: lines the patch itself left out.
+      segments.push({ hidden: true, count: line.count });
+      i++;
+      continue;
+    }
     if (visible.has(i)) {
-      const block: DiffLine[] = [];
-      while (i < diff.length && visible.has(i)) {
-        block.push(diff[i]);
+      const block: DiffTextLine[] = [];
+      while (i < diff.length && visible.has(i) && diff[i].type !== "gap") {
+        block.push(diff[i] as DiffTextLine);
         i++;
       }
       segments.push({ hidden: false, lines: block });
     } else {
       let count = 0;
-      while (i < diff.length && !visible.has(i)) {
+      while (i < diff.length && !visible.has(i) && diff[i].type !== "gap") {
         count++;
         i++;
       }
@@ -486,7 +499,7 @@ function DiffView({ patch }: { patch: string }) {
                 borderBottom: "var(--hairline) solid var(--border)",
               }}
             >
-              ... {seg.count} unchanged lines ...
+              {seg.count === null ? "⋯" : diffGapLabel(seg.count, t)}
             </div>
           );
           return result;
