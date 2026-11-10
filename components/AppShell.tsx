@@ -16,6 +16,7 @@ import type { MenuAnchor } from "@/lib/menu-placement";
 import { useScheduledRunNotifications } from "@/hooks/useScheduledRunNotifications";
 import type { ChatScrollPosition } from "@/lib/chat-scroll-position";
 import { clearDraft } from "@/lib/draft-store";
+import { movePanelTab, orderPanelTabs } from "@/lib/panel-tab-order";
 import { TabBar, type Tab } from "./TabBar";
 import { LazyTerminalPanel as TerminalPanel, preloadTerminalPanel } from "./LazyTerminalPanel";
 
@@ -731,13 +732,21 @@ export function AppShell() {
   const [artifactTabs, setArtifactTabs] = useState<ArtifactTab[]>([]);
   // artifactPanelTab reads each tab's newest title; this re-renders when one changes.
   useArtifactTitles(artifactTabs);
-  const panelTabs: Tab[] = useMemo(() => [...fileTabs, ...terminalTabs.map((tab) => ({
+  // A2: the order the user dragged the tabs into; tabs opened since go last.
+  const [panelTabOrder, setPanelTabOrder] = useState<string[]>([]);
+  const panelTabs: Tab[] = useMemo(() => orderPanelTabs([...fileTabs, ...terminalTabs.map((tab) => ({
     id: tab.id,
     label: getFileName(tab.cwd) || tab.cwd,
     filePath: tab.cwd,
     kind: "terminal" as const,
     closing: Boolean(tab.closing),
-  })), ...artifactTabs.map(artifactPanelTab)], [fileTabs, terminalTabs, artifactTabs]);
+  })), ...artifactTabs.map(artifactPanelTab)], panelTabOrder), [fileTabs, terminalTabs, artifactTabs, panelTabOrder]);
+  // A closed tab leaves the saved order, so reopening it appends it like any new tab.
+  const panelTabIds = panelTabs.map((tab) => tab.id).join("\n");
+  useEffect(() => {
+    const open = new Set(panelTabIds.split("\n"));
+    setPanelTabOrder((order) => order.every((id) => open.has(id)) ? order : order.filter((id) => open.has(id)));
+  }, [panelTabIds]);
   const activeArtifactTab = artifactTabs.find((tab) => tab.id === activeFileTabId) ?? null;
   const handleRightPanelToggle = useCallback(() => {
     if (isMobile) {
@@ -3145,6 +3154,7 @@ export function AppShell() {
               onSelectTab={setActiveFileTabId}
               onCloseTab={handleCloseFileTab}
               onNewTerminal={visibleProjectCwd ? () => handleOpenTerminal(visibleProjectCwd) : undefined}
+              onReorderTab={(source, target, after) => setPanelTabOrder(movePanelTab(panelTabs.map((tab) => tab.id), source, target, after))}
             />
           </div>
           {workbenchCwd && (

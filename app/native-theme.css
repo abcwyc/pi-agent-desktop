@@ -1477,6 +1477,21 @@ html.dark .conversation-navigator-preview {
   outline-offset: -1px;
 }
 
+/* A2: where a dragged tab will land, as a bar on the side it goes to. */
+.file-tab.is-drop-before::before,
+.file-tab.is-drop-after::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.file-tab.is-drop-before::before { left: -2px; }
+.file-tab.is-drop-after::after { right: -2px; }
+
 .file-tab-icon {
   display: flex;
   flex: 0 0 auto;
