@@ -81,7 +81,8 @@ test("restores the settings section and each list detail selection", async () =>
 test("keeps visited settings sections mounted and contains nested Escape handling", async () => {
   const modelsSource = ((await readFile(new URL("./ModelsConfig.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n")).replace(/\r\n/g, "\n");
   assert.match(panelSource, /mountedSections\.has\(id\)/);
-  assert.match(panelSource, /hidden=\{section !== id\}/);
+  // A phone hides every section on its list of sections (P1).
+  assert.match(panelSource, /hidden=\{section !== id \|\| phone\.level === "home"\}/);
   // Settings closes on an Escape nothing nearer handled (lib/stacked-dialog.test.mjs pins the phases).
   assert.match(panelSource, /useEffect\(\(\) => listenForPanelEscape\(document, \(\) => \{ if \(!busy\) onClose\(\); \}\), \[onClose, busy\]\);/);
   assert.doesNotMatch(panelSource, /addEventListener\("keydown"/);
@@ -197,13 +198,14 @@ test("groups chat display controls together without row backgrounds", () => {
 test("keeps General free of divider rows", () => {
   assert.match(panelSource, /className="settings-dialog-header"/);
   assert.match(cssSource, /\.settings-dialog-header \{[\s\S]*?display: flex[\s\S]*?align-items: center[\s\S]*?min-height: 50px/);
-  assert.doesNotMatch(panelSource, /sections\.find\(\(item\) => item\.id === section\)/);
   assert.doesNotMatch(panelSource, /<section style=\{\{[^}]*borderBottom/);
   assert.doesNotMatch(panelSource, /borderLeft: index > 0/);
 });
 
-test("uses top navigation on desktop and one compact section picker on mobile", () => {
-  assert.match(panelSource, /className="settings-mobile-section-picker"/);
+test("uses top navigation on desktop and a drill-down of full-screen levels on a phone (P1)", () => {
+  assert.doesNotMatch(panelSource, /settings-mobile-section-picker/);
+  assert.match(panelSource, /className="settings-phone-home"/);
+  assert.match(panelSource, /className="settings-phone-back"/);
   assert.match(panelSource, /className="settings-section-tabs"/);
   assert.match(panelSource, /className="settings-section-tab"/);
   assert.match(cssSource, /\.settings-section-tab \{[\s\S]*?width: 96px/);
@@ -213,12 +215,10 @@ test("uses top navigation on desktop and one compact section picker on mobile", 
   assert.match(cssSource, /\.settings-section-tab:focus-visible:not\(\[aria-current="page"\]\)/);
   assert.match(cssSource, /\.settings-section-tab:focus-visible\[aria-current="page"\][\s\S]*?outline: none/);
   assert.match(cssSource, /@media \(max-width: 640px\)[\s\S]*?\.settings-section-tabs \{[\s\S]*?display: none/);
-  // upstream dropped its phone rule for the picker (v0.14.2); the fork styles its own.
-  // Until P1 lands, the fork keeps its one-row phone header over upstream's Back | title | close grid.
-  assert.match(nativeThemeSource, /\.settings-dialog-header:has\(> \.settings-mobile-section-picker\) \{\s*display: flex;/);
-  assert.match(nativeThemeSource, /@media \(max-width: 640px\) \{[\s\S]*?\.settings-mobile-section-picker\.app-select-trigger \{[\s\S]*?display: inline-flex;[\s\S]*?max-width: 210px;/);
+  // The phone header is upstream's Back | title | close grid; the picker's overrides are gone.
+  assert.doesNotMatch(nativeThemeSource, /settings-mobile-section-picker/);
   assert.doesNotMatch(panelSource, /width: isMobile \? "100%" : 188/);
-  assert.match(panelSource, /<main className="settings-dialog-main">/);
+  assert.match(panelSource, /<main ref=\{mainRef\} className="settings-dialog-main">/);
   assert.doesNotMatch(panelSource, /<style>/);
   assert.doesNotMatch(panelSource, /style=\{\{/);
 });

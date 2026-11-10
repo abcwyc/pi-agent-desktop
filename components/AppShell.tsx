@@ -286,6 +286,8 @@ export function AppShell() {
   }, []);
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
+  // Shortcuts open their section; only the plain Settings button opens a phone's list of sections (P1).
+  const [settingsOpenAtHome, setSettingsOpenAtHome] = useState(false);
   useNativeContextMenu();
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [topMoreOpen, setTopMoreOpen] = useState(false);
@@ -1281,6 +1283,8 @@ export function AppShell() {
   const openSettingsAtLastSection = useCallback(() => {
     setActiveTopPanel(null);
     setTopMoreOpen(false);
+    // P1: the plain Settings button opens a phone's Settings on its list of sections.
+    setSettingsOpenAtHome(true);
     // A project-only section without a project falls back to General (SettingsPanel re-checks).
     setSettingsSection(getLastSettingsSection(
       isChatWorkspaceActive ? null : selectedSession?.cwd ?? newSessionCwd ?? activeCwd,
@@ -3360,12 +3364,14 @@ export function AppShell() {
         cwd={projectTrustCwd}
         sessionId={selectedSession?.id ?? null}
         initialSection={settingsSection}
+        openAtHome={settingsOpenAtHome}
         quoteSelectionEnabled={quoteSelectionEnabled}
         onQuoteSelectionChange={handleQuoteSelectionChange}
         soundEnabled={soundEnabled}
         onSoundToggle={onSoundToggle}
         onClose={() => {
           setSettingsSection(null);
+          setSettingsOpenAtHome(false);
           setModelsRefreshKey((key) => key + 1);
         }}
         onSessionReloaded={() => setSessionKey((key) => key + 1)}
