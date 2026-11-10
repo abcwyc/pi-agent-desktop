@@ -17,6 +17,8 @@ import {
   isVideoPath,
 } from "@/lib/file-types";
 import { encodeFilePathForApi, getFileDirectory, getFileName, getRelativeFilePath } from "@/lib/file-paths";
+import { DelimitedTable } from "./DelimitedTable";
+import { isDelimitedTablePath } from "@/lib/delimited-table";
 import { parsePdfPageFragment, resolveLocalFileHref, shouldOpenLocalFileInApp } from "@/lib/file-links";
 import { parseFrontmatter } from "@/lib/frontmatter";
 import { markdownPreviewRehypePlugins, markdownPreviewRemarkPlugins, markdownUrlTransform, normalizeDisplayMath } from "@/lib/markdown";
@@ -28,6 +30,7 @@ import { getFileIcon } from "./FileIcons";
 import { useI18n } from "@/hooks/useI18n";
 import {
   resolveInitialFileDisplayMode,
+  resolveInitialWrapLines,
   type FileViewerDisplayMode as DisplayMode,
   type FileViewerState,
 } from "@/lib/file-viewer-state";
@@ -57,6 +60,8 @@ interface FileData {
   size: number;
   nextOffset: number;
   truncated: boolean;
+  // The file's first bytes hold a NUL (git's test): no text view, only the download.
+  binary?: boolean;
 }
 
 const SOURCE_HIGHLIGHT_MAX_LINES = 1_000;
@@ -88,6 +93,17 @@ const FILE_LINE_NUMBER_STYLE: CSSProperties = {
   userSelect: "none",
   flexShrink: 0,
   verticalAlign: "top",
+};
+
+// The gutter stays put while a wide line scrolls sideways: `position: sticky`
+// against the viewer's own scroller. Only the highlighted Source view (at most
+// SOURCE_HIGHLIGHT_MAX_LINES rows) pins it; the browser repositions every sticky
+// number on each scroll, which a long lightweight file cannot afford.
+const FILE_PINNED_LINE_NUMBER_STYLE: CSSProperties = {
+  ...FILE_LINE_NUMBER_STYLE,
+  position: "sticky",
+  left: 0,
+  zIndex: 1,
 };
 
 type SourceCodeRendererProps = Parameters<NonNullable<SyntaxHighlighterProps["renderer"]>>[0] & {
@@ -1091,7 +1107,8 @@ function TextFileViewer({
   // HTML file renders its preview as the first thing painted. Deciding it after
   // the contents load painted the source view for a frame first.
   const requestedInitialDisplayMode = resolveInitialFileDisplayMode(initialState, initialDisplayMode, filePath);
-  const initialWrapLines = initialState?.wrapLines ?? false;
+  // Prose (Markdown, plain text) wraps by default; code keeps its columns. A saved choice wins.
+  const initialWrapLines = resolveInitialWrapLines(initialState, filePath);
   const initialScrollTop = initialState?.scrollTop ?? 0;
   const initialScrollLeft = initialState?.scrollLeft ?? 0;
   const [displayMode, setDisplayMode] = useState<DisplayMode>(requestedInitialDisplayMode);
@@ -1305,11 +1322,14 @@ function TextFileViewer({
   const viewerContent = data?.content ?? "";
   const sourceLines = useMemo(() => viewerContent.split("\n"), [viewerContent]);
   const language = data?.language ?? "text";
-  const isHtml = language === "html";
-  const isMarkdown = language === "markdown";
+  const isBinary = data?.binary === true;
+  const isDelimitedTable = !isBinary && isDelimitedTablePath(filePath);
+  const isHtml = !isBinary && language === "html";
+  const isMarkdown = !isBinary && language === "markdown";
   const htmlHasScripts = isHtml && /<script\b/i.test(viewerContent);
   const htmlPreviewUrl = getFileApiUrl(filePath, "serve", sourceSessionId, { v: htmlPreviewRevision });
-  const hasPreview = !data?.truncated && (isHtml || isMarkdown);
+  // A CSV/TSV table renders from its first chunk too (DelimitedTable marks it incomplete).
+  const hasPreview = isDelimitedTable || (!data?.truncated && (isHtml || isMarkdown));
   // Only the first chunk of a large file is loaded, so preview is unavailable
   // until the rest arrives; a preview default falls back to source instead of
   // rendering a partial document. The mode returns to preview once the whole
@@ -1332,9 +1352,7 @@ function TextFileViewer({
         language={language === "text" ? "plaintext" : language}
         style={calmCodeTheme}
         showLineNumbers
-        lineNumberStyle={{
-          ...FILE_LINE_NUMBER_STYLE,
-        }}
+        lineNumberStyle={wrapLines ? FILE_LINE_NUMBER_STYLE : FILE_PINNED_LINE_NUMBER_STYLE}
         customStyle={{
           margin: 0,
           padding: 0,
@@ -1494,7 +1512,9 @@ function TextFileViewer({
       ];
   const metadata = isDeletedDiff
     ? t("files.deleted")
-    : `${language} · ${lines.length} lines · ${formatSize(data!.size)}`;
+    : isBinary
+      ? `${t("files.binary")} · ${formatSize(data!.size)}`
+      : `${language} · ${lines.length} lines · ${formatSize(data!.size)}`;
 
   return (
     <div className="file-viewer-shell" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", position: "relative" }}>
@@ -1592,7 +1612,7 @@ function TextFileViewer({
                 <MentionIcon />
               </button>
             )}
-            {effectiveDisplayMode === "source" && (
+            {effectiveDisplayMode === "source" && !isBinary && (
               <>
                 <button
                   type="button"
@@ -1746,6 +1766,25 @@ function TextFileViewer({
             >
               {markdownPreview}
             </ReactMarkdown>
+          </div>
+        ) : isDelimitedTable && effectiveDisplayMode === "preview" ? (
+          <DelimitedTable
+            content={viewerContent}
+            filePath={filePath}
+            complete={!data?.truncated}
+            scrollRef={contentRef}
+          />
+        ) : isBinary ? (
+          // Decoded bytes are noise; opening a file never downloads it on its own (#1401).
+          <div className="file-viewer-binary">
+            <span>{t("files.binaryNoPreview")}</span>
+            <a
+              href={getFileApiUrl(filePath, "download", sourceSessionId)}
+              download={getFileName(filePath)}
+              className="file-viewer-mode-button file-viewer-binary-download"
+            >
+              {t("files.download")}
+            </a>
           </div>
         ) : useLightweightSource ? (
           <div

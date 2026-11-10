@@ -14,7 +14,7 @@ export interface FileViewerState {
 
 // The extensions the read endpoint reports as `markdown`/`html` and the viewer
 // can render. Keep in step with EXT_TO_LANGUAGE in app/api/files/[...path].
-const PREVIEW_FIRST_EXTENSIONS = new Set(["md", "mdx", "html", "htm"]);
+const PREVIEW_FIRST_EXTENSIONS = new Set(["md", "mdx", "html", "htm", "csv", "tsv"]);
 
 /**
  * Rendered-first default for a file that has no restored mode and no open hint.

@@ -6715,6 +6715,28 @@ html.dark {
   }
 }
 
+/* File viewer: a binary file offers its download instead of decoded bytes (F3, upstream #1401). */
+.file-viewer-binary {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  color: var(--text-muted);
+  font-size: var(--fs-body);
+  text-align: center;
+}
+.file-viewer-binary .file-viewer-binary-download {
+  display: inline-flex;
+  align-items: center;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+}
+
 /* File viewer markdown preview — larger headings */
 .markdown-file-preview h1 { font-size: 1.8em; }
 .markdown-file-preview h2 { font-size: 1.4em; }

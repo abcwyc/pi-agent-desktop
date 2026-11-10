@@ -68,7 +68,8 @@ test("TextFileViewer falls back to source while the preview is unavailable", () 
   const block = functionBlock("TextFileViewer", null);
   // A truncated (not fully loaded) file has no preview, so a preview default
   // must not paint a partial document or leave both switch buttons inactive.
-  assert.match(block, /const hasPreview = !data\?\.truncated && \(isHtml \|\| isMarkdown\);/);
+  // A CSV/TSV table previews from its first chunk; DelimitedTable marks it incomplete.
+  assert.match(block, /const hasPreview = isDelimitedTable \|\| \(!data\?\.truncated && \(isHtml \|\| isMarkdown\)\);/);
   assert.match(block, /displayMode === "preview" && !hasPreview\s*\? "source"/);
 });
 
@@ -83,4 +84,13 @@ test("markdown table tokens stay inline despite Tailwind's table utility", () =>
 
   assert.match(html, /class="token table[ "]/);
   assert.match(cssSource, /span\.token\.table\s*\{[^}]*display:\s*inline;/);
+});
+
+test("a CSV/TSV preview is its table and a binary file offers only its download (F1, F3)", async () => {
+  const source = (await readFile(new URL("./FileViewer.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+  assert.match(source, /isDelimitedTable && effectiveDisplayMode === "preview" \? \(\s*<DelimitedTable/);
+  assert.match(source, /\) : isBinary \? \([\s\S]*?t\("files\.binaryNoPreview"\)[\s\S]*?getFileApiUrl\(filePath, "download", sourceSessionId\)/);
+  // The wrap switch is for text only, and a wide line keeps its number in view.
+  assert.match(source, /effectiveDisplayMode === "source" && !isBinary && \(/);
+  assert.match(source, /lineNumberStyle=\{wrapLines \? FILE_LINE_NUMBER_STYLE : FILE_PINNED_LINE_NUMBER_STYLE\}/);
 });
