@@ -96,6 +96,13 @@ jobs:
           npm run release:verify
 
       - name: Prepare packaged Next.js server
+        env:
+          # DEFECT-000089: a release checkout has no `.pi/` (gitignored), so the
+          # payload assertion would pass without ever being exercised. Plant a
+          # fake `.pi/mcp.json` with a `Bearer ak_` canary and fail the release
+          # if it reaches the payload — on every platform, not just the one
+          # where the tracer happened to be tested.
+          PAYLOAD_CANARY: "1"
         run: npm run desktop:prepare
 
       - name: Test desktop shell

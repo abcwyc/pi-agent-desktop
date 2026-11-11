@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { PAYLOAD_ALLOWED, assertPayloadClean, pruneLocalConfig, scanPayload } from "./packaged-payload.mjs";
+import { PAYLOAD_ALLOWED, assertPayloadClean, findLocalConfigDirs, pruneLocalConfig, resolvePayloadRoot, scanPayload } from "./packaged-payload.mjs";
 
 // DEFECT-000089: the payload scan is the fail-closed half of the fix, so its
 // rules are pinned here rather than exercised only by a packaging run.
@@ -193,5 +193,49 @@ test("every allowlist entry targets a rule that exists", () => {
   for (const entry of PAYLOAD_ALLOWED) {
     assert.ok(typeof entry.path.test === "function", entry.reason);
     assert.ok(entry.reason.length > 20, "an allowlist entry must say why");
+  }
+});
+
+// A scan that saw nothing used to exit 0 and print "0 finding(s)", which reads
+// exactly like a clean package: a typo'd --root, an empty staging directory, or
+// an absolute path glued onto the checkout all landed there. DEFECT-000089's
+// gate must not be able to pass without looking at files.
+test("an empty tree is not a clean payload", async () => {
+  const root = await fixture({});
+  try {
+    await assert.rejects(() => assertPayloadClean(root, { label: "fixture" }), /Nothing to scan/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a payload root must be a relative path that exists", async () => {
+  const root = await fixture({ "server/server.js": "ok" });
+  try {
+    assert.equal(resolvePayloadRoot(root, "server", { exists: () => true }), join(root, "server"));
+    assert.throws(() => resolvePayloadRoot(root, ""), /payload root is required/);
+    // Absolute inputs are the real trap: join() glues them onto the base, so the
+    // scan walks a directory that does not exist and reports nothing.
+    assert.throws(() => resolvePayloadRoot(root, "C:/Users/somebody/tree"), /absolute path/);
+    assert.throws(() => resolvePayloadRoot(root, "/tmp/tree"), /absolute path/);
+    assert.throws(() => resolvePayloadRoot(root, "nope", { exists: () => false }), /does not exist/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("findLocalConfigDirs reports every .pi at any depth", async () => {
+  const root = await fixture({
+    "server/.pi/mcp.json": "{}",
+    "server/src-tauri/target/release/resources/server/.pi/mcp.json": "{}",
+    "node/node.exe": "binary",
+  });
+  try {
+    assert.deepEqual((await findLocalConfigDirs(root)).sort(), [
+      "server/.pi",
+      "server/src-tauri/target/release/resources/server/.pi",
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

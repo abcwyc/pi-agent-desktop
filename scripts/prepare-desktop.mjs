@@ -1,11 +1,12 @@
-import { access, chmod, copyFile, cp, mkdir, readdir, rm } from "node:fs/promises";
+import { access, chmod, copyFile, cp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { desktopTargetTriple } from "./desktop-platform.mjs";
-import { assertPayloadClean, pruneLocalConfig } from "./packaged-payload.mjs";
+import { assertPayloadClean, findLocalConfigDirs, pruneLocalConfig } from "./packaged-payload.mjs";
 import { piPackageDirNames } from "./pi-packages.mjs";
 import { dedupeNestedPackages, externalPackageSpecifiers, findNestedPiScopePackages, stageCompletePackage, stageResolvedClosure } from "./stage-package.mjs";
 
@@ -16,6 +17,50 @@ const tauriTargetDir = join(rootDir, "src-tauri", "target");
 const serverResourcesDir = join(rootDir, "src-tauri", "resources", "server");
 const serverHelperDir = join(rootDir, "src-tauri", "resources", "Pi Agent Server.app");
 const nodeResourcesDir = join(rootDir, "src-tauri", "resources", "node");
+
+/**
+ * CI canary for DEFECT-000089.
+ *
+ * In a clean CI checkout there is no `.pi/` at all (it is gitignored), so
+ * "the payload must not carry this checkout's `.pi/`" would pass vacuously —
+ * a gate that cannot fail is not a gate. With `PAYLOAD_CANARY=1` this script
+ * plants a `.pi/mcp.json` carrying a fake `Bearer ak_` token before the build,
+ * then reports whether the tracer picked it up and fails if it survives into
+ * the payload. A local run with real credentials is unaffected: the file is
+ * only created when it is absent, and it is removed on exit either way.
+ */
+const CANARY_DIR = join(rootDir, ".pi");
+const CANARY_FILE = join(CANARY_DIR, "mcp.json");
+const CANARY_TOKEN = "Bearer ak_PAYLOADCANARYNOTAREALKEY000000";
+
+async function plantPayloadCanary() {
+  if (process.env.PAYLOAD_CANARY !== "1") return false;
+  if (existsSync(CANARY_FILE)) {
+    console.log("Payload canary: this checkout already has .pi/mcp.json; scanning that instead of planting one");
+    return false;
+  }
+  await mkdir(CANARY_DIR, { recursive: true });
+  await writeFile(
+    CANARY_FILE,
+    `${JSON.stringify(
+      { mcpServers: { canary: { url: "http://127.0.0.1:1/entity/mcp", headers: { Authorization: CANARY_TOKEN } } } },
+      null,
+      2,
+    )}\n`,
+  );
+  // Whatever happens next — a failed build, a failing assertion, Ctrl-C — the
+  // fake file must not linger in the checkout.
+  process.once("exit", () => {
+    try {
+      rmSync(CANARY_DIR, { recursive: true, force: true });
+    } catch {
+      // Removing it is best effort; it holds no real credential.
+    }
+  });
+  console.log("Payload canary: planted .pi/mcp.json (fake token) so the payload assertion has something to catch");
+  return true;
+}
+
 
 async function runNextBuild() {
   const require = createRequire(import.meta.url);
@@ -339,12 +384,21 @@ async function bundleNodeRuntime() {
 }
 
 await clearTracedBuildOutput();
+const canaryPlanted = await plantPayloadCanary();
 await runNextBuild();
 
 // The tracer is not trusted to have kept this checkout's configuration and
 // credentials out (DEFECT-000089): drop the traced `.pi/` it cannot be told
 // about on Windows, then fail before 276 MB is copied around if anything else
 // got in.
+if (process.env.PAYLOAD_CANARY === "1") {
+  const traced = await findLocalConfigDirs(standaloneDir);
+  console.log(
+    traced.length > 0
+      ? `Payload canary: the tracer DID pull .pi/ into the standalone (${traced.join(", ")}) — the prune below is what keeps it out of the package`
+      : "Payload canary: the tracer no longer pulls .pi/ into the standalone (the assertion stays as belt-and-braces)",
+  );
+}
 const pruned = await pruneLocalConfig(standaloneDir);
 if (pruned.length > 0) {
   console.log(`Dropped ${pruned.length} traced local-config director${pruned.length === 1 ? "y" : "ies"}: ${pruned.join(", ")}`);

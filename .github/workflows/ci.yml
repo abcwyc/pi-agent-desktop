@@ -115,6 +115,34 @@ jobs:
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib
       - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
+  # DEFECT-000089: a package shipped the checkout's `.pi/mcp.json` — that is,
+  # the MCP endpoints of this machine, complete with `Bearer ak_` keys — because
+  # the file tracer pulled it in and the Windows exclude never matched. The
+  # fail-closed assertion lives in `npm run desktop:prepare`; this job is what
+  # makes it run on every push instead of only at publish time.
+  #
+  # `PAYLOAD_CANARY=1` matters more than it looks: a CI checkout has no `.pi/`
+  # at all, so without a canary the assertion has nothing to catch and the job
+  # would be decoration. The canary is a fake token in a fake `.pi/mcp.json`;
+  # the job fails if it survives into the staged payload, and logs whether the
+  # tracer picked it up at all (so a silently-changed tracer is visible too).
+  desktop-payload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.19.0
+          cache: npm
+      - run: npm ci
+      - name: Stage the desktop payload with a credential canary
+        env:
+          PAYLOAD_CANARY: "1"
+        run: npm run desktop:prepare
+      - name: Re-scan the staged payload
+        run: npm run desktop:check-payload
+
   audit:
     runs-on: ubuntu-latest
     timeout-minutes: 5

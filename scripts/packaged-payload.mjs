@@ -1,5 +1,5 @@
 import { readdir, readFile, rm } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
+import { isAbsolute, join, relative, sep } from "node:path";
 
 /**
  * What must never be inside a staged payload.
@@ -90,6 +90,31 @@ const ARMOURED_KEY_BODY = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\r\n]+[A-Za-z0-9+/
  * Deleting the traced file is not a silent pass: the caller asserts the payload
  * immediately afterwards, so anything *else* that arrives still fails the build.
  */
+/** Every `.pi` directory inside `root`, as payload-relative paths. */
+export async function findLocalConfigDirs(root) {
+  const found = [];
+  async function visit(dir) {
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch (error) {
+      if (error?.code === "ENOENT") return;
+      throw error;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const full = join(dir, entry.name);
+      if (entry.name === ".pi") {
+        found.push(relative(root, full).split(sep).join("/"));
+        continue;
+      }
+      await visit(full);
+    }
+  }
+  await visit(root);
+  return found;
+}
+
 export async function pruneLocalConfig(root) {
   const removed = [];
   async function visit(dir) {
@@ -191,6 +216,29 @@ export async function scanPayload(root, options = {}) {
   return { files, findings, allowed };
 }
 
+/** Like `join(base, arg)` but the two mistakes that silently scan the wrong tree
+ * are errors instead of surprises: an absolute path (`join` glues it onto the
+ * base, e.g. `D:/repo/C:/Users/…`) and a path that does not exist (0 files).
+ * DEFECT-000089 relies on this check being fail-closed, so a typo must not be
+ * able to produce "0 findings".
+ */
+export function resolvePayloadRoot(baseDir, arg, { exists } = {}) {
+  if (typeof arg !== "string" || arg.trim() === "") {
+    throw new Error("a payload root is required (pass a path relative to the repository, e.g. src-tauri/resources)");
+  }
+  if (isAbsolute(arg) || /^[A-Za-z]:[\\/]/.test(arg)) {
+    throw new Error(
+      `payload root must be relative to the repository, got ${JSON.stringify(arg)} ` +
+        `(an absolute path would be glued onto ${baseDir} and scan nothing)`,
+    );
+  }
+  const resolved = join(baseDir, arg);
+  if (exists && !exists(resolved)) {
+    throw new Error(`payload root does not exist: ${resolved}`);
+  }
+  return resolved;
+}
+
 /** `"{label}: 12,345 files, no findings (4 allowlisted ...)"` plus the details. */
 export function describePayloadScan(label, { files, findings, allowed }) {
   const counts = new Map();
@@ -212,6 +260,16 @@ export async function assertPayloadClean(root, { label = root, options = {} } = 
   console.log(describePayloadScan(label, result));
   for (const entry of result.allowed) {
     console.log(`  allowlisted  ${entry.path}  (${entry.reason})`);
+  }
+  // A scan that saw nothing proves nothing: a wrong `--root`, an empty staging
+  // directory, or a build that never staged the payload would all report "0
+  // findings" and exit 0, which reads exactly like a clean package. Refuse to
+  // call that clean — the scan only counts as evidence if it looked at files.
+  if (result.files === 0) {
+    throw new Error(
+      `Nothing to scan under ${label}: 0 files. That is not a clean payload — ` +
+        `check the path (it must be the staged tree, not the checkout root).`,
+    );
   }
   if (result.findings.length === 0) return result;
   console.error(`Refusing to package ${label}:`);

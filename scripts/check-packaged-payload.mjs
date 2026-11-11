@@ -1,5 +1,6 @@
+import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { assertPayloadClean } from "./packaged-payload.mjs";
+import { assertPayloadClean, resolvePayloadRoot } from "./packaged-payload.mjs";
 import { rootDir } from "./release-components.mjs";
 
 // Standalone re-check, usable on any staged tree and after a manual build:
@@ -11,6 +12,9 @@ const args = process.argv.slice(2);
 const rootArgIndex = args.indexOf("--root");
 const target = rootArgIndex === -1
   ? join(rootDir, "src-tauri", "resources")
-  : join(rootDir, args[rootArgIndex + 1] ?? "");
+  // Resolved, not joined by hand: an absolute `--root` would otherwise be
+  // glued onto the checkout and scan nothing (which used to report "0
+  // findings" and exit 0 — a wrong path looked exactly like a clean package).
+  : resolvePayloadRoot(rootDir, args[rootArgIndex + 1], { exists: existsSync });
 
 await assertPayloadClean(target, { label: target });
