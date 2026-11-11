@@ -13,6 +13,7 @@ import {
 } from "@/lib/app-updates";
 import type {
   AppComponentReleaseInfo,
+  AppReleaseHighlights,
   AppUpdateInfo,
   AppUpdateProjectId,
   AppUpdatesResponse,
@@ -44,6 +45,18 @@ function emptyState(): UpdateCheckState {
   return { version: STATE_VERSION, lastCheckedAt: {}, releases: {} };
 }
 
+function restoreHighlights(value: unknown): { highlights: AppReleaseHighlights } | null {
+  if (!value || typeof value !== "object") return null;
+  const { en, zh } = value as Partial<Record<keyof AppReleaseHighlights, unknown>>;
+  const strings = (list: unknown): string[] | null => (
+    Array.isArray(list) && list.every((item) => typeof item === "string") ? list as string[] : null
+  );
+  const restoredEn = strings(en);
+  const restoredZh = strings(zh);
+  if (!restoredEn || !restoredZh) return null;
+  return { highlights: { en: restoredEn.slice(0, 8), zh: restoredZh.slice(0, 8) } };
+}
+
 function restoreCachedRelease(
   project: UpdateProject,
   value: unknown,
@@ -73,6 +86,7 @@ function restoreCachedRelease(
       releaseUrl: releaseUrl.toString(),
       updateAvailable: compareAppVersions(raw.latestVersion, base.currentVersion) > 0,
       releaseStatus: "available",
+      ...(restoreHighlights(raw.highlights) ?? {}),
     };
   } catch {
     return null;
