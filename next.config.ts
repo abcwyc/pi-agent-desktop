@@ -29,6 +29,40 @@ const nextConfig: NextConfig = {
     ? { output: "standalone" as const, distDir: ".next-desktop" }
     : {}),
   outputFileTracingRoot: configDir,
+  // The file tracer folds every path that reaches one of its globs into the
+  // standalone server. `lib/branding.ts` imports a JSON file from `src-tauri/`,
+  // so the tracer walks that directory — and `tauri build` copies
+  // `src-tauri/resources` into `src-tauri/target/<profile>/resources`, which
+  // means each packaging run traced the previous run's staged server into the
+  // new one. Two runs of `desktop:prepare` in one checkout therefore nested
+  // `resources/server` inside itself until `findOverlongPaths()` refused to
+  // build (the third package of SSR-000096 failed exactly that way). Build
+  // output is never an input to the trace, so keep it out of it.
+  //
+  // `.pi/` is the one entry that is not about size: it is this checkout's own
+  // tool configuration, and `.pi/mcp.json` holds the Bearer keys of the MCP
+  // endpoints the developer talks to. The payload is a distributable
+  // installer, so nothing under `.pi/` may be traced into it — and nothing
+  // there is needed at runtime either (a packaged session reads its own
+  // config from the user's `~/.pi`, never from the repository). That alone did
+  // not hold (DEFECT-000089: the first 0.8.2 package shipped
+  // `resources/server/.pi/mcp.json`), because Next applies these excludes as
+  // `path.join(dir, exclude)` and picomatch reads the Windows drive backslash
+  // as an escape — every exclude below silently matches nothing on Windows.
+  // The load-bearing defence is therefore `scripts/prepare-desktop.mjs`:
+  // it deletes the build output before tracing and asserts with
+  // `scripts/packaged-payload.mjs` that no `.pi/`, `Bearer ak_` or private key
+  // reached the payload. Keep the list: it is what protects the POSIX builds.
+  outputFileTracingExcludes: {
+    "/*": [
+      ".next/**",
+      ".next-desktop/**",
+      ".pi/**",
+      "src-tauri/target/**",
+      "src-tauri/resources/server/**",
+      "src-tauri/resources/node/**",
+    ],
+  },
   experimental: {
     ...(isDesktopBuild
       ? { webpackBuildWorker: true, webpackMemoryOptimizations: true }
