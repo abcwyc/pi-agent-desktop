@@ -1850,7 +1850,10 @@ function AddProviderPicker({
         onClose();
       }}
     >
-      <div style={{ width: 820, maxWidth: "calc(100vw - 32px)", maxHeight: "min(72vh, calc(100vh - 32px))", background: "var(--bg)", border: "var(--hairline) solid var(--border)", borderRadius: "var(--radius-lg)", display: "flex", flexDirection: "column", boxShadow: "var(--shadow-dialog)", overflow: "hidden" }}>
+      {/* Sized against its containing block, not the viewport: inside Settings the
+          dialog keeps a transform from its entry animation, so this fixed layer
+          spans the dialog only, and a 72vh card overflowed it and was clipped. */}
+      <div style={{ width: 820, maxWidth: "calc(100% - 48px)", maxHeight: "calc(100% - 48px)", minHeight: 0, background: "var(--bg)", border: "var(--hairline) solid var(--border)", borderRadius: "var(--radius-lg)", display: "flex", flexDirection: "column", boxShadow: "var(--shadow-dialog)", overflow: "hidden" }}>
         {/* Search */}
         <div style={{ padding: "10px 14px", borderBottom: "var(--hairline) solid var(--border)", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>

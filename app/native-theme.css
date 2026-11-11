@@ -688,6 +688,14 @@
    Grid items establish their own formatting context, so both columns keep
    their leading section margin and start at the same height; stacked below
    the breakpoint the first child's margin collapses through as before. */
+/* Upstream 0.15 caps every child of `.settings-general` at a centered 600px
+   column; the fork's General tab fills the dialog instead (as in 0.8.2), so the
+   two columns use the whole width and no blank gutters sit on either side. */
+.settings-general > * {
+  max-width: none;
+  margin-inline: 0;
+}
+
 @media (min-width: 880px) {
   .settings-general {
     max-width: none;
@@ -845,6 +853,16 @@
   color: var(--text);
   font-family: var(--font-mono);
   font-weight: var(--fw-semibold);
+}
+
+/* The release's headline items: plain prose, not a version number. */
+.settings-update-row dd.settings-update-summary {
+  display: block;
+  min-width: 0;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-weight: var(--fw-regular, 400);
+  overflow-wrap: anywhere;
 }
 
 .settings-update-row dd.is-latest {
@@ -4429,8 +4447,72 @@ html.dark {
   background: var(--settings-control-knob-on);
 }
 
+/* Range sliders are drawn here rather than left to the engine: WKWebView's
+   native range painted a thick near-black track with a cyan fill that matched
+   nothing else in the dialog. A thin neutral track, the switches' "on" color
+   for the filled part (--range-progress, set by the component), and the same
+   white, lightly shadowed knob as the switches. */
 .settings-dialog-surface input[type="range"] {
+  --range-track: color-mix(in srgb, var(--text) 14%, transparent);
+  -webkit-appearance: none;
+  appearance: none;
+  height: 18px;
+  margin: 4px 0 0;
+  padding: 0;
+  background: transparent;
   accent-color: var(--settings-control-on);
+}
+
+.settings-dialog-surface input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--settings-control-on) 0 var(--range-progress, 0%),
+    var(--range-track) var(--range-progress, 0%) 100%
+  );
+}
+
+.settings-dialog-surface input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--range-track);
+}
+
+.settings-dialog-surface input[type="range"]::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--settings-control-on);
+}
+
+.settings-dialog-surface input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border: var(--hairline) solid rgba(0, 0, 0, 0.12);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.settings-dialog-surface input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: var(--hairline) solid rgba(0, 0, 0, 0.12);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.settings-dialog-surface input[type="range"]:focus-visible {
+  outline: none;
+}
+
+.settings-dialog-surface input[type="range"]:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--settings-control-on);
+  outline-offset: 1px;
 }
 
 .settings-dialog-close {
@@ -9588,6 +9670,72 @@ html.native-desktop :is(
   opacity: 0.62;
 }
 
+
+/* Settings › General: the network / advanced options form their own group
+   after the everyday ones, introduced by a divider and a quiet group title. */
+.settings-general-group {
+  margin-top: 36px;
+  padding-top: 22px;
+  border-top: var(--hairline) solid var(--separator);
+}
+
+.settings-general-group-title {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* The intro card used to separate the page title from the first section. */
+.settings-general > .settings-general-title + .settings-general-columns {
+  margin-top: 18px;
+}
+
+.settings-general-group-title + .settings-general-columns {
+  margin-top: 14px;
+}
+
+/* A one-line "about" at the foot of General instead of a card at its top. */
+.settings-general-about {
+  margin-top: 32px;
+}
+
+.settings-general-about .settings-general-tagline {
+  max-width: none;
+  color: var(--text-dim);
+  font-size: var(--fs-caption);
+}
+
+/* Open logs / Quit as the Desktop card's last row. */
+.settings-option.settings-option-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Settings › General › Chats outside projects: the tools' full capability
+   note, folded under a disclosure. */
+.settings-chats-details {
+  color: var(--text-dim);
+  font-size: var(--fs-caption);
+}
+
+.settings-chats-details > summary {
+  width: fit-content;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.settings-chats-details > summary:hover {
+  color: var(--text);
+}
+
+.settings-chats-details > p {
+  margin: 6px 0 0;
+  line-height: 1.5;
+}
 
 /* Settings › General › Chats: stacked label + control rows. */
 .settings-chats-field {

@@ -1,7 +1,7 @@
 "use client";
 
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { useDiffViewMode } from "@/hooks/useDiffViewMode";
@@ -179,12 +179,32 @@ function GeneralSettings({
 
       <div className="settings-general-columns">
         <div className="settings-general-col">
-          <section className="settings-general-section settings-general-intro settings-general-overview">
-            <p className="settings-general-tagline">{t("appSettings.tagline", { product: PRODUCT_NAME })}</p>
-            <p className="settings-general-tagline">{t("appSettings.taglineDetails")}</p>
-          </section>
           <AppUpdatesSection onBusyChange={onBusyChange} />
 
+          <section className="settings-general-section">
+            <h3 className="settings-general-heading">{t("common.language")}</h3>
+            <div role="radiogroup" aria-label={t("common.language")} className="settings-language-options">
+              {supportedLocales.map((plugin) => {
+                const selected = locale === plugin.id;
+                return (
+                  <button
+                    key={plugin.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => setLocale(plugin.id as typeof locale)}
+                    className="settings-language-option"
+                  >
+                    <span className="settings-language-radio">
+                      {selected && <span className="settings-language-radio-dot" />}
+                    </span>
+                    <span className="settings-language-label">{plugin.label}</span>
+                    <span className="settings-language-code">{plugin.id}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
           <section className="settings-general-section">
             <h3 className="settings-general-heading">{t("settings.chat")}</h3>
             <div className="settings-chat-options">
@@ -224,6 +244,7 @@ function GeneralSettings({
                   max={CHAT_CONTENT_WIDTH_MAX}
                   step={10}
                   value={chatContentWidth}
+                  style={rangeProgressStyle(chatContentWidth, CHAT_CONTENT_WIDTH_MIN, CHAT_CONTENT_WIDTH_MAX)}
                   onChange={(event) => setChatContentWidth(Number(event.target.value))}
                 />
               </div>
@@ -252,6 +273,7 @@ function GeneralSettings({
                   max={CHAT_CONTENT_FONT_SIZE_MAX}
                   step={1}
                   value={fontSize}
+                  style={rangeProgressStyle(fontSize, CHAT_CONTENT_FONT_SIZE_MIN, CHAT_CONTENT_FONT_SIZE_MAX)}
                   onChange={(event) => setFontSize(Number(event.target.value))}
                 />
               </div>
@@ -325,77 +347,73 @@ function GeneralSettings({
               </div>
             </div>
           </section>
-          <ChatsSettingsSection />
         </div>
 
         <div className="settings-general-col">
-          <section className="settings-general-section">
-            <h3 className="settings-general-heading">{t("common.language")}</h3>
-            <div role="radiogroup" aria-label={t("common.language")} className="settings-language-options">
-              {supportedLocales.map((plugin) => {
-                const selected = locale === plugin.id;
-                return (
-                  <button
-                    key={plugin.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    onClick={() => setLocale(plugin.id as typeof locale)}
-                    className="settings-language-option"
-                  >
-                    <span className="settings-language-radio">
-                      {selected && <span className="settings-language-radio-dot" />}
-                    </span>
-                    <span className="settings-language-label">{plugin.label}</span>
-                    <span className="settings-language-code">{plugin.id}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-
           <DesktopAppSection />
 
-          <NetworkProxySection />
-
-          <RelaySection />
-
-          <RemoteAccessSection />
-
-          <TerminalSettingsSection />
-
-          {shellSettings?.isWindows && (
-            <section className="settings-general-section">
-              <h3 className="settings-general-heading">{t("settings.shellTool")}</h3>
-              <p className="settings-general-description">{t("settings.shellToolDescription")}</p>
-              <div className="settings-shell-option">
-                <span>{t("settings.usePowerShell")}</span>
-                <ConfigSwitch
-                  checked={shellSettings.powerShellEnabled}
-                  loading={shellSaving}
-                  label={t("settings.usePowerShell")}
-                  onChange={(enabled) => void togglePowerShell(enabled)}
-                />
-              </div>
-              {shellError && <p role="alert" className="settings-general-error">{shellError}</p>}
-            </section>
-          )}
-
-          {webAuthEnabled && (
-            <section className="settings-general-section">
-              <ConfigButton variant="secondary" disabled={loggingOut} onClick={() => void logOut()}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M10 17l5-5-5-5M15 12H3M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-                </svg>
-                {loggingOut ? t("auth.loggingOut") : t("auth.logOut")}
-              </ConfigButton>
-              {logoutError && <p role="alert" className="settings-general-error">{logoutError}</p>}
-            </section>
-          )}
+          <ChatsSettingsSection />
         </div>
       </div>
+
+      {/* Low-traffic network and power-user options, grouped after the everyday ones. */}
+      <div className="settings-general-group">
+        <h3 className="settings-general-group-title">{t("settings.advancedGroup")}</h3>
+        <div className="settings-general-columns">
+          <div className="settings-general-col">
+            <NetworkProxySection />
+
+            <TerminalSettingsSection />
+
+            {shellSettings?.isWindows && (
+              <section className="settings-general-section">
+                <h3 className="settings-general-heading">{t("settings.shellTool")}</h3>
+                <p className="settings-general-description">{t("settings.shellToolDescription")}</p>
+                <div className="settings-shell-option">
+                  <span>{t("settings.usePowerShell")}</span>
+                  <ConfigSwitch
+                    checked={shellSettings.powerShellEnabled}
+                    loading={shellSaving}
+                    label={t("settings.usePowerShell")}
+                    onChange={(enabled) => void togglePowerShell(enabled)}
+                  />
+                </div>
+                {shellError && <p role="alert" className="settings-general-error">{shellError}</p>}
+              </section>
+            )}
+          </div>
+
+          <div className="settings-general-col">
+            <RelaySection />
+
+            <RemoteAccessSection />
+          </div>
+        </div>
+      </div>
+
+      {webAuthEnabled && (
+        <section className="settings-general-section">
+          <ConfigButton variant="secondary" disabled={loggingOut} onClick={() => void logOut()}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M10 17l5-5-5-5M15 12H3M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+            </svg>
+            {loggingOut ? t("auth.loggingOut") : t("auth.logOut")}
+          </ConfigButton>
+          {logoutError && <p role="alert" className="settings-general-error">{logoutError}</p>}
+        </section>
+      )}
+
+      <footer className="settings-general-intro settings-general-about">
+        <p className="settings-general-tagline">{t("appSettings.tagline", { product: PRODUCT_NAME })}</p>
+      </footer>
     </div>
   );
+}
+
+/** How far a range slider is filled, for the themed track in native-theme.css. */
+function rangeProgressStyle(value: number, min: number, max: number): CSSProperties {
+  const ratio = max > min ? (value - min) / (max - min) : 0;
+  return { "--range-progress": `${Math.round(Math.min(1, Math.max(0, ratio)) * 1000) / 10}%` } as CSSProperties;
 }
 
 export const SETTINGS_SECTION_ITEMS: { id: SettingsSection; labelKey: string; requiresProject: boolean }[] = [

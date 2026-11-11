@@ -82,7 +82,6 @@ export function DesktopAppSection() {
   return (
     <section className="settings-general-section">
       <h3 className="settings-general-heading">{t("appSettings.desktopSection")}</h3>
-      <p className="settings-general-description">{t("appSettings.desktopHint")}</p>
       <div className="settings-option-list">
         <div className="settings-option">
           <span className="settings-option-text">
@@ -142,14 +141,15 @@ export function DesktopAppSection() {
             {cacheState.status === "busy" ? t("appSettings.clearCacheBusy") : t("appSettings.clearCache")}
           </ConfigButton>
         </div>
-      </div>
-      <div className="settings-action-group">
-        <ConfigButton onClick={() => void openLogDirNative()}>
-          {t("appSettings.openLogs")}
-        </ConfigButton>
-        <ConfigButton onClick={() => void quitAppNative()}>
-          {t("appSettings.quitApp")}
-        </ConfigButton>
+        {/* App-level actions sit in the card as its last row, not loose under it. */}
+        <div className="settings-option settings-option-actions">
+          <ConfigButton onClick={() => void openLogDirNative()}>
+            {t("appSettings.openLogs")}
+          </ConfigButton>
+          <ConfigButton onClick={() => void quitAppNative()}>
+            {t("appSettings.quitApp")}
+          </ConfigButton>
+        </div>
       </div>
     </section>
   );

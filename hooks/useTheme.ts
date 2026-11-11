@@ -57,6 +57,11 @@ function ensureState(): ThemeState {
   const theme = resolveTheme(preference);
   applyDomTheme(theme);
   state = { preference, theme };
+  // The native window (and its macOS vibrancy behind the sidebar) starts from
+  // the theme stored in the app config, which can disagree with this origin's
+  // localStorage (another server port, a dev build, an interrupted toggle).
+  // Align it once with what the page actually shows.
+  void persistNativeTheme(theme);
   return state;
 }
 
@@ -93,6 +98,8 @@ function syncAutoThemeFromSystem(): void {
   const theme = getSystemTheme();
   if (theme === current.theme) return;
   setThemeState("auto", theme, false);
+  // "Follow system" switching the page must switch the native window with it.
+  void persistNativeTheme(theme);
 }
 
 function ensureSystemListener(): void {

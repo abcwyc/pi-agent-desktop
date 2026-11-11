@@ -1,5 +1,6 @@
 import type {
   AppComponentReleaseInfo,
+  AppReleaseHighlights,
   AppUpdateInfo,
   AppUpdateProjectId,
 } from "@/lib/app-update-types";
@@ -20,6 +21,7 @@ interface GitHubRelease {
   html_url?: unknown;
   draft?: unknown;
   prerelease?: unknown;
+  body?: unknown;
 }
 
 interface ParsedVersion {
@@ -127,6 +129,41 @@ function unpublishedRelease(project: AppUpdateProject): AppComponentReleaseInfo 
   };
 }
 
+const HIGHLIGHT_SECTIONS = {
+  en: ["New", "Improved"],
+  zh: ["新增", "改进"],
+} as const;
+const MAX_HIGHLIGHTS = 8;
+const MAX_HIGHLIGHT_LENGTH = 40;
+
+/**
+ * The bold lead-in of each top-level item in a release-notes section
+ * ("- **Network proxy.** …" → "Network proxy"), from the first of the
+ * language's sections that has any. The notes are bilingual: English first,
+ * then Chinese after a `---` rule; each language is read on its own.
+ */
+export function parseReleaseHighlights(body: unknown): AppReleaseHighlights | undefined {
+  if (typeof body !== "string" || !body.trim()) return undefined;
+  const pick = (headings: readonly string[]): string[] => {
+    for (const heading of headings) {
+      const match = new RegExp(`^###\\s+${heading}\\s*$([\\s\\S]*?)(?=^#{1,3}\\s|^---\\s*$|(?![\\s\\S]))`, "m").exec(body);
+      if (!match) continue;
+      const titles: string[] = [];
+      for (const line of match[1].split(/\r?\n/)) {
+        const item = /^[-*]\s+\*\*(.+?)\*\*/.exec(line);
+        if (!item) continue;
+        const title = item[1].replace(/[\s.。:：!！]+$/u, "").trim();
+        if (title && title.length <= MAX_HIGHLIGHT_LENGTH && !/^(security|安全)$/iu.test(title)) titles.push(title);
+        if (titles.length >= MAX_HIGHLIGHTS) break;
+      }
+      if (titles.length > 0) return titles;
+    }
+    return [];
+  };
+  const highlights = { en: pick(HIGHLIGHT_SECTIONS.en), zh: pick(HIGHLIGHT_SECTIONS.zh) };
+  return highlights.en.length > 0 || highlights.zh.length > 0 ? highlights : undefined;
+}
+
 function parseRelease(project: AppUpdateProject, raw: GitHubRelease): AppComponentReleaseInfo {
   if (raw.draft === true || raw.prerelease === true) {
     throw new Error("GitHub returned a non-stable latest release.");
@@ -139,6 +176,7 @@ function parseRelease(project: AppUpdateProject, raw: GitHubRelease): AppCompone
   const current = parseVersion(project.currentVersion);
   if (!latest || !current) throw new Error("GitHub returned an invalid release version.");
 
+  const highlights = parseReleaseHighlights(raw.body);
   const releaseUrl = new URL(raw.html_url);
   if (releaseUrl.protocol !== "https:" || releaseUrl.hostname !== "github.com") {
     throw new Error("GitHub returned an invalid release URL.");
@@ -154,6 +192,7 @@ function parseRelease(project: AppUpdateProject, raw: GitHubRelease): AppCompone
     releaseUrl: releaseUrl.toString(),
     updateAvailable: compareAppVersions(latest.display, current.display) > 0,
     releaseStatus: "available",
+    ...(highlights ? { highlights } : {}),
   };
 }
 

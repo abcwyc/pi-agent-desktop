@@ -21,6 +21,16 @@ export interface AppComponentReleaseInfo {
   releaseUrl: string | null;
   updateAvailable: boolean;
   releaseStatus: AppReleaseStatus;
+  /**
+   * Titles of the latest release's headline items (the bold lead-ins under
+   * "New", else "Improved"), per notes language. Absent for older caches.
+   */
+  highlights?: AppReleaseHighlights;
+}
+
+export interface AppReleaseHighlights {
+  en: string[];
+  zh: string[];
 }
 
 export interface AppUpdateInfo {

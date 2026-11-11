@@ -9,6 +9,7 @@ import {
   APP_VERSION_DISPLAY,
 } from "@/lib/branding";
 import { handleExternalLinkClick } from "@/lib/desktop-native";
+import { summarizeReleaseHighlights } from "@/lib/app-update-summary";
 import { installLatestDesktopRelease, type DesktopUpgradeProgress } from "@/lib/desktop-updater";
 import { useI18n } from "@/hooks/useI18n";
 import { ConfigButton } from "./SettingsUi";
@@ -26,7 +27,7 @@ interface Props {
  * and General is where the rest of the app-wide preferences already sit.
  */
 export function AppUpdatesSection({ onBusyChange }: Props) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [components, setComponents] = useState<AppComponentReleaseInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -102,6 +103,10 @@ export function AppUpdatesSection({ onBusyChange }: Props) {
         ? t("appSettings.updateAvailable")
         : t("appSettings.upToDate");
 
+  const releaseSummary = !loading && !loadError
+    ? summarizeReleaseHighlights(appRelease?.highlights, locale)
+    : null;
+
   const currentVersion = appRelease?.currentVersion ?? APP_VERSION;
   const currentVersionText = `v${currentVersion === APP_VERSION ? APP_VERSION_DISPLAY : currentVersion}`;
   const releaseUrl = appRelease?.releaseUrl ?? null;
@@ -152,6 +157,12 @@ export function AppUpdatesSection({ onBusyChange }: Props) {
               {updateAvailable && <span className="settings-update-badge">{t("appSettings.upgradeAvailable")}</span>}
             </dd>
           </div>
+          {releaseSummary && (
+            <div className="settings-update-row">
+              <dt>{t("appSettings.releaseHighlights")}</dt>
+              <dd className="settings-update-summary">{releaseSummary}</dd>
+            </div>
+          )}
         </dl>
         <div className="settings-update-side">
           <span className="settings-update-status" role="status">{statusText}</span>

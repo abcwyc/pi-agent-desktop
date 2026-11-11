@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 
 export const CHAT_CONTENT_WIDTH_DEFAULT = 820;
-export const CHAT_CONTENT_WIDTH_MIN = 820;
+export const CHAT_CONTENT_WIDTH_MIN = 640;
 export const CHAT_CONTENT_WIDTH_MAX = 2000;
 export const CHAT_CONTENT_WIDTH_STORAGE_KEY = "pi-chat-content-width";
 export const CHAT_CONTENT_FONT_SIZE_DEFAULT = 14;
@@ -24,7 +24,8 @@ let appearance: ChatAppearance | null = null;
 const listeners = new Set<() => void>();
 
 export function clampChatContentWidth(value: unknown): number {
-  const width = Number(value);
+  // Nothing stored (null) means the default, not Number(null) === 0 clamped to the minimum.
+  const width = Number(value ?? CHAT_CONTENT_WIDTH_DEFAULT);
   if (!Number.isFinite(width)) return CHAT_CONTENT_WIDTH_DEFAULT;
   return Math.max(CHAT_CONTENT_WIDTH_MIN, Math.min(CHAT_CONTENT_WIDTH_MAX, Math.round(width)));
 }

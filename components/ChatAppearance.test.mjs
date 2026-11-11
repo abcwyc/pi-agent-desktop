@@ -34,8 +34,10 @@ test("General chat settings own the chat width preference", () => {
 
 test("chat width validation preserves the default and supported range", () => {
   assert.equal(clampChatContentWidth(undefined), 820);
+  assert.equal(clampChatContentWidth(null), 820);
   assert.equal(clampChatContentWidth("invalid"), 820);
-  assert.equal(clampChatContentWidth(700), 820);
+  assert.equal(clampChatContentWidth(600), 640);
+  assert.equal(clampChatContentWidth(700), 700);
   assert.equal(clampChatContentWidth(1104), 1104);
   assert.equal(clampChatContentWidth(2400), 2000);
 });
