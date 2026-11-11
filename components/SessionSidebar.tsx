@@ -3063,11 +3063,27 @@ function SessionItem({
               touch devices, which have no hover, and while its menu is open,
               since the pointer then sits on the portal). Transient runtime
               rows expose no disk-backed actions and have no reliable time.
-              The slot keeps one fixed width so the title never reflows. */}
+              The time and the button share one grid cell and the time stays
+              laid out (hidden) under the button, so the slot is as wide as the
+              wider of the two: a long label ("19小时") never spills over the
+              title, and the title never reflows on hover. */}
           {!session.transient && (
             <div
               className="session-item-trailing"
             >
+              <span
+                className="session-item-time"
+                title={formatRelativeTime(session.modified, locale)}
+                aria-hidden={hovered || treeFocused || touchMode || menuOpen ? true : undefined}
+                style={{
+                  fontSize: "var(--fs-micro)", lineHeight: 1, color: "var(--text-dim)",
+                  whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
+                  paddingRight: 2,
+                  visibility: hovered || treeFocused || touchMode || menuOpen ? "hidden" : undefined,
+                }}
+              >
+                {formatCompactRelativeTime(session.modified, locale)}
+              </span>
               {hovered || treeFocused || touchMode || menuOpen ? (
                 <button
                   ref={menuButtonRef}
@@ -3086,19 +3102,7 @@ function SessionItem({
                     </svg>
                   </span>
                 </button>
-              ) : (
-                <span
-                  className="session-item-time"
-                  title={formatRelativeTime(session.modified, locale)}
-                  style={{
-                    fontSize: "var(--fs-micro)", lineHeight: 1, color: "var(--text-dim)",
-                    whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
-                    paddingRight: 2,
-                  }}
-                >
-                  {formatCompactRelativeTime(session.modified, locale)}
-                </span>
-              )}
+              ) : null}
             </div>
           )}
 
