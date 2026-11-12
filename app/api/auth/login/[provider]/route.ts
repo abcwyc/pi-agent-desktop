@@ -51,16 +51,22 @@ export async function GET(
   const { provider } = await params;
 
   const encoder = new TextEncoder();
+  // An extension's login can report progress from a timer or a server event
+  // after this stream closed (login settled, or the client went away). Enqueue
+  // then throws outside any await of ours: an uncaughtException in the log.
+  let closed = false;
   const send = (controller: ReadableStreamDefaultController, data: unknown) => {
+    if (closed) return;
     try {
       controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-      return true;
     } catch {
-      return false;
+      closed = true;
     }
   };
   const close = (controller: ReadableStreamDefaultController) => {
-    try { controller.close(); } catch { /* already closed/cancelled */ }
+    if (closed) return;
+    closed = true;
+    try { controller.close(); } catch { /* already closed */ }
   };
 
   // AbortController propagates client disconnect into ModelRuntime.login().
@@ -190,6 +196,7 @@ export async function GET(
       }
     },
     cancel() {
+      closed = true;
       abort.abort();
     },
   });
