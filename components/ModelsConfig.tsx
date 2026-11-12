@@ -441,8 +441,8 @@ function ProviderDetail({ name, editingName, fallbackLabel, provider, onChange, 
         <EnabledModelsProviderSwitchNote providerId={name} controller={enabledModels} id={switchNoteId} />
       </div>
 
-       <Field label={t("i18n.providerName")}>
-        <TextInput value={editingName} onChange={onEditingNameChange} placeholder="provider-name" mono />
+       <Field label={t("i18n.providerId")}>
+        <TextInput value={editingName} onChange={onEditingNameChange} placeholder="provider-id" mono />
         {editingName !== name && editingName.trim() && (
           <button onClick={() => onRename(editingName.trim())}
             style={{ marginTop: 4, padding: "3px 10px", background: "var(--accent)", border: "none", borderRadius: "var(--radius-xs)", color: "var(--accent-contrast)", cursor: "pointer", fontSize: "var(--fs-micro)", alignSelf: "flex-start" }}>
@@ -2090,7 +2090,7 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null, onOpenMcp 
 
   const renameProvider = useCallback((oldName: string, newName: string) => {
     if (applyProviderRename(config, oldName, newName)) setSaveError(null);
-    else setSaveError(t("models.providerNameTaken", { name: newName }));
+    else setSaveError(t("models.providerIdTaken", { name: newName }));
   }, [applyProviderRename, config, t]);
 
   const deleteProvider = useCallback((name: string) => {
@@ -2241,7 +2241,7 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null, onOpenMcp 
     if (providerNameDraft && pendingName && config.providers?.[providerNameDraft.provider]) {
       const renamed = applyProviderRename(config, providerNameDraft.provider, pendingName);
       if (!renamed) {
-        setSaveError(t("models.providerNameTaken", { name: pendingName }));
+        setSaveError(t("models.providerIdTaken", { name: pendingName }));
         setSaving(false);
         return;
       }
