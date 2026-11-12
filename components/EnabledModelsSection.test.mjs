@@ -196,7 +196,7 @@ test("the section is mounted for built-in and api-key providers", () => {
   );
   assert.match(
     modelsConfigSource,
-    /provider\.configured && <EnabledModelsSection providerId=\{provider\.id\} controller=\{enabledModels\} contextSettings=\{contextSettings\} \/>/,
+    /provider\.configured && \(\s*<EnabledModelsSection\s+providerId=\{provider\.id\}\s+controller=\{enabledModels\}\s+contextSettings=\{contextSettings\}\s+emptyCatalogHint=\{llama \? t\("models\.llamaEmptyCatalog"\) : undefined\}\s*\/>/,
   );
   assert.match(modelsConfigSource, /<EnabledModelsBanner controller=\{enabledModels\} \/>/);
   // A models.json provider gets the header switch instead of a section.
@@ -260,7 +260,7 @@ test("the saved-model slots mirror every move the draft makes", () => {
 
 test("a built-in provider's model rows edit the context window in the Models draft (M2)", () => {
   assert.match(source, /<ModelContextWindow\s+modelName=\{model\.name\}\s+effective=\{model\.contextWindow\}\s+value=\{contextOverride\(contextSettings, model\.id\)\}/);
-  assert.match(source, /\{contextSettings && <div id=\{contextNoteId\} className="enabled-models-note">\{t\("models\.contextOverrideHelp"\)\}<\/div>\}/);
+  assert.match(source, /\{contextSettings && provider\.models\.length > 0 && <div id=\{contextNoteId\} className="enabled-models-note">\{t\("models\.contextOverrideHelp"\)\}<\/div>\}/);
   assert.match(modelsConfigSource, /setConfig\(withContextWindowOverride\(config, providerId, modelId, value\)\)/);
   // The override lives in models.json under the built-in id; it is not a second, custom provider.
   assert.match(modelsConfigSource, /function isOverridesOnly\(entry: ProviderEntry\): boolean \{\s*return Object\.keys\(entry\)\.length === 1 && Object\.keys\(entry\.modelOverrides \?\? \{\}\)\.length > 0;/);

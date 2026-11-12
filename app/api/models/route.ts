@@ -14,6 +14,7 @@ import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-acces
 import { projectTrustReloadOptions } from "@/lib/project-trust";
 import { chatWorkspaceDir, isChatFolderPath, isChatWorkspacePath } from "@/lib/chat-workspace";
 import { readChatSettings, resolveChatStartDefaults } from "@/lib/chat-settings";
+import { llamaCppExtension } from "@/lib/pi-sdk-internals";
 import { providerDisplayNames, rememberProviderModels, withDeferredProviderModels } from "@/lib/deferred-provider-models";
 import { inferRemovedWorktree } from "@/lib/worktree";
 import { cwdMissingBody } from "@/lib/missing-cwd";
@@ -35,6 +36,7 @@ async function loadModels(cwd: string): Promise<ModelsData> {
   const services = await createAgentSessionServices({
     cwd,
     agentDir,
+    resourceLoaderOptions: { extensionFactories: [llamaCppExtension] },
     ...(trustReloadOptions ? { resourceLoaderReloadOptions: trustReloadOptions } : {}),
   });
   const modelError = services.modelRuntime.getError();
