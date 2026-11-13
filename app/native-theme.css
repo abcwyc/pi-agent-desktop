@@ -7264,6 +7264,40 @@ span.linenumber {
 }
 
 
+/* Preview uses the mounted sidebar without reserving any chat width. */
+@media (min-width: 641px) {
+  .sidebar-container.sidebar-peek {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--sidebar-width, 284px);
+    min-width: var(--sidebar-width, 284px);
+    border-right: var(--hairline) solid var(--border) !important;
+    box-shadow: 6px 0 24px rgb(0 0 0 / 28%);
+  }
+
+  html .sidebar-container.sidebar-peek.app-sidebar {
+    background: linear-gradient(var(--bg-panel), var(--bg-panel)), var(--bg) !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  /* On exit it returns to flow at zero width, without squeezing the chat. */
+  .sidebar-container.sidebar-peek-exit {
+    transition: none !important;
+  }
+
+  /* The preview covers reopen: keep its pin control under the same pointer. */
+  .sidebar-peek .sidebar-toggle-button {
+    position: absolute;
+    left: 9px;
+    top: 10px;
+  }
+
+  .sidebar-peek:has(.session-sidebar-header--mac-inset) .sidebar-toggle-button {
+    left: var(--mac-traffic-light-inset);
+  }
+}
+
 /* Right panel: animate width (split layout) and slide (compact overlay), with
    the left sidebar's timing so both sides open and close alike. */
 @media (min-width: 641px) {

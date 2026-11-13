@@ -27,7 +27,8 @@ export async function checkSidebarBreakpoint(page) {
   await expectOpen(true);
   await resize(1280);
   await expectOpen(false);
-  await page.getByRole("button", { name: "Show sidebar", exact: true }).click();
+  // Keyboard reopening also works while hover preview covers the pointer trigger.
+  await page.getByRole("button", { name: "Show sidebar", exact: true }).press("Enter");
   const originalUrl = page.url();
   const collapsedUrl = new URL(originalUrl);
   collapsedUrl.searchParams.set("sidebar", "collapsed");

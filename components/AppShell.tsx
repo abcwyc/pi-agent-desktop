@@ -306,6 +306,9 @@ export function AppShell() {
   const [projectTrustError, setProjectTrustError] = useState<ProjectTrustFailure | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(() => !initialNavigation.sidebarCollapsed);
   const desktopSidebarOpenRef = useRef(!initialNavigation.sidebarCollapsed);
+  const [sidebarPeek, setSidebarPeek] = useState(false);
+  const [sidebarPeekExiting, setSidebarPeekExiting] = useState(false);
+  const sidebarReopenRef = useRef<HTMLButtonElement>(null);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [rightPanelExpanded, setRightPanelExpanded] = useState(false);
   const rightPanelFullWidth = rightPanelOpen && rightPanelExpanded && !isMobile;
@@ -621,6 +624,49 @@ export function AppShell() {
       return next;
     });
   }, [isMobile]);
+
+  const sidebarPeekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sidebarPeekExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sidebarPeekFocusRef = useRef(false);
+  const holdSidebarPeek = useCallback(() => {
+    if (sidebarPeekTimerRef.current) clearTimeout(sidebarPeekTimerRef.current);
+    sidebarPeekTimerRef.current = null;
+  }, []);
+  const closeSidebarPeekAfter = useCallback((delay: number) => {
+    holdSidebarPeek();
+    sidebarPeekTimerRef.current = setTimeout(() => {
+      sidebarPeekTimerRef.current = null;
+      if (sidebarPeekFocusRef.current || sidebarResizer.panelRef.current?.matches(":hover")) return;
+      setSidebarPeekExiting(true);
+      setSidebarPeek(false);
+      sidebarPeekExitTimerRef.current = setTimeout(() => setSidebarPeekExiting(false), 80);
+    }, delay);
+  }, [holdSidebarPeek, sidebarResizer.panelRef]);
+  const openSidebarPeek = useCallback(() => {
+    if (isMobile || sidebarOpen || rightPanelFullWidth) return;
+    if (sidebarPeekExitTimerRef.current) clearTimeout(sidebarPeekExitTimerRef.current);
+    setSidebarPeekExiting(false);
+    setSidebarPeek(true);
+    closeSidebarPeekAfter(2600);
+  }, [isMobile, sidebarOpen, rightPanelFullWidth, closeSidebarPeekAfter]);
+  useEffect(() => {
+    if (sidebarOpen || isMobile || rightPanelFullWidth || settingsSection) {
+      holdSidebarPeek();
+      if (sidebarPeekExitTimerRef.current) clearTimeout(sidebarPeekExitTimerRef.current);
+      setSidebarPeek(false);
+      setSidebarPeekExiting(false);
+      sidebarPeekFocusRef.current = false;
+    }
+  }, [sidebarOpen, isMobile, rightPanelFullWidth, settingsSection, holdSidebarPeek]);
+  useEffect(() => () => {
+    holdSidebarPeek();
+    if (sidebarPeekExitTimerRef.current) clearTimeout(sidebarPeekExitTimerRef.current);
+  }, [holdSidebarPeek]);
+  useLayoutEffect(() => {
+    if (!sidebarOpen && !sidebarPeek && sidebarResizer.panelRef.current?.contains(document.activeElement)) {
+      sidebarReopenRef.current?.focus();
+    }
+  }, [sidebarOpen, sidebarPeek, sidebarResizer.panelRef]);
 
   // The panel is a preview layer; the composer remains the home base. The
   // overlay and backslash shortcut both use this same exit.
@@ -2053,10 +2099,12 @@ export function AppShell() {
         </svg>
       </button>
       <button
-        className="sidebar-chrome-button"
+        className="sidebar-chrome-button sidebar-toggle-button"
         onClick={handleSidebarToggle}
-        title={translate("sidebar.hide")}
-        aria-label={translate("sidebar.hide")}
+        title={translate(sidebarPeek ? "sidebar.show" : "sidebar.hide")}
+        aria-label={translate(sidebarPeek ? "sidebar.show" : "sidebar.hide")}
+        aria-controls="session-sidebar"
+        aria-expanded={sidebarOpen}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" />
@@ -2292,8 +2340,15 @@ export function AppShell() {
       <div
         ref={sidebarResizer.panelRef}
         id="session-sidebar"
-        className={`app-sidebar sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"}${mobileSidebarReady ? "" : " sidebar-mobile-pending"}${sidebarResizer.isResizing ? " sidebar-resizing" : ""}`}
-        inert={rightPanelFullWidth}
+        className={`app-sidebar sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"}${sidebarPeek ? " sidebar-peek" : ""}${sidebarPeekExiting ? " sidebar-peek-exit" : ""}${mobileSidebarReady ? "" : " sidebar-mobile-pending"}${sidebarResizer.isResizing ? " sidebar-resizing" : ""}`}
+        inert={rightPanelFullWidth || (!sidebarOpen && !sidebarPeek)}
+        onMouseEnter={sidebarPeek ? holdSidebarPeek : undefined}
+        onMouseLeave={sidebarPeek ? () => closeSidebarPeekAfter(420) : undefined}
+        onFocusCapture={() => { sidebarPeekFocusRef.current = true; holdSidebarPeek(); }}
+        onBlurCapture={() => {
+          sidebarPeekFocusRef.current = false;
+          if (sidebarPeek) closeSidebarPeekAfter(420);
+        }}
         style={{
           "--sidebar-width": `${sidebarResizer.width}px`,
           background: "var(--bg-panel)",
@@ -2335,8 +2390,13 @@ export function AppShell() {
               the window, so there the sidebar stays closed until it is restored. */}
           {!sidebarOpen && !rightPanelFullWidth && (
             <button
+              ref={sidebarReopenRef}
+              inert={sidebarPeek}
               className="native-icon-button"
               onClick={handleSidebarToggle}
+              onMouseEnter={openSidebarPeek}
+              aria-controls="session-sidebar"
+              aria-expanded={sidebarPeek}
               title={translate("sidebar.show")}
               aria-label={translate("sidebar.show")}
               // Size, hover colour and background come from .native-icon-button, which
