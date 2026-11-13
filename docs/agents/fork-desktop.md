@@ -18,6 +18,12 @@ Fork-owned notes moved out of `AGENTS.md` to keep it short. The upstream doc on 
 - `lib/workspace-state.ts` restores the last session/cwd/file tabs on cold start. URL params always win over the persisted workspace.
 - `useDesktopConnection` polls `/api/home` only in Tauri to drive the offline banner. Its cleanup must stop in-flight probes from rescheduling, otherwise an unmount leaves a timer nobody owns and it pings forever.
 
+## What must not be inside a package
+- A staged payload carries no `.pi/`, no `Bearer ak_`, no armoured private key and no `src-tauri/target` leftover. `outputFileTracingExcludes` is inert on Windows (Next joins the drive path before picomatch), so the defence that holds is in `scripts/prepare-desktop.mjs`: it clears build output before tracing, prunes the traced `.pi/`, and runs the throwing scan of `scripts/packaged-payload.mjs` twice (traced standalone, then `src-tauri/resources`). `npm run desktop:check-payload [--root <dir>]` re-runs it on a built tree.
+- `desktop:prepare` deletes `src-tauri/resources/{server,node}`, the helper `.app` and `target/<profile>/{resources,bundle}` / `target/nsis`, so **locally built dmg/deb/NSIS installers are removed**; the cargo cache stays.
+- `PAYLOAD_CANARY=1` plants a fake `.pi/mcp.json` so the scan has something to catch in a clean checkout; only the file (and the directory if it created it) is removed on exit.
+- `Bearer ak_` is this project's own MCP key shape, not a general secret scanner; the allowlist only covers npm's documented key-armour examples.
+
 ## Workspace terminals & node-pty staging
 - General's Default terminal picker detects local executables without launching
   a shell. Automatic prefers PowerShell 7, Windows PowerShell, then CMD on Windows;

@@ -29,6 +29,33 @@ const nextConfig: NextConfig = {
     ? { output: "standalone" as const, distDir: ".next-desktop" }
     : {}),
   outputFileTracingRoot: configDir,
+  // Keep build output and this checkout's tool configuration out of the
+  // standalone trace. `lib/branding.ts` imports a JSON file from `src-tauri/`, so
+  // the tracer walks that directory, and `tauri build` copies
+  // `src-tauri/resources` into `src-tauri/target/<profile>/resources`: without an
+  // exclude each packaging run traces the previous run's staged server into the
+  // new one and `resources/server` nests inside itself.
+  //
+  // `.pi/` is not about size: `.pi/mcp.json` can hold the Bearer keys of the
+  // developer's MCP endpoints, and the payload is a distributable installer.
+  // Nothing under `.pi/` is needed at runtime (a packaged session reads the
+  // user's own `~/.pi`).
+  //
+  // Windows caveat: Next applies each entry as `path.join(dir, exclude)` and
+  // picomatch reads the drive backslash as an escape, so on Windows every entry
+  // below matches nothing. The list protects POSIX builds only; the defence that
+  // holds everywhere is `scripts/prepare-desktop.mjs` (clear build output before
+  // tracing, prune the traced `.pi/`, assert with `scripts/packaged-payload.mjs`).
+  outputFileTracingExcludes: {
+    "/*": [
+      ".next/**",
+      ".next-desktop/**",
+      ".pi/**",
+      "src-tauri/target/**",
+      "src-tauri/resources/server/**",
+      "src-tauri/resources/node/**",
+    ],
+  },
   experimental: {
     ...(isDesktopBuild
       ? { webpackBuildWorker: true, webpackMemoryOptimizations: true }

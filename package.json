@@ -49,6 +49,7 @@
     "release:verify": "node scripts/verify-release-components.mjs",
     "drift": "node scripts/measure-fork-drift.mjs",
     "preview-runtime": "node scripts/build-preview-runtime.mjs",
+    "desktop:check-payload": "node scripts/check-packaged-payload.mjs",
     "desktop:verify": "node scripts/verify-packaged-codemode.mjs && node scripts/verify-packaged-terminal.mjs",
     "test:release-tools": "node --test scripts/*.test.mjs",
     "check:deps": "node scripts/check-installed-deps.mjs",

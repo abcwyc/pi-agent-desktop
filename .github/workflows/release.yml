@@ -96,6 +96,12 @@ jobs:
           npm run release:verify
 
       - name: Prepare packaged Next.js server
+        env:
+          # A release checkout has no `.pi/` (gitignored), so the payload
+          # assertion would pass without being exercised. Plant a fake
+          # `.pi/mcp.json` with a canary token and fail the release if it
+          # reaches the payload, on every platform.
+          PAYLOAD_CANARY: "1"
         run: npm run desktop:prepare
 
       - name: Test desktop shell

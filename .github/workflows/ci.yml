@@ -115,6 +115,60 @@ jobs:
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib
       - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
+  # Runs the fail-closed payload assertion of `npm run desktop:prepare` on every
+  # push. A CI checkout has no `.pi/` (gitignored), so `PAYLOAD_CANARY=1` plants a
+  # fake `.pi/mcp.json` with a fake token; the job fails if it reaches the staged
+  # payload and logs whether the tracer picked it up at all. On Linux the
+  # `.pi/**` trace exclude already works, so this proves the exclude; the prune
+  # path that Windows depends on is exercised by the windows-latest leg.
+  # The matrix below runs a full webpack build, so on pull requests it only runs
+  # when something that feeds the payload changed; pushes to main always run it.
+  payload-changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.filter.outputs.run }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if git diff --name-only "$BASE_SHA...$HEAD_SHA" | grep -Eq '^(scripts/|next\.config\.ts$|package(-lock)?\.json$|src-tauri/(resources|tauri[^/]*\.json)|lib/branding\.ts$|\.github/workflows/(ci|release)\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  desktop-payload:
+    needs: payload-changes
+    if: needs.payload-changes.outputs.run == 'true'
+    name: desktop-payload (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.19.0
+          cache: npm
+      - run: npm ci
+      - name: Stage the desktop payload with a credential canary
+        env:
+          PAYLOAD_CANARY: "1"
+        run: npm run desktop:prepare
+      - name: Re-scan the staged payload
+        run: npm run desktop:check-payload
+
   audit:
     runs-on: ubuntu-latest
     timeout-minutes: 5
