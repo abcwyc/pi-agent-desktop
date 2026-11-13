@@ -5,8 +5,8 @@ import { join } from "node:path";
 import test from "node:test";
 import { PAYLOAD_ALLOWED, assertPayloadClean, findLocalConfigDirs, pruneLocalConfig, resolvePayloadRoot, scanPayload } from "./packaged-payload.mjs";
 
-// DEFECT-000089: the payload scan is the fail-closed half of the fix, so its
-// rules are pinned here rather than exercised only by a packaging run.
+// The payload scan is the fail-closed half of the fix, so its rules are pinned
+// here rather than exercised only by a packaging run.
 
 async function fixture(files) {
   const root = await mkdtemp(join(tmpdir(), "payload-scan-"));
@@ -198,7 +198,7 @@ test("every allowlist entry targets a rule that exists", () => {
 
 // A scan that saw nothing used to exit 0 and print "0 finding(s)", which reads
 // exactly like a clean package: a typo'd --root, an empty staging directory, or
-// an absolute path glued onto the checkout all landed there. DEFECT-000089's
+// an absolute path glued onto the checkout all landed there. The
 // gate must not be able to pass without looking at files.
 test("an empty tree is not a clean payload", async () => {
   const root = await fixture({});

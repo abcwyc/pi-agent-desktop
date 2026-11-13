@@ -1,6 +1,5 @@
 import { access, chmod, copyFile, cp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
-import { constants } from "node:fs";
-import { existsSync, rmSync } from "node:fs";
+import { constants, existsSync, rmSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, join, relative } from "node:path";
@@ -19,15 +18,15 @@ const serverHelperDir = join(rootDir, "src-tauri", "resources", "Pi Agent Server
 const nodeResourcesDir = join(rootDir, "src-tauri", "resources", "node");
 
 /**
- * CI canary for DEFECT-000089.
+ * CI canary for the payload assertion.
  *
- * In a clean CI checkout there is no `.pi/` at all (it is gitignored), so
- * "the payload must not carry this checkout's `.pi/`" would pass vacuously —
- * a gate that cannot fail is not a gate. With `PAYLOAD_CANARY=1` this script
- * plants a `.pi/mcp.json` carrying a fake `Bearer ak_` token before the build,
- * then reports whether the tracer picked it up and fails if it survives into
- * the payload. A local run with real credentials is unaffected: the file is
- * only created when it is absent, and it is removed on exit either way.
+ * A clean CI checkout has no `.pi/` (it is gitignored), so "the payload must not
+ * carry a `.pi/`" would pass vacuously. With `PAYLOAD_CANARY=1` this script
+ * plants a `.pi/mcp.json` holding a fake `Bearer ak_` token before the build,
+ * reports whether the tracer picked it up, and fails if it survives into the
+ * payload. A checkout that already has `.pi/mcp.json` is left alone. On exit
+ * (including SIGINT/SIGTERM) only what this script created is removed: the file,
+ * and the `.pi/` directory only if it did not exist before.
  */
 const CANARY_DIR = join(rootDir, ".pi");
 const CANARY_FILE = join(CANARY_DIR, "mcp.json");
@@ -39,6 +38,7 @@ async function plantPayloadCanary() {
     console.log("Payload canary: this checkout already has .pi/mcp.json; scanning that instead of planting one");
     return false;
   }
+  const createdDir = !existsSync(CANARY_DIR);
   await mkdir(CANARY_DIR, { recursive: true });
   await writeFile(
     CANARY_FILE,
@@ -48,19 +48,28 @@ async function plantPayloadCanary() {
       2,
     )}\n`,
   );
-  // Whatever happens next — a failed build, a failing assertion, Ctrl-C — the
-  // fake file must not linger in the checkout.
-  process.once("exit", () => {
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
     try {
-      rmSync(CANARY_DIR, { recursive: true, force: true });
+      if (createdDir) rmSync(CANARY_DIR, { recursive: true, force: true });
+      else rmSync(CANARY_FILE, { force: true });
     } catch {
-      // Removing it is best effort; it holds no real credential.
+      // Best effort; the file holds no real credential.
     }
-  });
+  };
+  process.once("exit", cleanup);
+  // Node does not emit `exit` for a default SIGINT/SIGTERM.
+  for (const [signal, code] of [["SIGINT", 130], ["SIGTERM", 143]]) {
+    process.once(signal, () => {
+      cleanup();
+      process.exit(code);
+    });
+  }
   console.log("Payload canary: planted .pi/mcp.json (fake token) so the payload assertion has something to catch");
   return true;
 }
-
 
 async function runNextBuild() {
   const require = createRequire(import.meta.url);
@@ -95,26 +104,18 @@ async function runNextBuild() {
 }
 
 /**
- * Removes everything under `src-tauri/` that a build has already written.
+ * Removes everything under `src-tauri/` that an earlier build has written, so
+ * the file tracer cannot fold a previous run's staged server into this one
+ * (which nested `resources/server` inside itself on repeated runs).
  *
- * DEFECT-000089: the file tracer follows paths, not provenance. Each packaging
- * run copies the staged payload into the next build, so a second
- * `desktop:prepare` in one checkout nested `resources/server` inside itself
- * five levels deep (and carried `.pi/mcp.json` along with it): the third 0.8.2
- * package failed the Windows path-length gate. Deleting the output before the
- * build is the mechanism that cannot be defeated by a tracer pattern — unlike
- * `outputFileTracingExcludes`, which Next applies as
- * `path.join(dir, exclude)` and picomatch then reads the drive backslash as an
- * escape, so on Windows every such exclude silently matches nothing.
+ * Deleted: `resources/{server,node}`, the macOS helper `.app`, and the payload
+ * copies and installers under `target/<profile>/{resources,bundle}`,
+ * `target/nsis` and per-triple variants. This includes locally built
+ * dmg/deb/NSIS installers. The cargo cache stays.
  *
- * The cargo cache stays: only directories that hold a *copy of the payload*
- * (or the installers built from it) are removed here, and
- * `assertPayloadClean()` fails the run if any of it still reaches the payload.
- *
- * `target/<profile>/resources` is what `tauri build` copies
- * `src-tauri/resources` into, file by file, never deleting what an earlier
- * build left behind — stale hashed chunks piled up there (the to-do view work
- * alone left 496 dead files in the installer), so the copy must start empty.
+ * `outputFileTracingExcludes` cannot do this job on Windows (see
+ * `next.config.ts`), and `target/<profile>/resources` is filled by `tauri build`
+ * without deleting stale files, so the copy has to start empty.
  */
 async function clearTracedBuildOutput() {
   const removed = [];
@@ -168,6 +169,7 @@ async function clearTracedBuildOutput() {
 
   console.log(`Cleared previous build output: ${removed.length} path(s)`);
 }
+
 async function assembleServer() {
   await access(join(standaloneDir, "server.js"), constants.R_OK);
   await rm(serverResourcesDir, { recursive: true, force: true });
@@ -388,9 +390,8 @@ const canaryPlanted = await plantPayloadCanary();
 await runNextBuild();
 
 // The tracer is not trusted to have kept this checkout's configuration and
-// credentials out (DEFECT-000089): drop the traced `.pi/` it cannot be told
-// about on Windows, then fail before 276 MB is copied around if anything else
-// got in.
+// credentials out: drop the traced `.pi/` (the exclude list is inert on
+// Windows), then fail early if anything else got in.
 if (process.env.PAYLOAD_CANARY === "1") {
   const traced = await findLocalConfigDirs(standaloneDir);
   console.log(
@@ -440,7 +441,7 @@ if (overlong.length > 0) {
 const { binaryPath: nodeBinary, triple } = await bundleNodeRuntime();
 
 // Last gate before `tauri build` runs: nothing in the staged payload may carry
-// this checkout's own configuration or credentials (DEFECT-000089).
+// this checkout's own configuration or credentials.
 await assertPayloadClean(join(rootDir, "src-tauri", "resources"), { label: "src-tauri/resources" });
 console.log(`Desktop server staged at ${serverResourcesDir}`);
 console.log(`Node runtime staged at ${nodeBinary} (${triple})`);

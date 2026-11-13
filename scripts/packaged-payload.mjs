@@ -4,24 +4,23 @@ import { isAbsolute, join, relative, sep } from "node:path";
 /**
  * What must never be inside a staged payload.
  *
- * DEFECT-000089: the first 0.8.2 package of 2026-11-10 shipped
- * `resources/server/.pi/mcp.json`, i.e. the checkout's own MCP endpoint config —
- * complete with `Bearer ak_…` keys for the demo and test stacks. The payload is
- * a distributable installer, so "the repository happened to have a `.pi/` at
- * that moment" must not be able to reach a user. This module is the fail-closed
- * check: `scripts/prepare-desktop.mjs` runs it over the traced standalone
- * output and again over `src-tauri/resources` before `tauri build` can package
- * anything.
+ * The payload is a distributable installer, so "the checkout happened to have a
+ * `.pi/` (with `mcp.json` and its Bearer keys) at that moment" must not be able
+ * to reach a user. `scripts/prepare-desktop.mjs` runs this check over the traced
+ * standalone output and again over `src-tauri/resources` before `tauri build`
+ * can package anything.
  *
- * The rules are deliberately about *consequences*, not about the tracer's
- * behaviour: whatever makes a file land in the payload (a traced `resolve()`,
- * a copied staging directory, a future script), it fails the build.
+ * The rules are about consequences, not the tracer's behaviour: whatever makes a
+ * file land in the payload, it fails the build.
  */
 
 /**
  * `matchesPath` gets the payload-relative path with forward slashes;
  * `matchesContent` gets the file decoded as latin1 (one char per byte), which
- * keeps arbitrary binaries matchable without a UTF-8 decode error.
+ * keeps arbitrary binaries matchable without a UTF-8 decode error. A rule with
+ * `needle` is only evaluated when the raw bytes contain that literal, so big
+ * binaries (node.exe, native addons) are never decoded into a string just to
+ * find nothing.
  */
 export const PAYLOAD_RULES = [
   {
@@ -39,15 +38,17 @@ export const PAYLOAD_RULES = [
   },
   {
     id: "bearer-token",
-    describe: "a Bearer `ak_` token, the shape our MCP endpoints authenticate with",
+    describe: "a Bearer `ak_` token, the key shape this project's own MCP endpoints use (a project-specific check, not a general secret scanner)",
     // Anchored on "Bearer ": a bare `ak_` sweep drowns in `ak_malloced` /
     // `ak_Slovakia` / `ak_ordering` symbols inside node.exe, libvips.dll and
     // the pdb files, which is why no path allowlist is needed for those.
+    needle: "Bearer ak_",
     matchesContent: (text) => text.includes("Bearer ak_"),
   },
   {
     id: "private-key",
     describe: "an armoured private key",
+    needle: "PRIVATE KEY-----",
     matchesContent: (text) => /-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(text),
   },
 ];
@@ -76,22 +77,10 @@ export const PAYLOAD_ALLOWED = [
 const ARMOURED_KEY_BODY = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\r\n]+[A-Za-z0-9+/=\r\n]{64,}/;
 
 /**
- * Deletes the traced copy of this checkout's `.pi/` from a build output tree.
- *
- * The tracer cannot be talked out of it on Windows: the pi SDK resolves its
- * project config directory as `join(cwd, CONFIG_DIR_NAME, "mcp.json")` with
- * `cwd` defaulting to `process.cwd()`, and `@vercel/nft` evaluates that default
- * against the build directory, so every route that imports the SDK traces
- * `<repo>/.pi/mcp.json` (28 route traces in the 2026-11-10 build).
- * `outputFileTracingExcludes` would be the right place to drop it, but Next
- * applies those globs as `path.join(dir, exclude)` and picomatch then reads the
- * Windows drive backslash as an escape, so on Windows they match nothing.
- *
- * Deleting the traced file is not a silent pass: the caller asserts the payload
- * immediately afterwards, so anything *else* that arrives still fails the build.
+ * Walks `root` and returns every `.pi` directory as a payload-relative path.
+ * With `{ remove: true }` each one is deleted (and not descended into).
  */
-/** Every `.pi` directory inside `root`, as payload-relative paths. */
-export async function findLocalConfigDirs(root) {
+async function walkLocalConfigDirs(root, { remove = false } = {}) {
   const found = [];
   async function visit(dir) {
     let entries;
@@ -106,6 +95,7 @@ export async function findLocalConfigDirs(root) {
       const full = join(dir, entry.name);
       if (entry.name === ".pi") {
         found.push(relative(root, full).split(sep).join("/"));
+        if (remove) await rm(full, { recursive: true, force: true });
         continue;
       }
       await visit(full);
@@ -115,31 +105,24 @@ export async function findLocalConfigDirs(root) {
   return found;
 }
 
-export async function pruneLocalConfig(root) {
-  const removed = [];
-  async function visit(dir) {
-    let entries;
-    try {
-      entries = await readdir(dir, { withFileTypes: true });
-    } catch (error) {
-      if (error?.code === "ENOENT") return;
-      throw error;
-    }
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const full = join(dir, entry.name);
-      const path = relative(root, full).split(sep).join("/");
-      if (entry.name === ".pi") {
-        await rm(full, { recursive: true, force: true });
-        removed.push(path);
-        continue;
-      }
-      await visit(full);
-    }
-  }
-  await visit(root);
-  return removed;
-}
+/** Every `.pi` directory inside `root`, as payload-relative paths. */
+export const findLocalConfigDirs = (root) => walkLocalConfigDirs(root);
+
+/**
+ * Deletes the traced copy of this checkout's `.pi/` from a build output tree.
+ *
+ * The pi SDK resolves its project config as `join(cwd, ".pi", "mcp.json")` with
+ * `cwd` defaulting to `process.cwd()`, and `@vercel/nft` evaluates that default
+ * against the build directory, so routes importing the SDK trace
+ * `<repo>/.pi/mcp.json`. `outputFileTracingExcludes` would drop it, but Next
+ * applies those globs as `path.join(dir, exclude)` and picomatch reads the
+ * Windows drive backslash as an escape, so on Windows they match nothing.
+ *
+ * The caller asserts the payload right afterwards, so anything else that
+ * arrives still fails the build. Note the rule also matches a `.pi` directory
+ * inside `node_modules`; that is fail-closed on purpose.
+ */
+export const pruneLocalConfig = (root) => walkLocalConfigDirs(root, { remove: true });
 
 function allowedBy(ruleId, path) {
   return PAYLOAD_ALLOWED.find((entry) => entry.rule === ruleId && entry.path.test(path)) ?? null;
@@ -198,11 +181,14 @@ export async function scanPayload(root, options = {}) {
         if (error?.code === "ENOENT") continue;
         throw error;
       }
-      const text = buffer.toString("latin1");
+      let text;
+      const decoded = () => (text ??= buffer.toString("latin1"));
       for (const rule of PAYLOAD_RULES) {
-        if (rule.matchesContent?.(text)) record(rule, path);
+        if (!rule.matchesContent) continue;
+        if (rule.needle && !buffer.includes(rule.needle, 0, "latin1")) continue;
+        if (rule.matchesContent(decoded())) record(rule, path);
       }
-      if (ARMOURED_KEY_BODY.test(text)) {
+      if (buffer.includes("PRIVATE KEY-----", 0, "latin1") && ARMOURED_KEY_BODY.test(decoded())) {
         findings.push({
           rule: "private-key-material",
           describe: "an armoured private key with a key body — never a documentation example",
@@ -219,8 +205,7 @@ export async function scanPayload(root, options = {}) {
 /** Like `join(base, arg)` but the two mistakes that silently scan the wrong tree
  * are errors instead of surprises: an absolute path (`join` glues it onto the
  * base, e.g. `D:/repo/C:/Users/…`) and a path that does not exist (0 files).
- * DEFECT-000089 relies on this check being fail-closed, so a typo must not be
- * able to produce "0 findings".
+ * The check is fail-closed, so a typo must not be able to produce "0 findings".
  */
 export function resolvePayloadRoot(baseDir, arg, { exists } = {}) {
   if (typeof arg !== "string" || arg.trim() === "") {
@@ -253,7 +238,7 @@ export function describePayloadScan(label, { files, findings, allowed }) {
  *
  * Deliberately no `--soft` / skip switch: a payload that carries this
  * checkout's credentials must not be packaged, and a check that can be waved
- * through is not a check (DEFECT-000089).
+ * through is not a check.
  */
 export async function assertPayloadClean(root, { label = root, options = {} } = {}) {
   const result = await scanPayload(root, options);
@@ -278,7 +263,7 @@ export async function assertPayloadClean(root, { label = root, options = {} } = 
     console.error(`      ${finding.describe}`);
   }
   throw new Error(
-    `${result.findings.length} finding(s) in the staged payload — see DEFECT-000089 (` +
-      `the installer must not carry this checkout's configuration or credentials).`,
+    `${result.findings.length} finding(s) in the staged payload ` +
+      `(the installer must not carry this checkout's configuration or credentials).`,
   );
 }
