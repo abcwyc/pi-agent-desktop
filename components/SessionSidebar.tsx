@@ -22,7 +22,7 @@ import {
   type WorktreeEntry,
 } from "./ProjectContextMenu";
 import { useProjectWorktreeActions } from "@/hooks/useProjectWorktreeActions";
-import { getRecentProjects } from "./path-ui";
+import { getRecentProjects, PathLabel } from "./path-ui";
 import { APP_PREF_KEYS, getPref, getPrefJson, removePref, setPref, setPrefJson } from "@/lib/app-prefs";
 import { groupByProject } from "@/lib/project-group";
 import { getProjectDisplayName, getProjectDisplayNames } from "@/lib/project-display";
@@ -467,6 +467,37 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const projectViewMenuButtonRef = useRef<HTMLButtonElement>(null);
   const [projectMenu, setProjectMenu] = useState<{ root: string; archived?: boolean } | null>(null);
   const [projectMenuPos, setProjectMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const [projectPathHint, setProjectPathHint] = useState<{ root: string; top: number; left: number; height: number } | null>(null);
+  const projectPathHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideProjectPathHint = useCallback(() => {
+    if (projectPathHintTimerRef.current !== null) clearTimeout(projectPathHintTimerRef.current);
+    projectPathHintTimerRef.current = null;
+    setProjectPathHint(null);
+  }, []);
+  const scheduleProjectPathHint = useCallback((target: HTMLElement, root: string) => {
+    hideProjectPathHint();
+    if (projectMenu) return;
+    projectPathHintTimerRef.current = setTimeout(() => {
+      projectPathHintTimerRef.current = null;
+      if (!target.isConnected) return;
+      const row = target.closest<HTMLElement>(".sidebar-project-tree-row");
+      const sidebar = target.closest<HTMLElement>(".session-sidebar");
+      if (!row || !sidebar) return;
+      const rowRect = row.getBoundingClientRect();
+      setProjectPathHint({ root, top: rowRect.top, left: sidebar.getBoundingClientRect().right, height: rowRect.height });
+    }, 350);
+  }, [hideProjectPathHint, projectMenu]);
+  useEffect(() => {
+    window.addEventListener("scroll", hideProjectPathHint, true);
+    window.addEventListener("resize", hideProjectPathHint);
+    window.addEventListener("pointerdown", hideProjectPathHint, true);
+    return () => {
+      window.removeEventListener("scroll", hideProjectPathHint, true);
+      window.removeEventListener("resize", hideProjectPathHint);
+      window.removeEventListener("pointerdown", hideProjectPathHint, true);
+      if (projectPathHintTimerRef.current !== null) clearTimeout(projectPathHintTimerRef.current);
+    };
+  }, [hideProjectPathHint]);
   const [projectMenuAnchor, setProjectMenuAnchor] = useState<MenuAnchor | null>(null);
   const [projectBranchMenu, setProjectBranchMenu] = useState<ProjectBranchMenuState | null>(null);
   const [projectMenuView, setProjectMenuView] = useState<ProjectMenuView>("actions");
@@ -1418,6 +1449,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
   /** "…" opens the menu under the button; a right-click opens it at the cursor. */
   const openProjectMenu = useCallback((e: React.MouseEvent<HTMLElement>, projectRoot: string, archived = false) => {
+    hideProjectPathHint();
     const atCursor = e.type === "contextmenu";
     if (atCursor) e.preventDefault();
     e.stopPropagation();
@@ -1444,7 +1476,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     setProjectBranchMenu(null);
     setProjectMenuView("actions");
     setProjectRevealError(null);
-  }, [closeProjectMenu, projectMenu, resetWorktreeActions, showNativeProjectMenu]);
+  }, [closeProjectMenu, hideProjectPathHint, projectMenu, resetWorktreeActions, showNativeProjectMenu]);
 
   // Phase A: project tree — groups sessions by project root. Sorting is
   const trimmedSessionQuery = sessionQuery.trim().toLowerCase();
@@ -1630,6 +1662,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
     const isMenuOpen = projectMenu?.root === group.projectRoot;
     const rowTitle = branchSubtitle ? `${group.projectRoot} · ${branchSubtitle}` : group.projectRoot;
+    const displayName = (archived ? archivedDisplayNames : projectDisplayNames).get(group.projectRoot) ?? group.displayName;
 
     return (
       <div key={group.projectRoot} className={`sidebar-project-tree-group${isCollapsed ? " is-collapsed" : ""}${isActive ? " is-active" : ""}${archived ? " is-archived" : ""}`}>
@@ -1646,7 +1679,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             aria-selected={isActive}
             onClick={toggleCollapse}
             aria-expanded={!isCollapsed}
-            title={rowTitle}
+            aria-label={`${displayName} · ${rowTitle}`}
+            onMouseEnter={(e) => scheduleProjectPathHint(e.currentTarget, group.projectRoot)}
+            onMouseLeave={hideProjectPathHint}
+            onClickCapture={hideProjectPathHint}
             onKeyDown={(e) => handleSidebarTreeKeyDown(e, {
               activate: toggleCollapse,
               expand: () => {
@@ -1673,7 +1709,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               </svg>
             </span>
             <span className="sidebar-project-tree-name">
-              {(archived ? archivedDisplayNames : projectDisplayNames).get(group.projectRoot) ?? group.displayName}
+              {displayName}
             </span>
             {/* A folded project hides its rows, so the count (and any running
                 or unread chips) must stay readable on the header itself. */}
@@ -2335,6 +2371,16 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           onExpandAll={expandAllProjects}
           onClose={() => setProjectViewMenuPos(null)}
         />
+      )}
+      {projectPathHint && createPortal(
+        <div
+          className="sidebar-project-path-hint"
+          aria-hidden="true"
+          style={{ top: projectPathHint.top, left: projectPathHint.left, height: projectPathHint.height, maxWidth: `min(60vw, 640px, ${Math.max(0, window.innerWidth - projectPathHint.left - 8)}px)` }}
+        >
+          <PathLabel text={projectPathHint.root} style={{ lineHeight: 1 }} />
+        </div>,
+        document.body,
       )}
       {projectSessionsDelete && createPortal(
         <ChatConfirmDialog

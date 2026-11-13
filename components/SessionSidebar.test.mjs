@@ -305,9 +305,11 @@ test("project header shows a session count and chips only while folded", () => {
   // A folded project hides its rows, so the header carries the count.
   assert.match(source, /\{isCollapsed && \(\s*<span className="sidebar-project-tree-count"[^>]*>\s*\(\{groupTree\.length\}\)/);
   assert.match(source, /\{isCollapsed && \(\s*<span className="sidebar-project-tree-meta">/);
-  // The branch moved from the row into its tooltip.
+  // The rendered path replaces the native tooltip; the accessible label keeps the branch.
   assert.doesNotMatch(source, /className="sidebar-project-tree-branch"/);
-  assert.match(source, /title=\{rowTitle\}/);
+  assert.match(source, /const rowTitle = branchSubtitle \? `\$\{group\.projectRoot\} · \$\{branchSubtitle\}` : group\.projectRoot/);
+  assert.match(source, /aria-label=\{`\$\{displayName\} · \$\{rowTitle\}`\}/);
+  assert.doesNotMatch(source, /title=\{rowTitle\}/);
 });
 
 test("project header keeps its actions hover-only and no separate chevron", async () => {
