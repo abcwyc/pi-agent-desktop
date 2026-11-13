@@ -89,7 +89,7 @@ export async function checkFilePanel(page, filePath) {
       await panel.getByRole("button", { name: "Restore panel width", exact: true }).press("Enter");
       assert.equal(await width(), originalWidth);
       assert.deepEqual(await storedWidths(), originalStored);
-      assert.equal(await page.locator("#session-sidebar").evaluate(el => el.inert), false);
+      assert.equal(await page.locator("#session-sidebar").evaluate(el => el.inert), true, "The collapsed sidebar stays inert after restoring the panel width");
     }
     await toggle.click();
     await hidePanelInStrip.click();
