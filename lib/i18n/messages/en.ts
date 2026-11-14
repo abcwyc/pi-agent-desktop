@@ -1791,8 +1791,10 @@ export const enLocale: LocalePlugin = {
     "layout.resizeHeightHint": "Drag vertically to resize. Double-click or press Enter to reset.",
     "sidebar.switchWorktreeTitle": "Switch worktree: {path}",
     "sidebar.deleteWithShiftClick": "Delete (Shift+click to delete without confirmation)",
-    "sidebar.expandSubagents": "Expand subagents",
-    "sidebar.collapseSubagents": "Collapse subagents",
+    "sidebar.expandSubagentsCount": "Expand {count} subagents",
+    "sidebar.collapseSubagentsCount": "Collapse {count} subagents",
+    "sidebar.forkRow": "Fork",
+    "sidebar.forkedFrom": "Forked from “{title}”",
     "files.explorer": "Explorer",
     // Kept by the fork: upstream dropped these keys, fork components still use them.
     "subagent.open": "Open sub-agent session",

@@ -26,6 +26,8 @@ export const APP_PREF_KEYS = {
   expandedProjects: "pi-web:expanded-projects",
   /** "1" while the sidebar Chats section is folded. */
   collapsedChats: "pi-web:collapsed-chats",
+  /** Session ids whose subagent / side chat rows the user unfolded (folded by default, #237). */
+  expandedSubagentRows: "pi-web:expanded-subagent-rows",
   /** Projects header fold; independent of individual project/archive folds. */
   collapsedProjectsSection: "pi-web:collapsed-projects-section",
   /** Additional five-chat pages shown past the Chats preview cap. */
