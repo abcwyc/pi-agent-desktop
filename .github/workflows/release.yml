@@ -120,45 +120,43 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.8.4
+            ## Pi Agent Desktop 0.8.5
 
             ### New
 
-            - **Regrouped General settings.** Settings › General fills the dialog again, in two columns: "Version & Updates", "Language" and "Display & input" on the left; the desktop options and "Chats outside projects" on the right; the proxy, terminal, relay and remote access options under "Network & advanced". Long hints are shorter, and the two sections that were both called "Chat" now have distinct names.
-            - **Release summary.** "Version & Updates" names the latest release's headline items in one short line under "What's new".
+            - **Settings sidebar.** On every desktop platform the Settings sections are now a list on the left, with the page beside it; narrower windows show an icon rail, and phones keep the drill-down. The list takes one Tab stop and moves with the arrow keys.
+            - **Folded subagents.** Subagent runs start folded under their session, behind an "Expand N subagents" toggle; your fold choices are remembered. Forks are now rows of their own beside their source, marked with a fork icon whose tooltip names the source, so they get pin, archive and Fork like any session.
 
             ### Improved
 
-            - Settings sliders now match the rest of the dialog, and "Chat content width" goes down to 640px.
-            - **pi 1.5.2.** Importing a session whose folder no longer exists no longer leaves duplicate copies, and Anthropic OAuth requests report a current Claude Code version.
+            - Hovering a project in the sidebar shows its full path in a bar beside the row, instead of the system tooltip.
+            - With many projects, the project menu above the composer no longer runs off the top of the window; it scrolls.
 
             ### Fixed
 
-            - In the sidebar, a session's last-activity time (such as "19小时") no longer overlaps its title.
-            - On macOS the sidebar no longer looks washed out when the window and the page disagree about light or dark mode, for example after the system theme changes while the app follows it.
-            - "Add provider" in Settings › Models was taller than the Settings dialog and cut off its search box; it now fits and scrolls inside.
+            - "Import models…" for a custom provider no longer returns a silently cut-off list: when the provider has more than 20 pages, or repeats a page, it now reports an error.
+            - The installer no longer risks carrying the build machine's `.pi/` project settings; packaging now stops if they, or anything that looks like a credential, end up in the payload.
 
             Bundled components: pi 1.5.2, pi-web 0.15.0.
 
             ---
 
-            ## Pi Agent Desktop 0.8.4
+            ## Pi Agent Desktop 0.8.5
 
             ### 新增
 
-            - **常规设置重排。** “设置 › 常规”重新铺满整个弹窗，分为两栏：左栏是“版本与更新”“语言”“聊天显示与输入”，右栏是桌面端选项和“对话（非项目）”；网络代理、终端、远程中继和远程访问归入“网络与高级”。冗长的说明文字已精简，原来两个都叫“对话”的分区也改成了不同的名称。
-            - **更新内容摘要。** “版本与更新”里新增“更新内容”一行，用一句话列出最新版本的主要变化。
+            - **设置左侧导航。** 各桌面平台的设置页统一改为左侧分区列表、右侧内容；窗口较窄时显示为图标栏，手机仍是逐级进入。分区列表只占一个 Tab 位置，可用方向键切换。
+            - **子智能体折叠。** 子智能体默认折叠在所属会话下，点“展开 N 个子智能体”即可展开，折叠状态会被记住。分叉对话不再嵌在源会话下面，而是作为独立的一行，带分叉图标，悬停可看到“分叉自「…」”，也能像普通会话一样置顶、存档和分叉。
 
             ### 改进
 
-            - 设置中的滑块改为与弹窗其他控件一致的样式，“聊天内容宽度”最小可调到 640px。
-            - **pi 1.5.2。** 导入原文件夹已不存在的会话时不再留下重复副本；Anthropic OAuth 请求会上报当前的 Claude Code 版本。
+            - 在侧栏中悬停项目时，会在该行旁边显示完整路径，取代系统自带的提示框。
+            - 项目很多时，输入框上方的项目菜单不再超出窗口顶部，改为可滚动。
 
             ### 修复
 
-            - 侧栏中会话的最近活动时间（如“19小时”）不再压住会话标题。
-            - macOS 上，窗口与页面的深浅色不一致时（例如应用跟随系统、系统切换了深浅色），侧栏不再发白。
-            - “设置 › 模型”中的“添加 Provider”弹窗比设置对话框还高，顶部的搜索框被截掉；现在会完整显示在对话框内，并在内部滚动。
+            - 自定义 Provider 的“导入模型…”不会再悄悄返回不完整的列表：Provider 超过 20 页或重复返回同一页时，会直接报错。
+            - 安装包不会再意外带上构建机器的 `.pi/` 项目配置；打包时一旦发现这类文件或疑似凭据，会直接中止。
 
             内置组件版本：pi 1.5.2、pi-web 0.15.0。
           releaseDraft: true
