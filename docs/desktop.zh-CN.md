@@ -1,10 +1,10 @@
 # Pi Agent 桌面 App
 
-Pi Agent 使用 Tauri 封装本地 Web UI 与 Agent 服务，支持 Apple Silicon Mac、Windows x64 和 Linux x64。由于应用包含本地 API 和 AgentSession，安装包会携带 Next.js standalone 服务与当前平台的 Node.js runtime；打开 App 时服务自动启动，退出 App 时自动停止，无需另开终端或安装 Node.js。
+Pi Agent 使用 Tauri 封装本地 Web UI 与 Agent 服务，支持 Mac（Apple Silicon 与 Intel）、Windows x64 和 Linux x64。由于应用包含本地 API 和 AgentSession，安装包会携带 Next.js standalone 服务与当前平台的 Node.js runtime；打开 App 时服务自动启动，退出 App 时自动停止，无需另开终端或安装 Node.js。
 
 ## 要求
 
-- macOS 11 或更新版本（Apple Silicon）、Windows 10/11 x64，或安装了 WebKitGTK 4.1 与 GTK 3 的 Linux x64 发行版
+- macOS 11 或更新版本（Apple Silicon 或 Intel）、Windows 10/11 x64，或安装了 WebKitGTK 4.1 与 GTK 3 的 Linux x64 发行版
 - 构建时使用 Node.js 22.19 或更新的 22.x 版本，与项目 CI 保持一致
 - Rust 1.85 或更新版本
 - macOS 使用 Xcode Command Line Tools；Windows 使用 Microsoft C++ Build Tools；Linux 使用 GTK/WebKitGTK 开发包
@@ -46,7 +46,7 @@ src-tauri/target/release/bundle/nsis/Pi Agent_<version>_x64-setup.exe
 src-tauri/target/release/bundle/deb/pi-agent-desktop_<version>_amd64.deb
 ```
 
-构建结果是当前机器架构的原生应用：Apple Silicon 构建 `aarch64` DMG，Linux x64 构建 `.deb`，Windows x64 构建 NSIS `-setup.exe`。正式流水线不构建 Intel Mac 版本。发布给其他用户前，macOS 应使用 Apple Developer ID 签名并公证，Windows 应使用 Authenticode 证书签名；本地开发和测试不要求平台代码签名。
+构建结果是当前机器架构的原生应用：Apple Silicon 构建 `aarch64` DMG，Linux x64 构建 `.deb`，Windows x64 构建 NSIS `-setup.exe`。正式流水线另外在 Apple Silicon runner 上用 x64 Node 交叉编译 Intel Mac（`x86_64-apple-darwin`）版本，打包前用 `lipo` 确认内置 Node 的架构与目标一致。发布给其他用户前，macOS 应使用 Apple Developer ID 签名并公证，Windows 应使用 Authenticode 证书签名；本地开发和测试不要求平台代码签名。
 
 桌面版会检查 `pi-agent-desktop`、Pi 与 Pi Web 的官方 GitHub Release。每个项目最多每 7 天检查一次；发现任一组件有新版后，用户可以从设置中安装包含全部最新组件的完整签名 App 并重启。详细机制见 [桌面升级与发布说明](./desktop-updates.md)。
 

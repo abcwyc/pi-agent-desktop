@@ -21,6 +21,19 @@ jobs:
             target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
             apple_signing_identity: "-"
+            mac_arch: arm64
+          # Intel Macs: cross-compiled on the Apple Silicon runner (the only
+          # one with the macOS 26 SDK). The bundled server runs the Node that
+          # built it (prepare-desktop copies process.execPath), so this job
+          # installs an x64 Node and runs it under Rosetta; npm ci then also
+          # picks the x64 optional native packages. tauri-action reads the
+          # target from `args` and files the updater entry as darwin-x86_64.
+          - runner: macos-26
+            target: x86_64-apple-darwin
+            args: --target x86_64-apple-darwin
+            apple_signing_identity: "-"
+            node_arch: x64
+            mac_arch: x86_64
           - runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             args: --target x86_64-unknown-linux-gnu --bundles deb
@@ -52,6 +65,7 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 22
+          architecture: ${{ matrix.node_arch }}
           cache: npm
 
       - name: Configure updater public key
@@ -103,6 +117,15 @@ jobs:
           # reaches the payload, on every platform.
           PAYLOAD_CANARY: "1"
         run: npm run desktop:prepare
+
+      # An arm64 server binary inside an x86_64 app only fails on an Intel Mac,
+      # at launch. Check the staged runtime matches the target instead.
+      - name: Check the bundled Node architecture
+        if: runner.os == 'macOS'
+        run: |
+          archs="$(lipo -archs "src-tauri/resources/Pi Agent Server.app/Contents/MacOS/node")"
+          echo "Bundled Node: $archs"
+          test "$archs" = "${{ matrix.mac_arch }}"
 
       - name: Test desktop shell
         if: runner.os == 'Windows' || runner.os == 'Linux'
@@ -261,19 +284,20 @@ jobs:
         with:
           ref: main
 
-      - name: Point the cask at the published DMG
+      - name: Point the cask at the published DMGs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           version="$(node -p "require('./src-tauri/pi-agent-desktop-package.json').version")"
-          digest="$(gh release view "v$version" --json assets \
-            --jq '.assets[] | select(.name | endswith("_aarch64.dmg")) | .digest')"
-          if [ -z "$digest" ]; then
-            echo "No aarch64 DMG digest on release v$version" >&2
+          assets="$(gh release view "v$version" --json assets --jq '.assets')"
+          arm_digest="$(jq -r '.[] | select(.name | endswith("_aarch64.dmg")) | .digest' <<<"$assets")"
+          intel_digest="$(jq -r '.[] | select(.name | endswith("_x64.dmg")) | .digest' <<<"$assets")"
+          if [ -z "$arm_digest" ] || [ -z "$intel_digest" ]; then
+            echo "Release v$version lacks the aarch64 or x64 DMG digest" >&2
             exit 1
           fi
-          node scripts/update-homebrew-cask.mjs "$version" "$digest"
+          node scripts/update-homebrew-cask.mjs "$version" "$arm_digest" "$intel_digest"
           if git diff --quiet -- Casks; then
             echo "Cask already at $version"
             exit 0

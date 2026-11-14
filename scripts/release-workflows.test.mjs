@@ -163,7 +163,7 @@ test("the manifest job only publishes when every platform succeeded", async () =
   assert.match(manifestJob, /--draft=false --latest --prerelease=false/);
 });
 
-test("release workflow publishes Apple Silicon, Linux x64, and Windows x64 installers", async () => {
+test("release workflow publishes Apple Silicon, Intel Mac, Linux x64, and Windows x64 installers", async () => {
   const workflow = await readText(
     join(root, ".github", "workflows", "release.yml"),
     "utf8",
@@ -183,7 +183,17 @@ test("release workflow publishes Apple Silicon, Linux x64, and Windows x64 insta
   assert.match(workflow, /runner: windows-latest/);
   assert.match(workflow, /target: x86_64-pc-windows-msvc/);
   assert.match(workflow, /--bundles nsis/);
-  assert.doesNotMatch(workflow, /x86_64-apple-darwin/);
+  // Intel Macs are cross-compiled on the same macOS 26 runner with an x64 Node,
+  // and the staged server's Node must match the target (an arm64 node in an
+  // x86_64 app only fails at launch on an Intel Mac).
+  assert.match(workflow, /target: x86_64-apple-darwin\n\s+args: --target x86_64-apple-darwin\n\s+apple_signing_identity: "-"\n\s+node_arch: x64\n\s+mac_arch: x86_64/);
+  assert.match(workflow, /architecture: \$\{\{ matrix\.node_arch \}\}/);
+  assert.match(workflow, /lipo -archs "src-tauri\/resources\/Pi Agent Server\.app\/Contents\/MacOS\/node"/);
+  assert.match(workflow, /test "\$archs" = "\$\{\{ matrix\.mac_arch \}\}"/);
+  // The Homebrew cask needs both DMGs.
+  assert.match(workflow, /endswith\("_aarch64\.dmg"\)/);
+  assert.match(workflow, /endswith\("_x64\.dmg"\)/);
+  assert.match(workflow, /update-homebrew-cask\.mjs "\$version" "\$arm_digest" "\$intel_digest"/);
   assert.doesNotMatch(workflow, /macos-15/);
   assert.match(workflow, /uploadUpdaterJson: true/);
   assert.match(workflow, /gh release edit "v\$version" --draft=false --latest --prerelease=false/);

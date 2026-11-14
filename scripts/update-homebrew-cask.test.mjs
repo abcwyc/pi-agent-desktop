@@ -3,24 +3,38 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { CASK_PATH, updateCask } from "./update-homebrew-cask.mjs";
 
-const SHA = "a".repeat(64);
+const ARM = "a".repeat(64);
+const INTEL = "b".repeat(64);
 
-test("updateCask rewrites only the version and sha256 lines", async () => {
-  const source = await readFile(CASK_PATH, "utf8");
-  const next = updateCask(source, "9.8.7", SHA);
-  assert.match(next, /^\s*version "9\.8\.7"$/m);
-  assert.match(next, new RegExp(`^\\s*sha256 "${SHA}"$`, "m"));
-  const before = source.split("\n");
-  const after = next.split("\n");
-  assert.equal(after.length, before.length);
-  const changed = after.filter((line, i) => line !== before[i]);
-  assert.equal(changed.length, 2, "only the version and sha256 lines may change");
+test("updateCask serves the aarch64 DMG to Apple Silicon and the x64 DMG to Intel", async () => {
+  const next = updateCask(await readFile(CASK_PATH, "utf8"), "9.8.7", ARM, INTEL);
+  assert.match(next, /^  arch arm: "aarch64", intel: "x64"$/m);
+  assert.match(next, /^  version "9\.8\.7"$/m);
+  assert.match(next, new RegExp(`^  sha256 arm:   "${ARM}",\\n         intel: "${INTEL}"$`, "m"));
+  assert.match(next, /releases\/download\/v#\{version\}\/Pi\.Agent_#\{version\}_#\{arch\}\.dmg"$/m);
+  assert.doesNotMatch(next, /depends_on arch:/);
+  assert.equal(next.match(/^  sha256 /gm).length, 1);
+  assert.equal(next.match(/^  url /gm).length, 1);
 });
 
-test("the cask points at the aarch64 DMG the release publishes", async () => {
+test("updateCask is stable on a cask it already wrote", async () => {
+  const once = updateCask(await readFile(CASK_PATH, "utf8"), "9.8.7", ARM, INTEL);
+  assert.equal(updateCask(once, "9.8.7", ARM, INTEL), once);
+  const bumped = updateCask(once, "9.8.8", INTEL, ARM);
+  const before = once.split("\n");
+  const changed = bumped.split("\n").filter((line, i) => line !== before[i]);
+  assert.equal(changed.length, 3, "only the version and the two sha256 lines may change");
+});
+
+test("updateCask keeps the rest of the cask", async () => {
   const source = await readFile(CASK_PATH, "utf8");
-  assert.match(source, /releases\/download\/v#\{version\}\/Pi\.Agent_#\{version\}_aarch64\.dmg/);
-  assert.match(source, /depends_on arch: :arm64/);
+  const next = updateCask(source, "9.8.7", ARM, INTEL);
+  const tail = (text) => text.slice(text.indexOf('  name "Pi Agent"'));
+  assert.equal(tail(next), tail(source).replace(/^  depends_on arch: :arm64\n/m, ""));
+});
+
+test("the cask's fixed parts", async () => {
+  const source = await readFile(CASK_PATH, "utf8");
   // `depends_on macos: ">= :big_sur"` is deprecated in Homebrew 5+, and any
   // versioned minimum at or below Big Sur is redundant under Homebrew's own
   // macOS 11 floor, so the bare form is the one Homebrew 7 asks for.
@@ -41,7 +55,8 @@ test("the cask points at the aarch64 DMG the release publishes", async () => {
 
 test("updateCask rejects malformed input", async () => {
   const source = await readFile(CASK_PATH, "utf8");
-  assert.throws(() => updateCask(source, "v1.2.3", SHA), /Invalid version/);
-  assert.throws(() => updateCask(source, "1.2.3", "abc"), /Invalid sha256/);
-  assert.throws(() => updateCask("cask \"x\" do\nend\n", "1.2.3", SHA), /no version/);
+  assert.throws(() => updateCask(source, "v1.2.3", ARM, INTEL), /Invalid version/);
+  assert.throws(() => updateCask(source, "1.2.3", "abc", INTEL), /Invalid arm64 sha256/);
+  assert.throws(() => updateCask(source, "1.2.3", ARM, "abc"), /Invalid x86_64 sha256/);
+  assert.throws(() => updateCask("cask \"x\" do\nend\n", "1.2.3", ARM, INTEL), /no cask head/);
 });
