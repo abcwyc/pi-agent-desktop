@@ -7,10 +7,14 @@ import { desktopTargetTriple } from "./desktop-platform.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
-test("desktop builds target Apple Silicon, Linux x64, and Windows x64", () => {
+test("desktop builds target Apple Silicon, Intel Macs, Linux x64, and Windows x64", () => {
   assert.equal(
     desktopTargetTriple("darwin", "arm64"),
     "aarch64-apple-darwin",
+  );
+  assert.equal(
+    desktopTargetTriple("darwin", "x64"),
+    "x86_64-apple-darwin",
   );
   assert.equal(
     desktopTargetTriple("linux", "x64"),
@@ -23,10 +27,6 @@ test("desktop builds target Apple Silicon, Linux x64, and Windows x64", () => {
 });
 
 test("unsupported desktop platforms fail before packaging", () => {
-  assert.throws(
-    () => desktopTargetTriple("darwin", "x64"),
-    /Unsupported desktop platform: darwin\/x64/,
-  );
   assert.throws(
     () => desktopTargetTriple("linux", "arm64"),
     /Unsupported desktop platform: linux\/arm64/,
