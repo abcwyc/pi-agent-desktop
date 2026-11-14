@@ -178,3 +178,56 @@ export function nextModelsPageUrl(currentUrl: URL, api: string, payload: unknown
 
   return null;
 }
+
+export type ModelPageFetchResult =
+  | { ok: true; payload: unknown }
+  | { ok: false; status: number; error: string };
+
+export type ModelPagesResult =
+  | { ok: true; pages: unknown[] }
+  | { ok: false; status: number; error: string; upstreamStatus?: number };
+
+/**
+ * Walks a provider's paginated model list. A list that is cut short — the page
+ * budget runs out while the upstream still offers another page, or a cursor
+ * repeats — is an error: returning the pages read so far would look like a
+ * complete catalog and silently hide the models on the pages never read.
+ */
+export async function collectModelPages(input: {
+  firstUrl: URL;
+  api: string;
+  maxPages: number;
+  fetchPage: (url: URL) => Promise<ModelPageFetchResult>;
+}): Promise<ModelPagesResult> {
+  const pages: unknown[] = [];
+  const seen = new Set<string>();
+  let pageUrl: URL | null = input.firstUrl;
+
+  while (pageUrl) {
+    if (pages.length >= input.maxPages) {
+      return {
+        ok: false,
+        status: 502,
+        error: `The upstream model list has more than ${input.maxPages} pages; stopped instead of showing a partial list.`,
+      };
+    }
+    const key = pageUrl.toString();
+    if (seen.has(key)) {
+      return {
+        ok: false,
+        status: 502,
+        error: "The upstream model list repeated a page cursor; stopped instead of showing a partial list.",
+      };
+    }
+    seen.add(key);
+
+    const result = await input.fetchPage(pageUrl);
+    if (!result.ok) {
+      return { ok: false, status: 502, error: result.error, upstreamStatus: result.status };
+    }
+    pages.push(result.payload);
+    pageUrl = nextModelsPageUrl(pageUrl, input.api, result.payload);
+  }
+
+  return { ok: true, pages };
+}

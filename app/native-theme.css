@@ -696,7 +696,14 @@
   margin-inline: 0;
 }
 
-@media (min-width: 880px) {
+/* #227: the two columns follow the room the section actually has, not the
+   viewport — beside the navigation pane a 1000px window leaves the page well
+   under 880px. */
+.settings-section-host {
+  container: settings-section / inline-size;
+}
+
+@container settings-section (min-width: 760px) {
   .settings-general {
     max-width: none;
   }
@@ -4676,66 +4683,6 @@ html.dark {
   height: 10px;
 }
 
-/* macOS: a preferences-window toolbar — icon over label, centered, the
-   selected item a rounded gray tile instead of an underline. The window title
-   is implied (the dialog keeps its aria-label), as in Safari's or Xcode's
-   Settings. */
-@media (min-width: 641px) {
-  :root[data-platform="macos"] .settings-dialog-header {
-    justify-content: center;
-    min-height: 64px;
-    padding: 0 52px;
-  }
-
-  :root[data-platform="macos"] .settings-dialog-title {
-    display: none;
-  }
-
-  :root[data-platform="macos"] .settings-section-tabs {
-    align-items: center;
-    gap: 2px;
-    height: 64px;
-    margin: 0;
-  }
-
-  :root[data-platform="macos"] .settings-section-tab {
-    flex: 0 0 auto;
-    flex-direction: column;
-    gap: 3px;
-    width: auto;
-    min-width: 64px;
-    height: 52px;
-    padding: 0 8px;
-    border-radius: var(--radius-md);
-    font-size: var(--fs-caption);
-    transition:
-      color var(--dur-fast) var(--ease-native),
-      background var(--dur-fast) var(--ease-native);
-  }
-
-  :root[data-platform="macos"] .settings-section-tab .settings-section-icon {
-    width: 20px;
-    height: 20px;
-  }
-
-  :root[data-platform="macos"] .settings-section-tab::after {
-    display: none;
-  }
-
-  :root[data-platform="macos"] .settings-section-tab[aria-current="page"] {
-    background: var(--bg-selected);
-    font-weight: var(--fw-medium);
-  }
-
-  :root[data-platform="macos"] .settings-section-tab:not(:disabled):not([aria-current="page"]):hover {
-    background: var(--bg-hover);
-  }
-
-  :root[data-platform="macos"] .settings-dialog-close {
-    top: 18px;
-  }
-}
-
 /* Windows 11 (Fluent) switch: an outlined pill whose knob grows into a filled
    accent track when on. */
 :root[data-platform="windows"] .settings-dialog-surface .config-switch {
@@ -4789,49 +4736,49 @@ html.dark {
   transform: translateX(14px);
 }
 
-/* Windows and Linux: a navigation pane on the left and a content card under
-   a title bar, as in the Windows 11 Settings app and GNOME Settings. The
-   header becomes `display: contents` so its title, tabs and close button
-   are placed on the surface's grid directly. Below 900px the pane plus the
-   Models/Agents list would leave the detail too narrow, so the top tabs stay. */
-@media (min-width: 900px) {
-  :root[data-platform="windows"] .settings-dialog-surface,
-  :root[data-platform="linux"] .settings-dialog-surface {
+/* Settings navigation (#227): every desktop platform lists the sections in a
+   pane on the left, under the dialog's title, with the content beside it —
+   as in macOS System Settings, Windows 11 Settings and GNOME Settings. The
+   header becomes `display: contents` so its title, tabs and close button sit
+   on the surface's grid directly. A pane never runs out of room as sections
+   are added (it scrolls), which a row of 96px tabs in the header did.
+   Between 641px and 899px the pane narrows to icons (each keeps its label
+   for assistive tech and as a tooltip); a phone keeps upstream's drill-down. */
+@media (min-width: 641px) {
+  .settings-dialog-surface {
     display: grid;
     grid-template-columns: 208px minmax(0, 1fr);
     grid-template-rows: 48px minmax(0, 1fr);
-    width: min(1120px, calc(100vw - 64px));
-    border-radius: var(--radius-md);
   }
 
-  :root[data-platform="windows"] .settings-dialog-header,
-  :root[data-platform="linux"] .settings-dialog-header {
+  .settings-dialog-header {
     display: contents;
   }
 
-  :root[data-platform="windows"] .settings-dialog-title,
-  :root[data-platform="linux"] .settings-dialog-title {
+  .settings-dialog-title {
     grid-area: 1 / 1;
     align-self: center;
+    min-width: 0;
     padding-left: 20px;
+    overflow: hidden;
     font-size: var(--fs-body);
     font-weight: var(--fw-semibold);
+    text-overflow: ellipsis;
   }
 
-  :root[data-platform="windows"] .settings-section-tabs,
-  :root[data-platform="linux"] .settings-section-tabs {
+  .settings-section-tabs {
     grid-area: 2 / 1;
     flex-direction: column;
     gap: var(--choice-row-gap);
     height: auto;
+    min-height: 0;
     margin: 0;
     padding: var(--choice-inset);
     overflow-x: hidden;
     overflow-y: auto;
   }
 
-  :root[data-platform="windows"] .settings-section-tab,
-  :root[data-platform="linux"] .settings-section-tab {
+  .settings-section-tab {
     flex: 0 0 36px;
     justify-content: flex-start;
     gap: 12px;
@@ -4844,20 +4791,53 @@ html.dark {
       background var(--dur-fast) var(--ease-native);
   }
 
-  :root[data-platform="windows"] .settings-section-tab[aria-current="page"],
-  :root[data-platform="linux"] .settings-section-tab[aria-current="page"] {
-    background: var(--bg-selected);
-    font-weight: var(--fw-regular);
+  .settings-section-tab-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  :root[data-platform="windows"] .settings-section-tab:not(:disabled):not([aria-current="page"]):hover,
-  :root[data-platform="linux"] .settings-section-tab:not(:disabled):not([aria-current="page"]):hover {
+  .settings-section-tab[aria-current="page"] {
+    background: var(--bg-selected);
+    font-weight: var(--fw-medium);
+  }
+
+  .settings-section-tab:not(:disabled):not([aria-current="page"]):hover {
     background: var(--bg-hover);
   }
 
+  /* A focused row gets a ring rather than upstream's hover-like tint, so the
+     roving focus (arrow keys) stays visible on the selected row too. */
+  .settings-section-tab:focus-visible,
+  .settings-section-tab:focus-visible[aria-current="page"] {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  /* macOS and GNOME mark the page with the tile alone. */
+  .settings-section-tab::after {
+    display: none;
+  }
+
+  .settings-dialog-main {
+    grid-area: 2 / 2;
+    border-top: 1px solid var(--separator);
+    border-left: 1px solid var(--separator);
+    border-top-left-radius: 8px;
+    background: var(--surface-elevated);
+  }
+
+  .settings-dialog-close {
+    position: static;
+    grid-area: 1 / 2;
+    align-self: center;
+    justify-self: end;
+    margin-right: 12px;
+  }
+
   /* Fluent's selection pill: a short accent bar on the leading edge. */
-  :root[data-platform="windows"] .settings-section-tab::after,
-  :root[data-platform="linux"] .settings-section-tab::after {
+  :root[data-platform="windows"] .settings-section-tab::after {
+    display: block;
     top: 50%;
     bottom: auto;
     left: 0;
@@ -4868,37 +4848,20 @@ html.dark {
     transform: translateY(-50%) scaleY(0.5);
   }
 
-  :root[data-platform="windows"] .settings-section-tab[aria-current="page"]::after,
-  :root[data-platform="linux"] .settings-section-tab[aria-current="page"]::after {
+  :root[data-platform="windows"] .settings-section-tab[aria-current="page"]::after {
     transform: translateY(-50%) scaleY(1);
   }
 
-  /* GNOME has no selection bar; the tile alone marks the page. */
-  :root[data-platform="linux"] .settings-section-tab::after {
-    display: none;
-  }
-
-  :root[data-platform="windows"] .settings-dialog-main,
-  :root[data-platform="linux"] .settings-dialog-main {
-    grid-area: 2 / 2;
-    border-top: 1px solid var(--separator);
-    border-left: 1px solid var(--separator);
-    border-top-left-radius: 8px;
-    background: var(--surface-elevated);
-  }
-
-  :root[data-platform="windows"] .settings-dialog-close,
-  :root[data-platform="linux"] .settings-dialog-close {
-    position: static;
-    grid-area: 1 / 2;
-    align-self: start;
-    justify-self: end;
+  :root[data-platform="windows"] .settings-section-tab[aria-current="page"] {
+    font-weight: var(--fw-regular);
   }
 
   /* Windows caption button: flush in the corner, red on hover. */
   :root[data-platform="windows"] .settings-dialog-close {
+    align-self: start;
     width: 46px;
     height: 32px;
+    margin: 0;
     border-radius: 0 8px 0 0;
     font-size: 18px;
   }
@@ -4912,7 +4875,6 @@ html.dark {
   :root[data-platform="linux"] .settings-dialog-close {
     width: 24px;
     height: 24px;
-    margin: 12px 12px 0 0;
     border-radius: 50%;
     background: var(--bg-hover);
     font-size: 16px;
@@ -4920,6 +4882,40 @@ html.dark {
 
   :root[data-platform="linux"] .settings-dialog-close:hover {
     background: var(--bg-selected);
+  }
+}
+
+@media (min-width: 900px) {
+  :root[data-platform="windows"] .settings-dialog-surface,
+  :root[data-platform="linux"] .settings-dialog-surface {
+    width: min(1120px, calc(100vw - 64px));
+    border-radius: var(--radius-md);
+  }
+}
+
+/* A narrow window: an icon rail, the title across the whole top row. */
+@media (min-width: 641px) and (max-width: 899px) {
+  .settings-dialog-surface {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .settings-dialog-title {
+    grid-column: 1 / -1;
+    padding-right: 64px;
+  }
+
+  .settings-section-tab {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .settings-section-tab-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 }
 
