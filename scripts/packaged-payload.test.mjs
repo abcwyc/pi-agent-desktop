@@ -112,6 +112,25 @@ test("npm's documented PRIVATE KEY example is allowlisted and reported", async (
   }
 });
 
+test("the PEM marker strings inside sharp's macOS libvips are allowlisted", async () => {
+  const dylib = Buffer.concat([
+    Buffer.from([0xcf, 0xfa, 0xed, 0xfe]),
+    Buffer.from("\0-----BEGIN PRIVATE KEY-----\0-----BEGIN ENCRYPTED PRIVATE KEY-----\0"),
+  ]);
+  const root = await fixture({
+    "node_modules/@img/sharp-libvips-darwin-arm64/lib/libvips-cpp.8.18.7.dylib": dylib,
+    "node_modules/@img/sharp-libvips-darwin-x64/lib/libvips-cpp.8.18.7.dylib": dylib,
+    "node_modules/@img/sharp-libvips-darwin-x64/lib/notes.txt": "-----BEGIN PRIVATE KEY-----",
+  });
+  try {
+    const result = await scanPayload(root);
+    assert.deepEqual(rulesOf(result), ["private-key node_modules/@img/sharp-libvips-darwin-x64/lib/notes.txt"]);
+    assert.equal(result.allowed.length, 2);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("a private key outside the documented-example paths is a finding", async () => {
   const root = await fixture({
     "server/keys/prod.pem": "-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA\n-----END OPENSSH PRIVATE KEY-----",

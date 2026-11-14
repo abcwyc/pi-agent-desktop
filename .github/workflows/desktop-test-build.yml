@@ -27,6 +27,17 @@ jobs:
           - runner: macos-26
             target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin --bundles dmg
+            mac_arch: arm64
+          # Intel Macs: cross-compiled on the Apple Silicon runner (the only
+          # one with the macOS 26 SDK). The bundled server runs the Node that
+          # built it (prepare-desktop copies process.execPath), so this job
+          # installs an x64 Node and runs it under Rosetta; npm ci then also
+          # picks the x64 optional native packages.
+          - runner: macos-26
+            target: x86_64-apple-darwin
+            args: --target x86_64-apple-darwin --bundles dmg
+            node_arch: x64
+            mac_arch: x86_64
           - runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             args: --target x86_64-unknown-linux-gnu --bundles deb
@@ -44,6 +55,7 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 22
+          architecture: ${{ matrix.node_arch }}
           cache: npm
 
       # The window controls are drawn by the AppKit the binary links, not the
@@ -84,6 +96,15 @@ jobs:
 
       - name: Prepare packaged Next.js server
         run: npm run desktop:prepare
+
+      # An arm64 server binary inside an x86_64 app only fails on an Intel Mac,
+      # at launch. Check the staged runtime matches the target instead.
+      - name: Check the bundled Node architecture
+        if: runner.os == 'macOS'
+        run: |
+          archs="$(lipo -archs "src-tauri/resources/Pi Agent Server.app/Contents/MacOS/node")"
+          echo "Bundled Node: $archs"
+          test "$archs" = "${{ matrix.mac_arch }}"
 
       - name: Test desktop shell
         if: runner.os == 'Windows' || runner.os == 'Linux'
