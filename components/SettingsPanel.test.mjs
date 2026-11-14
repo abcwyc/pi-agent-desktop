@@ -256,3 +256,21 @@ test("keeps password authentication to one login field and one settings action",
 test("a phone's Settings is full screen: the fork's card sizing stops at the phone breakpoint (P1)", () => {
   assert.match(nativeThemeSource, /@media \(max-width: 640px\) \{\s*\.settings-dialog-backdrop \{\s*background: var\(--bg\);[\s\S]*?\.settings-dialog-surface \{\s*width: 100%;\s*height: 100%;\s*border-radius: 0;/);
 });
+
+test("lists the sections in a left pane on every desktop platform, icons only in a narrow window (#227)", () => {
+  const pane = nativeThemeSource.match(/@media \(min-width: 641px\) \{\n  \.settings-dialog-surface \{[\s\S]*?\n\}\n/)?.[0] ?? "";
+  assert.match(pane, /grid-template-columns: 208px minmax\(0, 1fr\)/);
+  assert.match(pane, /\.settings-dialog-header \{\s*display: contents;/);
+  assert.match(pane, /\.settings-section-tabs \{[\s\S]*?flex-direction: column;[\s\S]*?overflow-y: auto;/);
+  // The layout is no longer keyed to one platform: macOS's header toolbar is gone.
+  assert.doesNotMatch(nativeThemeSource, /:root\[data-platform="macos"\] \.settings-section-tabs/);
+  assert.match(nativeThemeSource, /@media \(min-width: 641px\) and \(max-width: 899px\) \{\s*\.settings-dialog-surface \{\s*grid-template-columns: 56px minmax\(0, 1fr\);/);
+  assert.match(panelSource, /<span className="settings-section-tab-label">\{item\.label\}<\/span>/);
+  // General's two columns follow the section's own width, not the viewport's.
+  assert.match(nativeThemeSource, /\.settings-section-host \{\s*container: settings-section \/ inline-size;/);
+  assert.match(nativeThemeSource, /@container settings-section \(min-width: 760px\) \{\s*\.settings-general \{/);
+  assert.doesNotMatch(nativeThemeSource, /@media \(min-width: 880px\) \{\s*\.settings-general \{/);
+  // One tab stop; arrow keys, Home and End move within the list.
+  assert.match(panelSource, /tabIndex=\{selected \? 0 : -1\}/);
+  assert.match(panelSource, /onKeyDown=\{moveSectionFocus\}/);
+});

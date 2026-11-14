@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { resolveModelDiscoveryAuth } from "@/lib/model-discovery-auth";
-import { buildModelsListUrl, nextModelsPageUrl, parseDiscoveredModels } from "@/lib/model-discovery";
+import { buildModelsListUrl, collectModelPages, parseDiscoveredModels, type ModelPageFetchResult } from "@/lib/model-discovery";
 
 export const dynamic = "force-dynamic";
 
 const DISCOVERY_TIMEOUT_MS = 20_000;
+/** Budget for the whole walk, so 20 slow pages cannot hold the request for minutes. */
+const DISCOVERY_TOTAL_TIMEOUT_MS = 60_000;
 const MAX_DISCOVERY_PAGES = 20;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -68,35 +70,43 @@ export async function POST(req: Request) {
     }
 
     const headers = buildHeaders(api, auth.apiKey, auth.headers);
-    const collected: unknown[] = [];
-    let pageUrl: URL | null = endpoint;
-
-    for (let page = 0; pageUrl && page < MAX_DISCOVERY_PAGES; page += 1) {
-      const response = await fetch(pageUrl, {
-        cache: "no-store",
-        headers,
-        signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
-      });
-      const responseText = await response.text();
-      if (!response.ok) {
-        return NextResponse.json({
-          error: responseText.slice(0, 500) || `Upstream returned HTTP ${response.status}`,
-          status: response.status,
-        }, { status: 502 });
-      }
-
-      let payload: unknown;
-      try {
-        payload = JSON.parse(responseText);
-      } catch {
-        return NextResponse.json({ error: "Upstream model list was not valid JSON" }, { status: 502 });
-      }
-
-      collected.push(payload);
-      pageUrl = nextModelsPageUrl(pageUrl, api, payload);
+    const totalBudget = AbortSignal.timeout(DISCOVERY_TOTAL_TIMEOUT_MS);
+    const collected = await collectModelPages({
+      firstUrl: endpoint,
+      api,
+      maxPages: MAX_DISCOVERY_PAGES,
+      fetchPage: async (pageUrl): Promise<ModelPageFetchResult> => {
+        const response = await fetch(pageUrl, {
+          cache: "no-store",
+          headers,
+          signal: AbortSignal.any([AbortSignal.timeout(DISCOVERY_TIMEOUT_MS), totalBudget]),
+        });
+        const responseText = await response.text();
+        if (!response.ok) {
+          return {
+            ok: false,
+            status: response.status,
+            error: responseText.slice(0, 500) || `Upstream returned HTTP ${response.status}`,
+          };
+        }
+        try {
+          return { ok: true, payload: JSON.parse(responseText) };
+        } catch {
+          return { ok: false, status: response.status, error: "Upstream model list was not valid JSON" };
+        }
+      },
+    });
+    if (!collected.ok) {
+      return NextResponse.json(
+        collected.upstreamStatus === undefined
+          ? { error: collected.error }
+          : { error: collected.error, status: collected.upstreamStatus },
+        { status: collected.status },
+      );
     }
 
-    const models = parseDiscoveredModels(collected.length === 1 ? collected[0] : collected);
+    const pages = collected.pages;
+    const models = parseDiscoveredModels(pages.length === 1 ? pages[0] : pages);
     if (models.length === 0) {
       return NextResponse.json({ error: "No models found in the upstream response" }, { status: 502 });
     }
