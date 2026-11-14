@@ -71,6 +71,11 @@ export const PAYLOAD_ALLOWED = [
     path: /(^|\/)node_modules\/npm\/node_modules\/@npmcli\/config\/lib\/definitions\//,
     reason: "the same example text, as `npm config` help shows it",
   },
+  {
+    rule: "private-key",
+    path: /(^|\/)node_modules\/@img\/sharp-libvips-darwin-(arm64|x64)\/lib\/[^/]+\.dylib$/,
+    reason: "sharp's prebuilt macOS libvips statically links a TLS/PEM parser whose `-----BEGIN … PRIVATE KEY-----` marker strings are in the binary (no key body follows them)",
+  },
 ];
 
 /** `-----BEGIN … PRIVATE KEY-----` followed by real key material, never allowed. */
