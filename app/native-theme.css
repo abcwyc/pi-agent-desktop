@@ -2598,6 +2598,36 @@ html.dark .sidebar-view-switcher-thumb {
   }
 }
 
+/* Continue the hovered project row beyond the sidebar's clipping edge. */
+.sidebar-project-path-hint {
+  position: fixed;
+  z-index: var(--z-popover);
+  display: flex;
+  align-items: center;
+  width: max-content;
+  padding: 0 12px 0 10px;
+  border: 1px solid var(--border);
+  border-left: 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-popover);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: sidebar-project-path-hint-in var(--dur-fast) var(--ease-native) both;
+}
+
+@keyframes sidebar-project-path-hint-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-project-path-hint { animation: none; }
+}
+
 .sidebar-project-tree-children {
   display: flex;
   flex-direction: column;
