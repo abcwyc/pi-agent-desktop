@@ -83,6 +83,8 @@ export function ComposerProjectChip({
             zIndex: 500,
             minWidth: 220,
             maxWidth: 320,
+            maxHeight: "min(60vh, 420px)",
+            overflowY: "auto",
             padding: 5,
           }}
         >
