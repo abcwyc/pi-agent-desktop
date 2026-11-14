@@ -1791,8 +1791,10 @@ export const zhTWLocale: LocalePlugin = {
     "layout.resizeHeightHint": "上下拖曳以調整高度。按兩下或按 Enter 鍵即可重設。",
     "sidebar.switchWorktreeTitle": "切換 worktree：{path}",
     "sidebar.deleteWithShiftClick": "刪除（按住 Shift 點選可跳過確認）",
-    "sidebar.expandSubagents": "展開子代理",
-    "sidebar.collapseSubagents": "摺疊子代理",
+    "sidebar.expandSubagentsCount": "展開 {count} 個子代理",
+    "sidebar.collapseSubagentsCount": "摺疊 {count} 個子代理",
+    "sidebar.forkRow": "分叉對話",
+    "sidebar.forkedFrom": "分叉自「{title}」",
     "files.explorer": "檔案瀏覽器",
     // Kept by the fork: upstream dropped these keys, fork components still use them.
     "subagent.open": "開啟子代理工作階段",

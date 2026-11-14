@@ -246,7 +246,7 @@ Each one undid a real regression; the linked note has the reasoning.
 ---
 
 ### Two kinds of branching — don't confuse them
-- **Fork** (Fork button on user message): creates a new independent `.jsonl` file. Shown as a child in the sidebar tree via `parentSession` header field.
+- **Fork** (Fork button on user message): creates a new independent `.jsonl` file (`parentSession` header field). In the sidebar it is a row of its own beside its source, marked with the fork glyph; only subagent runs and side chats nest under a row, folded by default (`lib/sidebar-session-nodes.ts`, `lib/sidebar-subagent-expansion.ts`, #237).
 - **In-session branch** (Continue button / BranchNavigator): calls `navigate_tree` within the same file. Multiple entries share the same `parentId`. Switching between them calls `/api/sessions/[id]/context?leafId=`.
 
 ### Upstream merge sentinels (not the same "fork" as session fork)

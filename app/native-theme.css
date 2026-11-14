@@ -2753,6 +2753,57 @@ html.dark .sidebar-view-switcher-thumb {
   visibility: hidden;
 }
 
+/* A fork's glyph does say something: it is a row of its own beside its
+   source (#237), and the glyph is what tells it from a plain session. */
+.session-item-glyph.session-item-fork-glyph {
+  visibility: visible;
+}
+
+/* Fold toggle of a row's subagent runs and side chats: robot glyph, count,
+   chevron. Folded by default; the chevron turns like a group header's. */
+.session-item-children-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 18px;
+  padding: 0 4px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.session-item-children-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+}
+
+.session-item-children-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.session-item-children-chevron {
+  transition: transform var(--dur-base) var(--ease-native);
+}
+
+.session-item-children-toggle.is-collapsed .session-item-children-chevron {
+  transform: rotate(-90deg);
+}
+
+@media (hover: none) {
+  .session-item-children-toggle {
+    min-width: 32px;
+    height: 32px;
+    justify-content: center;
+  }
+}
+
 /* Secondary sidebar text (timestamps, counts, section label) sat at ~3.9:1 on
    the panel; scoped here so the global --text-dim keeps its role elsewhere. */
 html:not(.dark) .app-sidebar {

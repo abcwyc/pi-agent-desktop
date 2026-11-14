@@ -1791,8 +1791,10 @@ export const zhCNLocale: LocalePlugin = {
     "layout.resizeHeightHint": "上下拖动调整高度。双击或按 Enter 恢复默认值。",
     "sidebar.switchWorktreeTitle": "切换 worktree：{path}",
     "sidebar.deleteWithShiftClick": "删除（按住 Shift 点击可跳过确认）",
-    "sidebar.expandSubagents": "展开子智能体",
-    "sidebar.collapseSubagents": "折叠子智能体",
+    "sidebar.expandSubagentsCount": "展开 {count} 个子智能体",
+    "sidebar.collapseSubagentsCount": "折叠 {count} 个子智能体",
+    "sidebar.forkRow": "分叉对话",
+    "sidebar.forkedFrom": "分叉自「{title}」",
     "files.explorer": "文件浏览器",
     // Kept by the fork: upstream dropped these keys, fork components still use them.
     "subagent.open": "打开子代理会话",
