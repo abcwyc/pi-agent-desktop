@@ -163,7 +163,7 @@ test("the manifest job only publishes when every platform succeeded", async () =
   assert.match(manifestJob, /--draft=false --latest --prerelease=false/);
 });
 
-test("release workflow publishes Apple Silicon, Linux x64, and Windows x64 installers", async () => {
+test("release workflow publishes Apple Silicon, Intel Mac, Linux x64, and Windows x64 installers", async () => {
   const workflow = await readText(
     join(root, ".github", "workflows", "release.yml"),
     "utf8",
@@ -183,7 +183,17 @@ test("release workflow publishes Apple Silicon, Linux x64, and Windows x64 insta
   assert.match(workflow, /runner: windows-latest/);
   assert.match(workflow, /target: x86_64-pc-windows-msvc/);
   assert.match(workflow, /--bundles nsis/);
-  assert.doesNotMatch(workflow, /x86_64-apple-darwin/);
+  // Intel Macs are cross-compiled on the same macOS 26 runner with an x64 Node,
+  // and the staged server's Node must match the target (an arm64 node in an
+  // x86_64 app only fails at launch on an Intel Mac).
+  assert.match(workflow, /target: x86_64-apple-darwin\n\s+args: --target x86_64-apple-darwin\n\s+apple_signing_identity: "-"\n\s+node_arch: x64\n\s+mac_arch: x86_64/);
+  assert.match(workflow, /architecture: \$\{\{ matrix\.node_arch \}\}/);
+  assert.match(workflow, /lipo -archs "src-tauri\/resources\/Pi Agent Server\.app\/Contents\/MacOS\/node"/);
+  assert.match(workflow, /test "\$archs" = "\$\{\{ matrix\.mac_arch \}\}"/);
+  // The Homebrew cask needs both DMGs.
+  assert.match(workflow, /endswith\("_aarch64\.dmg"\)/);
+  assert.match(workflow, /endswith\("_x64\.dmg"\)/);
+  assert.match(workflow, /update-homebrew-cask\.mjs "\$version" "\$arm_digest" "\$intel_digest"/);
   assert.doesNotMatch(workflow, /macos-15/);
   assert.match(workflow, /uploadUpdaterJson: true/);
   assert.match(workflow, /gh release edit "v\$version" --draft=false --latest --prerelease=false/);
@@ -310,4 +320,33 @@ test("the Tauri crates stay on the npm packages' major/minor", async () => {
     [],
     "align them in src-tauri/Cargo.lock (cargo update -p <crate> --precise <version>)",
   );
+});
+
+test("the Intel backfill only adds to a published release", async () => {
+  const workflow = await readText(
+    join(root, ".github", "workflows", "release-add-intel-mac.yml"),
+    "utf8",
+  );
+
+  assert.match(workflow, /on:\s*\n\s*workflow_dispatch:/);
+  // Builds the release's own source, signed with the release key.
+  assert.match(workflow, /ref: v\$\{\{ inputs\.version \}\}/);
+  assert.match(workflow, /test "\$\(node -p "require\('\.\/src-tauri\/pi-agent-desktop-package\.json'\)\.version"\)" = "\$VERSION"/);
+  assert.match(workflow, /TAURI_SIGNING_PRIVATE_KEY: \$\{\{ secrets\.TAURI_SIGNING_PRIVATE_KEY \}\}/);
+  assert.match(workflow, /architecture: x64/);
+  assert.match(workflow, /test "\$archs" = "x86_64"/);
+  assert.match(workflow, /PAYLOAD_CANARY: "1"/);
+  assert.match(workflow, /npx tauri build --target x86_64-apple-darwin/);
+  // Never a draft or prerelease, never a second Intel DMG, and it shares the
+  // release workflow's lock so the two cannot race on latest.json.
+  assert.match(workflow, /test "\$\(jq -r \.isDraft <<<"\$release"\)" = false/);
+  assert.match(workflow, /already has an Intel Mac DMG/);
+  assert.match(workflow, /group: pi-agent-desktop-release/);
+  // latest.json keeps every existing platform and gains darwin-x86_64.
+  assert.match(workflow, /\.platforms\["darwin-x86_64"\] = \{signature: \$signature, url: \$url\}/);
+  assert.match(workflow, /jq -e '\.platforms\["darwin-aarch64"\] and \.platforms\["darwin-x86_64"\]'/);
+  // It touches assets only: publishing state belongs to release.yml.
+  assert.doesNotMatch(workflow, /gh release edit/);
+  assert.doesNotMatch(workflow, /tauri-action/);
+  assert.match(workflow, /update-homebrew-cask\.mjs "\$VERSION" "\$arm_digest" "\$intel_digest"/);
 });
