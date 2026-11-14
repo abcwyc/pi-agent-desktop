@@ -1,0 +1,175 @@
+name: Add Intel Mac build to a published release
+
+# Backfills x86_64-apple-darwin installers into a release that release.yml
+# published before it built Intel Macs (0.8.5 and earlier). It builds from the
+# release's own tag, signs the updater archive with the same key, uploads the
+# DMG and updater archive, adds darwin-x86_64 to that release's latest.json, and
+# then points the Homebrew cask at both DMGs. The release's other assets and its
+# draft/latest flags are left alone.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Published version to backfill, e.g. 0.8.5"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pi-agent-desktop-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-26
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Require a published release without an Intel build
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid version: $VERSION" >&2; exit 1; }
+          release="$(gh release view "v$VERSION" -R "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,assets)"
+          test "$(jq -r .isDraft <<<"$release")" = false
+          test "$(jq -r .isPrerelease <<<"$release")" = false
+          jq -e '.assets | any(.name == "latest.json")' <<<"$release" >/dev/null
+          if jq -e '.assets | any(.name | endswith("_x64.dmg"))' <<<"$release" >/dev/null; then
+            echo "v$VERSION already has an Intel Mac DMG" >&2
+            exit 1
+          fi
+
+      - name: Check out the release tag
+        uses: actions/checkout@v7
+        with:
+          ref: v${{ inputs.version }}
+
+      - name: Require updater signing secrets
+        env:
+          UPDATER_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+        run: |
+          test -n "$UPDATER_PRIVATE_KEY"
+          test -n "$UPDATER_PUBLIC_KEY"
+
+      # Cross-compiled on the Apple Silicon runner, the only one with the macOS
+      # 26 SDK. prepare-desktop bundles the Node that runs it (process.execPath),
+      # so this is an x64 Node under Rosetta; npm ci then picks the x64 native
+      # packages too.
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          architecture: x64
+          cache: npm
+
+      - name: Require the tag's version
+        run: test "$(node -p "require('./src-tauri/pi-agent-desktop-package.json').version")" = "$VERSION"
+
+      - name: Configure updater public key
+        env:
+          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+        run: node scripts/configure-updater-public-key.mjs
+
+      - name: Require the macOS 26 SDK
+        run: |
+          sdk="$(xcrun --sdk macosx --show-sdk-version)"
+          echo "macOS SDK $sdk"
+          test "${sdk%%.*}" -ge 26
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare packaged Next.js server
+        env:
+          PAYLOAD_CANARY: "1"
+        run: npm run desktop:prepare
+
+      - name: Check the bundled Node architecture
+        run: |
+          archs="$(lipo -archs "src-tauri/resources/Pi Agent Server.app/Contents/MacOS/node")"
+          echo "Bundled Node: $archs"
+          test "$archs" = "x86_64"
+
+      - name: Build and sign
+        env:
+          PI_AGENT_DESKTOP_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: "-"
+        run: npx tauri build --target x86_64-apple-darwin
+
+      # Same asset names the release workflow gives the aarch64 build, with `x64`.
+      - name: Upload the Intel assets
+        run: |
+          set -euo pipefail
+          bundle="src-tauri/target/x86_64-apple-darwin/release/bundle"
+          out="$RUNNER_TEMP/intel"
+          mkdir -p "$out"
+          dmgs=("$bundle"/dmg/*_x64.dmg)
+          test "${#dmgs[@]}" -eq 1 && test -f "${dmgs[0]}"
+          cp "${dmgs[0]}" "$out/Pi.Agent_${VERSION}_x64.dmg"
+          cp "$bundle/macos/Pi Agent.app.tar.gz" "$out/Pi.Agent_${VERSION}_x64.app.tar.gz"
+          cp "$bundle/macos/Pi Agent.app.tar.gz.sig" "$out/Pi.Agent_${VERSION}_x64.app.tar.gz.sig"
+          gh release upload "v$VERSION" -R "$GITHUB_REPOSITORY" "$out"/*
+
+      - name: Add darwin-x86_64 to latest.json
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/intel"
+          asset_id="$(gh release view "v$VERSION" -R "$GITHUB_REPOSITORY" --json assets \
+            --jq ".assets[] | select(.name == \"Pi.Agent_${VERSION}_x64.app.tar.gz\") | .apiUrl" | sed 's#.*/##')"
+          test -n "$asset_id"
+          url="https://api.github.com/repos/$GITHUB_REPOSITORY/releases/assets/$asset_id"
+          signature="$(cat "$out/Pi.Agent_${VERSION}_x64.app.tar.gz.sig")"
+          gh release download "v$VERSION" -R "$GITHUB_REPOSITORY" -p latest.json -D "$RUNNER_TEMP/manifest"
+          jq --arg url "$url" --arg signature "$signature" \
+            '.platforms["darwin-x86_64"] = {signature: $signature, url: $url}
+             | .platforms["darwin-x86_64-app"] = {signature: $signature, url: $url}' \
+            "$RUNNER_TEMP/manifest/latest.json" > "$out/latest.json"
+          jq -e '.platforms["darwin-aarch64"] and .platforms["darwin-x86_64"]' "$out/latest.json" >/dev/null
+          gh release upload "v$VERSION" -R "$GITHUB_REPOSITORY" "$out/latest.json" --clobber
+
+  homebrew:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pi-agent-desktop
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Point the cask at both DMGs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          latest="$(gh release view -R "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          if [ "$latest" != "v$VERSION" ]; then
+            echo "v$VERSION is not the latest release ($latest); the cask stays as it is"
+            exit 0
+          fi
+          assets="$(gh release view "v$VERSION" --json assets --jq '.assets')"
+          arm_digest="$(jq -r '.[] | select(.name | endswith("_aarch64.dmg")) | .digest' <<<"$assets")"
+          intel_digest="$(jq -r '.[] | select(.name | endswith("_x64.dmg")) | .digest' <<<"$assets")"
+          if [ -z "$arm_digest" ] || [ -z "$intel_digest" ]; then
+            echo "Release v$VERSION lacks the aarch64 or x64 DMG digest" >&2
+            exit 1
+          fi
+          node scripts/update-homebrew-cask.mjs "$VERSION" "$arm_digest" "$intel_digest"
+          if git diff --quiet -- Casks; then
+            echo "Cask already serves both architectures for $VERSION"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/pi-agent.rb
+          git commit -m "chore(homebrew): serve Intel Macs from $VERSION"
+          git push origin HEAD:main
