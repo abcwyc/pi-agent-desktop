@@ -31,7 +31,7 @@ Repository: [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop
 
 Builds are available from [GitHub Releases](https://github.com/abcwyc/pi-agent-desktop/releases):
 
-- Mac: download the `aarch64.dmg` on Apple Silicon or the `x64.dmg` on an Intel Mac, open it, and drag the app into `Applications`. Intel builds start with 0.8.6; 0.8.5 and earlier are Apple Silicon only.
+- Mac: download the `aarch64.dmg` on Apple Silicon or the `x64.dmg` on an Intel Mac, open it, and drag the app into `Applications`. Intel builds start with 0.8.5; earlier releases are Apple Silicon only.
 - Mac with [Homebrew](https://brew.sh): install from this repository's tap. The tap is added from the repo URL, so the first command is needed once:
 
   ```bash

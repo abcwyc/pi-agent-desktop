@@ -31,7 +31,7 @@
 
 发布版本可从 [GitHub Releases](https://github.com/abcwyc/pi-agent-desktop/releases) 下载：
 
-- Mac：Apple Silicon 下载 `aarch64.dmg`，Intel 芯片下载 `x64.dmg`，打开后将 App 拖入 `Applications`。Intel 版从 0.8.6 开始提供，0.8.5 及更早版本只有 Apple Silicon 版。
+- Mac：Apple Silicon 下载 `aarch64.dmg`，Intel 芯片下载 `x64.dmg`，打开后将 App 拖入 `Applications`。Intel 版从 0.8.5 开始提供，更早的版本只有 Apple Silicon 版。
 - 使用 [Homebrew](https://brew.sh) 的 Mac：从本仓库的 tap 安装。tap 通过仓库地址添加，第一条命令只需执行一次：
 
   ```bash
