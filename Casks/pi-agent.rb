@@ -1,9 +1,9 @@
 cask "pi-agent" do
   arch arm: "aarch64", intel: "x64"
 
-  version "0.8.5"
-  sha256 arm:   "025b0837e7900c8c6bdbf7260ccc4b2131e4cfd7a7fc6c155d55550c86dd7f04",
-         intel: "898a834a89d2b675d105f4eb39ee99cbb2a2093b92bfc18ef0f3ecbd955480bc"
+  version "0.8.6"
+  sha256 arm:   "4901add68d5f128b27c4a3bf654f94d6e8125e4df8ca91b55cf79a23ef057109",
+         intel: "914f046f5c308baba0f5f3180ed34b8ac18b8d4770730e396d5eefdafe8c610c"
 
   url "https://github.com/abcwyc/pi-agent-desktop/releases/download/v#{version}/Pi.Agent_#{version}_#{arch}.dmg"
   name "Pi Agent"
