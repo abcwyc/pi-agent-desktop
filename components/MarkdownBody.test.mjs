@@ -268,12 +268,20 @@ test("previews complete HTML documents in a sandboxed frame", () => {
   assert.match(html, />Source</);
 });
 
-test("keeps HTML source visible while streaming and for fragments", () => {
+test("draws HTML as it streams when it can be drawn faithfully, and keeps the rest as source", () => {
   const streaming = renderMarkdown("```html\n<!DOCTYPE html>\n<html><body>x</body></html>\n```", { isStreaming: true });
-  const fragment = renderMarkdown("```html\n<div>fragment</div>\n```");
+  // A frame of its own (the shell of lib/html-preview-stream.ts), not the page that will run: the
+  // finished page gets the normal preview.
+  assert.match(streaming, /<iframe[^>]*aria-busy="true"/);
+  assert.doesNotMatch(streaming, /allow-same-origin/);
+  assert.match(streaming, />Source</);
 
-  assert.doesNotMatch(streaming, /<iframe/);
-  assert.match(streaming, />Preview</);
+  // Styles that only load in the real document would pop in at the end: source until then.
+  const external = renderMarkdown('```html\n<!DOCTYPE html>\n<html><head><script src="https://cdn.tailwindcss.com"></script></head><body>x</body></html>\n```', { isStreaming: true });
+  assert.doesNotMatch(external, /<iframe/);
+  assert.match(external, />Preview</);
+
+  const fragment = renderMarkdown("```html\n<div>fragment</div>\n```");
   assert.doesNotMatch(fragment, /<iframe/);
   assert.doesNotMatch(fragment, />Preview</);
 });

@@ -1148,6 +1148,8 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
       if (editEntryId) chatInputRef?.current?.insertText(text);
       else void handleSend(text);
     },
+    // A preview's `sendPrompt` only fills the composer; the user sends it.
+    chatInputRef ? (text) => chatInputRef.current?.insertText(text) : undefined,
   );
 
 

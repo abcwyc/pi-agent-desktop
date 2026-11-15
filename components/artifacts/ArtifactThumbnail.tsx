@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useTheme } from "@/hooks/useTheme";
-import { readThemeColors } from "@/hooks/useHtmlPreviewFrame";
+import { readThemeColors, readThemeKit } from "@/hooks/useHtmlPreviewFrame";
 import type { ArtifactSummary, FileOutputSummary, OutputSummary } from "@/lib/artifact-index";
 import { encodeFilePathForApi } from "@/lib/file-paths";
 import { buildHtmlPreviewDocument } from "@/lib/html-preview";
+import { defaultThemeKit, themeKitSvgSource } from "@/lib/preview-theme-kit";
 import { ArtifactTypeIcon } from "../ArtifactCard";
 import { getFileIcon } from "../FileIcons";
 import { renderMermaidSvg } from "../MermaidBlock";
@@ -170,7 +171,8 @@ async function fetchLatestContent(item: ArtifactSummary): Promise<string | null>
 /** The page as a static XHTML document: no scripts, frames or plugins. */
 function pageSvg(html: string, isDark: boolean): string {
   // Read at render time: the theme class has landed by the time a job runs.
-  const doc = new DOMParser().parseFromString(buildHtmlPreviewDocument("html", html, { theme: readThemeColors(isDark) }), "text/html");
+  const theme = readThemeColors(isDark);
+  const doc = new DOMParser().parseFromString(buildHtmlPreviewDocument("html", html, { theme, themeKit: readThemeKit(isDark, theme) }), "text/html");
   for (const element of doc.querySelectorAll("script, noscript, iframe, frame, object, embed, link, base")) element.remove();
   return pageImageSvg(new XMLSerializer().serializeToString(doc.documentElement));
 }
@@ -249,7 +251,10 @@ async function renderThumb(item: OutputSummary, isDark: boolean): Promise<Thumb>
     const src = await rasterise(svgImageSource(pageSvg(source, isDark)), PAGE_THUMBNAIL_WIDTH, PAGE_THUMBNAIL_HEIGHT, "cover");
     return { kind: "image", src, page: true };
   }
-  const svg = kind === "mermaid" ? await renderMermaidSvg(source, isDark).catch(() => null) : source;
+  // A vector page that takes its colours from the theme kit has no page around it here: the kit goes inside the SVG.
+  const svg = kind === "mermaid"
+    ? await renderMermaidSvg(source, isDark).catch(() => null)
+    : themeKitSvgSource(source, readThemeKit(isDark) ?? defaultThemeKit(isDark ? "dark" : "light"));
   if (!svg) return null;
   return { kind: "image", src: await rasterise(svgImageSource(svg), 300, 150, "contain"), page: false };
 }
