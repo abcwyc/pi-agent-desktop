@@ -10708,6 +10708,592 @@ html.dark .artifacts-thumb[data-tone="data"] { --tone: #4fc1d6; }
   .tasks-dot--running { animation: none; }
 }
 
+/* Tasks / Calendar switch (TasksView) and the calendar's Week / Month switch. */
+.task-seg {
+  display: inline-flex;
+  flex: none;
+  padding: 3px;
+  border-radius: var(--radius-md);
+  background: var(--bg-selected);
+}
+
+.task-seg > button {
+  padding: 4px 12px;
+  border: 0;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.task-seg > button:hover { color: var(--text); }
+
+.task-seg > button[aria-pressed="true"] {
+  background: var(--bg);
+  color: var(--text);
+  font-weight: var(--fw-semibold);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.task-seg.is-small > button { padding: 3px 10px; font-size: var(--fs-small); }
+
+/* Tasks page calendar (components/tasks/TaskCalendar.tsx): toolbar, grid,
+   and a preview column beside it. Full width, unlike the list's 880px shell. */
+.tasks-view--calendar { overflow: hidden; }
+
+.task-cal {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.task-cal-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 12px 16px;
+  border-bottom: var(--hairline) solid var(--border);
+}
+
+.task-cal-range {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 15px;
+  font-weight: var(--fw-regular);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.task-cal-bar-end {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.task-cal-icon-btn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.task-cal-icon-btn:hover { background: var(--bg-hover); color: var(--text); }
+
+.task-cal-icon-btn svg,
+.task-cal-mark svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.task-cal-icon-btn svg { width: 16px; height: 16px; stroke-width: 1.8; }
+
+.task-cal-filter-badge {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.task-cal-today {
+  padding: 5px 12px;
+  border: var(--hairline) solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+}
+
+.task-cal-today:hover { background: var(--bg-hover); }
+
+.task-cal-notice { padding: 8px 16px 0; }
+
+.task-cal-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.task-cal-main {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+}
+
+/* Month grid */
+.task-cal-month-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.task-cal-weekdays,
+.task-cal-month,
+.task-cal-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.task-cal-weekdays {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-bottom: var(--hairline) solid var(--border);
+  background: var(--bg);
+}
+
+.task-cal-weekdays > div {
+  padding: 8px 12px;
+  color: var(--text-dim);
+  font-size: var(--fs-small);
+  text-align: right;
+}
+
+.task-cal-month { flex: 1; }
+
+.task-cal-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 4px 5px 6px;
+  border-right: var(--hairline) solid var(--border);
+  border-bottom: var(--hairline) solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.task-cal-cell:nth-child(7n) { border-right: 0; }
+.task-cal-cell.is-outside { background: transparent; }
+
+.task-cal-daynum,
+.task-cal-week-num {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: var(--fs-body);
+  font-variant-numeric: tabular-nums;
+}
+
+.task-cal-daynum {
+  align-self: flex-end;
+  flex: none;
+  margin-bottom: 1px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.task-cal-daynum:hover { background: var(--bg-hover); }
+.task-cal-cell.is-outside .task-cal-daynum { color: var(--text-dim); }
+
+.task-cal-cell.is-today .task-cal-daynum,
+.task-cal-week-head.is-today .task-cal-week-num,
+.task-cal-agenda-day.is-today .task-cal-week-num {
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: var(--fw-semibold);
+}
+
+.task-cal-more {
+  align-self: flex-start;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+
+.task-cal-more:hover { background: var(--bg-hover); color: var(--text); }
+
+/* One entry: a status mark, the title, and (outside the month grid) a meta line. */
+.task-cal-item {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 6px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.task-cal-item.is-compact { padding: 3px 5px; }
+.task-cal-item:hover { background: var(--bg-hover); }
+.task-cal-item[aria-pressed="true"] { background: var(--bg-selected); }
+
+.task-cal-item-title {
+  overflow: hidden;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium, 500);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-cal-item--run .task-cal-item-title { color: var(--text-muted); }
+.task-cal-item--planned .task-cal-item-title { color: var(--text-muted); font-weight: var(--fw-regular); }
+
+.task-cal-item-meta {
+  display: flex;
+  grid-column: 2;
+  gap: 8px;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.task-cal-week-list .task-cal-item,
+.task-cal-agenda-list .task-cal-item { align-items: start; }
+.task-cal-week-list .task-cal-mark,
+.task-cal-agenda-list .task-cal-mark { margin-top: 3px; }
+
+.task-cal-week-list .task-cal-item-title {
+  display: -webkit-box;
+  white-space: normal;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.task-cal-mark {
+  display: grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+  color: var(--text-dim);
+}
+
+.task-cal-mark svg { width: 12px; height: 12px; stroke-width: 2; }
+.task-cal-mark--done { color: var(--success); }
+.task-cal-mark--failed,
+.task-cal-mark--aborted { color: var(--danger); }
+.task-cal-mark--running { color: var(--accent); }
+
+.task-cal-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.task-cal-dot--idle { border: 1.5px solid var(--text-dim); }
+.task-cal-dot--running { background: var(--success); animation: scheduled-pulse 1.4s ease-in-out infinite; }
+.task-cal-dot--waiting { background: var(--warning); }
+.task-cal-dot--failed { background: var(--danger); }
+
+.task-cal-status--running { color: var(--success); }
+.task-cal-status--waiting { color: var(--warning); }
+.task-cal-status--failed,
+.task-cal-status--aborted { color: var(--danger); }
+.task-cal-status--done { color: var(--success); }
+.task-cal-status--planned { color: var(--text-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .task-cal-dot--running { animation: none; }
+}
+
+/* Week grid */
+.task-cal-week { min-height: 100%; }
+
+.task-cal-week-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: var(--hairline) solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.task-cal-week-col:last-child { border-right: 0; }
+
+.task-cal-week-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: var(--hairline) solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  font-size: var(--fs-small);
+}
+
+.task-cal-week-head .task-cal-week-num { color: var(--text); }
+
+.task-cal-week-list,
+.task-cal-agenda-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px;
+}
+
+.task-cal-empty {
+  padding: 6px;
+  color: var(--text-dim);
+  font-size: var(--fs-small);
+}
+
+/* Phone agenda */
+.task-cal-agenda { padding: 4px 8px 24px; }
+
+.task-cal-agenda-day {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 4px;
+  padding: 8px 0;
+  border-bottom: var(--hairline) solid var(--border);
+}
+
+.task-cal-agenda-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-top: 4px;
+  color: var(--text-dim);
+  font-size: var(--fs-small);
+}
+
+.task-cal-agenda-list { padding: 0; }
+
+/* Preview */
+.task-cal-preview {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  width: 360px;
+  min-height: 0;
+  border-left: var(--hairline) solid var(--border);
+  background: var(--bg);
+}
+
+.task-cal-preview-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px 14px 10px 16px;
+}
+
+.task-cal-preview-heading { flex: 1; min-width: 0; }
+
+.task-cal-eyebrow {
+  color: var(--text-dim);
+  font-size: var(--fs-small);
+}
+
+.task-cal-preview-heading h3 {
+  margin: 6px 0 0;
+  font-size: 16px;
+  font-weight: var(--fw-semibold);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.task-cal-preview-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 16px 16px;
+}
+
+.task-cal-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.task-cal-chip {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--bg-selected);
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.task-cal-chip[class*="task-cal-status--"] { background: color-mix(in srgb, currentColor 12%, transparent); }
+
+.task-cal-section h4 {
+  margin: 0 0 8px;
+  color: var(--text-dim);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+}
+
+.task-cal-prompts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-cal-prompts li {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 8px;
+  font-size: var(--fs-body);
+  line-height: 1.55;
+}
+
+.task-cal-prompts li > span { overflow-wrap: anywhere; }
+
+.task-cal-prompts time {
+  padding-top: 1px;
+  color: var(--text-dim);
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.task-cal-reply {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: var(--fs-body);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.task-cal-reply.is-error { color: var(--danger); }
+
+.task-cal-facts {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 6px 10px;
+  margin: 0;
+  font-size: var(--fs-body);
+}
+
+.task-cal-facts dt { color: var(--text-dim); }
+.task-cal-facts dd { margin: 0; overflow-wrap: anywhere; }
+
+.task-cal-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.task-cal-days > button {
+  padding: 3px 10px;
+  border: var(--hairline) solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.task-cal-days > button:hover { background: var(--bg-hover); }
+
+.task-cal-days > button[aria-current="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.task-cal-preview-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: var(--hairline) solid var(--border);
+}
+
+.task-cal-btn {
+  padding: 6px 14px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+}
+
+.task-cal-btn:hover { background: var(--bg-hover); }
+
+.task-cal-btn.is-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.task-cal-btn.is-primary:hover { opacity: 0.88; }
+
+/* Narrower windows: the preview floats over the grid instead of squeezing it. */
+@media (max-width: 1100px) {
+  .task-cal-preview {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    width: min(360px, 100%);
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12);
+  }
+}
+
+@media (max-width: 640px) {
+  .task-cal-bar { padding: 10px 12px; }
+  .task-cal-range { order: 10; width: 100%; font-size: var(--fs-body); }
+  .task-cal-preview {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--z-sticky);
+    width: 100%;
+    max-height: 78dvh;
+    border-left: 0;
+    border-top: var(--hairline) solid var(--border);
+    border-radius: 16px 16px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.16);
+  }
+}
+
 /* ---- Render error screen (app/error.tsx, app/global-error.tsx) ------------
    Replaces Next's built-in "This page couldn't load" page, which the packaged
    app showed with no way to see the exception (no DevTools). */

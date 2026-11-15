@@ -47,6 +47,12 @@ export const APP_PREF_KEYS = {
   notifyOnComplete: "pi-desktop-notify-on-complete",
   chatDrafts: "pi-chat-drafts-v1",
   diffViewMode: "pi-diff-view-mode",
+  /** Tasks page layout: "calendar" or the list (anything else). */
+  tasksMode: "pi-web:tasks-mode",
+  /** Tasks calendar range: "week" or "month". */
+  tasksCalendarView: "pi-web:tasks-calendar-view",
+  /** Tasks calendar filter: project keys and `type:*` keys switched off. */
+  tasksCalendarHidden: "pi-web:tasks-calendar-hidden",
   /** Last open session / cwd / file tabs for desktop cold-start restore. */
   workspace: "pi-workspace-v1",
 } as const;

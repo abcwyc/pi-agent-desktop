@@ -1424,7 +1424,17 @@ export function AppShell() {
     }
   }, [isMobile, router]);
   const handleOpenTasks = useCallback(() => openWorkspaceView("tasks"), [openWorkspaceView]);
-  const handleOpenScheduled = useCallback(() => openWorkspaceView("scheduled"), [openWorkspaceView]);
+  // The task the Scheduled page opens on; null opens its list. Bumped per open so
+  // picking the same task again from the Tasks calendar still remounts on it.
+  const [scheduledFocus, setScheduledFocus] = useState<{ taskId: string; seq: number } | null>(null);
+  const handleOpenScheduled = useCallback(() => {
+    setScheduledFocus(null);
+    openWorkspaceView("scheduled");
+  }, [openWorkspaceView]);
+  const handleOpenScheduledTask = useCallback((taskId: string) => {
+    setScheduledFocus((current) => ({ taskId, seq: (current?.seq ?? 0) + 1 }));
+    openWorkspaceView("scheduled");
+  }, [openWorkspaceView]);
   const handleOpenArtifacts = useCallback(() => openWorkspaceView("artifacts"), [openWorkspaceView]);
 
   // Validated and allow-listed like any project pick, which /api/models needs for the new folder.
@@ -3076,11 +3086,14 @@ export function AppShell() {
           <TasksView
             sessions={sessionCatalog}
             runningSessionIds={runningSessionIds}
-            onOpenSession={(sessionId) => void handleOpenSession(sessionId)}
+            onOpenSession={(sessionId, entryId) => void handleOpenSession(sessionId, entryId)}
+            onOpenScheduledTask={handleOpenScheduledTask}
           />
         )}
         {scheduledOpen && (
           <ScheduledView
+            key={scheduledFocus ? `task-${scheduledFocus.seq}` : "list"}
+            initialTaskId={scheduledFocus?.taskId}
             projectRoots={availableProjectRoots}
             defaultCwd={isChatWorkspaceActive ? null : selectedSession?.cwd ?? newSessionCwd ?? activeCwd}
             onBrowseFolder={desktopMode ? handleBrowseScheduledFolder : undefined}
