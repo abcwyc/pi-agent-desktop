@@ -17,15 +17,17 @@ interface Props {
   onBrowseFolder?: () => Promise<string | null>;
   /** Open a run's session in the chat view. Resolves false when the session no longer exists. */
   onOpenSession: (sessionId: string) => Promise<boolean>;
+  /** Open on this task's detail instead of the list (from the Tasks calendar). */
+  initialTaskId?: string | null;
 }
 
 type Mode = { kind: "list" } | { kind: "detail"; id: string } | { kind: "edit"; id: string | null };
 
 /** The Scheduled page: task list, a task's detail with its run history, and the editor. */
-export function ScheduledView({ projectRoots, defaultCwd, onBrowseFolder, onOpenSession }: Props) {
+export function ScheduledView({ projectRoots, defaultCwd, onBrowseFolder, onOpenSession, initialTaskId }: Props) {
   const { t, locale } = useI18n();
   const { tasks, loaded, error, schedulerOwner, schedulerOwnerInfo, runningTaskIds } = useScheduledTasks();
-  const [mode, setMode] = useState<Mode>({ kind: "list" });
+  const [mode, setMode] = useState<Mode>(() => (initialTaskId ? { kind: "detail", id: initialTaskId } : { kind: "list" }));
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ScheduledTaskView | null>(null);

@@ -129,7 +129,7 @@ function deferredSessionInfo(
 	};
 }
 
-function extractTextContent(message: RawEntry): string {
+export function extractTextContent(message: RawEntry): string {
 	const content = message.content;
 	if (typeof content === "string") return content;
 	if (!Array.isArray(content)) return "";

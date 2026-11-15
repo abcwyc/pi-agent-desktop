@@ -2,16 +2,23 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { APP_PREF_KEYS, getPref, setPref } from "@/lib/app-prefs";
 import { formatRelativeTime } from "@/lib/i18n/format";
 import type { AgentTaskSnapshot, SessionInfo } from "@/lib/types";
 import { createTasksPoller, describeActivity, groupTasks, projectLabel, sessionTitle, type TaskRow } from "./tasks-helpers";
+import { TaskCalendar } from "./TaskCalendar";
 
 interface Props {
   sessions: SessionInfo[];
   /** From the sidebar's running stream; a change refetches at once. */
   runningSessionIds: ReadonlySet<string>;
-  onOpenSession: (sessionId: string) => void;
+  /** `entryId` scrolls the opened session to that message. */
+  onOpenSession: (sessionId: string, entryId?: string) => void;
+  /** Opens the Scheduled page on this task's detail. */
+  onOpenScheduledTask: (taskId: string) => void;
 }
+
+type TasksMode = "list" | "calendar";
 
 // While something runs, the current step changes faster than the running set does.
 const LIVE_REFRESH_MS = 3000;
@@ -21,8 +28,9 @@ const LIVE_REFRESH_MS = 3000;
  * what finished lately. Built for following work from a phone (Settings › Remote
  * access); opening a row goes to the session, where its dialog can be answered.
  */
-export function TasksView({ sessions, runningSessionIds, onOpenSession }: Props) {
+export function TasksView({ sessions, runningSessionIds, onOpenSession, onOpenScheduledTask }: Props) {
   const { t, locale } = useI18n();
+  const [mode, setModeState] = useState<TasksMode>(() => (getPref(APP_PREF_KEYS.tasksMode) === "calendar" ? "calendar" : "list"));
   const [snapshots, setSnapshots] = useState<AgentTaskSnapshot[] | null>(null);
   const [failed, setFailed] = useState(false);
   const rootRef = useRef<HTMLElement>(null);
@@ -116,6 +124,32 @@ export function TasksView({ sessions, runningSessionIds, onOpenSession }: Props)
     </section>
   );
 
+  const setMode = (next: TasksMode) => {
+    setModeState(next);
+    setPref(APP_PREF_KEYS.tasksMode, next);
+  };
+  const modeSwitch = (
+    <div className="task-seg" role="group" aria-label={t("tasks.modeLabel")}>
+      <button type="button" aria-pressed={mode === "list"} onClick={() => setMode("list")}>{t("tasks.mode.list")}</button>
+      <button type="button" aria-pressed={mode === "calendar"} onClick={() => setMode("calendar")}>{t("tasks.mode.calendar")}</button>
+    </div>
+  );
+
+  if (mode === "calendar") {
+    return (
+      <main ref={rootRef} tabIndex={-1} className="scheduled-view tasks-view tasks-view--calendar" aria-label={t("tasks.title")}>
+        <TaskCalendar
+          sessions={sessions}
+          snapshots={snapshots ?? []}
+          runningSessionIds={runningSessionIds}
+          modeSwitch={modeSwitch}
+          onOpenSession={onOpenSession}
+          onOpenScheduledTask={onOpenScheduledTask}
+        />
+      </main>
+    );
+  }
+
   return (
     <main ref={rootRef} tabIndex={-1} className="scheduled-view tasks-view" aria-label={t("tasks.title")}>
       <div className="scheduled-shell">
@@ -124,6 +158,7 @@ export function TasksView({ sessions, runningSessionIds, onOpenSession }: Props)
             <h2 className="scheduled-title">{t("tasks.title")}</h2>
             <p className="scheduled-subtitle">{t("tasks.subtitle")}</p>
           </div>
+          {modeSwitch}
         </header>
         {failed && <p className="scheduled-error" role="alert">{t("tasks.loadFailed")}</p>}
         {snapshots === null && !failed && <p className="scheduled-hint">{t("tasks.loading")}</p>}
