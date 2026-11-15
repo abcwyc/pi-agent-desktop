@@ -63,6 +63,11 @@ export async function checkFilePanel(page, filePath) {
     if (await separator.isVisible()) await separator.press("ArrowLeft");
     const originalWidth = await width();
     const originalStored = await storedWidths();
+    // Full width makes the sidebar inert; leaving it restores whatever the
+    // sidebar was before. That is inert here too, since this check closed it
+    // above and a closed sidebar is kept out of the Tab order.
+    const sidebarInert = () => page.locator("#session-sidebar").evaluate(el => el.inert);
+    const originalSidebarInert = await sidebarInert();
     // The fork keeps session stats in the topbar's More menu (upstream had a
     // dedicated "Session info" button); the strip's hide-panel chip is gone
     // too — the topbar panel toggle owns closing on desktop, the fixed
@@ -81,7 +86,7 @@ export async function checkFilePanel(page, filePath) {
       assert.equal(await sessionPopover.count(), 0, "Full-width mode dismisses inert top-bar menus");
       assert.equal(await panel.getByRole("button", { name: "Restore panel width", exact: true }).getAttribute("aria-pressed"), "true");
       assert.equal(Math.round(await width()), page.viewportSize().width);
-      assert.equal(await page.locator("#session-sidebar").evaluate(el => el.inert), true);
+      assert.equal(await sidebarInert(), true);
       assert.equal(await frame.evaluate(() => window.previewInstance), instance);
       assert.equal(await frame.evaluate(() => scrollY), 120);
       assert.equal(await frame.locator("#notes").inputValue(), "Keep this note");
@@ -89,7 +94,7 @@ export async function checkFilePanel(page, filePath) {
       await panel.getByRole("button", { name: "Restore panel width", exact: true }).press("Enter");
       assert.equal(await width(), originalWidth);
       assert.deepEqual(await storedWidths(), originalStored);
-      assert.equal(await page.locator("#session-sidebar").evaluate(el => el.inert), false);
+      assert.equal(await sidebarInert(), originalSidebarInert);
     }
     await toggle.click();
     await hidePanelInStrip.click();
