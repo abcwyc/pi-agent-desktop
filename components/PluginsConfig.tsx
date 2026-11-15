@@ -610,13 +610,19 @@ export function PluginsConfig({
       .filter((group) => group.packages.length > 0);
   }, [packages]);
 
+  // Only the latest load may write state: switching projects while a slower
+  // request for the previous folder is in flight must not show its plugins.
+  const loadRequestRef = useRef(0);
   const loadPlugins = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
+    const isCurrent = () => requestId === loadRequestRef.current;
     setLoading(true);
     setError(null);
     setGroupStatus(null);
     try {
       const res = await fetch(`/api/plugins?cwd=${encodeURIComponent(cwd)}`);
       const next = (await res.json()) as PluginsResponse & { error?: string };
+      if (!isCurrent()) return;
       if (!res.ok || next.error) throw new Error(next.error ?? `HTTP ${res.status}`);
       setData(next);
       setAddMode((current) => (next.packages.length === 0 && next.standaloneExtensions.length === 0) || current);
@@ -632,9 +638,9 @@ export function PluginsConfig({
             : null;
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (isCurrent()) setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }, [cwd]);
 

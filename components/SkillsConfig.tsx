@@ -655,12 +655,18 @@ export function SkillsConfig({
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [projectResourcesLoaded, setProjectResourcesLoaded] = useState(true);
 
+  // Only the latest load may write state: switching projects while a slower
+  // request for the previous folder is in flight must not show its skills.
+  const loadRequestRef = useRef(0);
   const loadSkills = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
+    const isCurrent = () => requestId === loadRequestRef.current;
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/skills?cwd=${encodeURIComponent(cwd)}`);
       const d = (await res.json()) as Partial<SkillsResponse> & { error?: string };
+      if (!isCurrent()) return [];
       if (!res.ok || d.error) throw new Error(d.error ?? `HTTP ${res.status}`);
       const list = d.skills ?? [];
       setSkills(list);
@@ -672,10 +678,10 @@ export function SkillsConfig({
       });
       return list;
     } catch (e) {
-      setError(String(e));
+      if (isCurrent()) setError(e instanceof Error ? e.message : String(e));
       return [];
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }, [cwd]);
 

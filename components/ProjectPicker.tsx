@@ -6,6 +6,7 @@ import { AnimatedDropdown, PathLabel, displayCwd } from "./path-ui";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import { selectDirectoryNative } from "@/lib/desktop-window";
 import { isImeComposing } from "@/lib/ime";
+import { useI18n } from "@/hooks/useI18n";
 
 interface ProjectPickerProps {
   recentProjects: string[];
@@ -74,6 +75,7 @@ export async function selectProjectDirectoryNative(selectedCwd: string | null, h
 }
 
 export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, homeDir, onSelectCwd, variant = "block", disabled }: ProjectPickerProps) {
+  const { t } = useI18n();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [projectFilter, setProjectFilter] = useState("");
@@ -250,7 +252,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
             />
           ) : (
             <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", fontSize: "var(--fs-micro)", color: "var(--text-dim)" }}>
-              Select project…
+              {t("sidebar.selectProject")}
             </span>
           )
         ) : (
@@ -269,7 +271,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
             >
               {selectedCwd
                 ? ((selectedProject ?? selectedCwd).split("/").filter(Boolean).pop() ?? displayCwd(selectedProject ?? selectedCwd, homeDir))
-                : "Select project…"}
+                : t("sidebar.selectProject")}
             </span>
             <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <polyline points="2 3.5 5 6.5 8 3.5" />
@@ -291,8 +293,8 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
                   else closeDropdown();
                 }
               }}
-              placeholder="Filter projects…"
-              aria-label="Filter projects"
+              placeholder={t("sidebar.filterProjects")}
+              aria-label={t("sidebar.filterProjects")}
               autoFocus
               style={{
                 width: "100%",
@@ -342,7 +344,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
             </button>
           ))}
           {visibleProjects.length === 0 && trimmedFilter && (
-            <div style={{ padding: "8px 10px", fontSize: "var(--fs-micro)", color: "var(--text-dim)" }}>No matching projects</div>
+            <div style={{ padding: "8px 10px", fontSize: "var(--fs-micro)", color: "var(--text-dim)" }}>{t("sidebar.noMatchingProjects")}</div>
           )}
         </div>
 
@@ -369,7 +371,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
             <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <path d="M1 3A1 1 0 0 1 2 2H4L5 3.5H8.5a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5h-7A.5.5 0 0 1 1 8V3Z" />
             </svg>
-            <span>Use default directory</span>
+            <span>{t("sidebar.useDefaultDirectory")}</span>
           </button>
         )}
 
@@ -399,7 +401,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
             <line x1="5" y1="1" x2="5" y2="9" />
             <line x1="1" y1="5" x2="9" y2="5" />
           </svg>
-          <span>Open Folder…</span>
+          <span>{t("sidebar.openFolder")}</span>
         </button>
         {customPathError && isTauriDesktop() && (
           <div

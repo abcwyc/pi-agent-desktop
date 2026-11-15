@@ -2293,7 +2293,10 @@ export function AppShell() {
         ref={sidebarResizer.panelRef}
         id="session-sidebar"
         className={`app-sidebar sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"}${mobileSidebarReady ? "" : " sidebar-mobile-pending"}${sidebarResizer.isResizing ? " sidebar-resizing" : ""}`}
-        inert={rightPanelFullWidth}
+        // A closed sidebar is only slid off-canvas (phone) or squeezed to 0px
+        // (desktop): without inert its rows stay in the Tab order and are read
+        // out by screen readers. A phone also hides it while mobile-pending.
+        inert={rightPanelFullWidth || !sidebarOpen || (isMobile && !mobileSidebarReady)}
         style={{
           "--sidebar-width": `${sidebarResizer.width}px`,
           background: "var(--bg-panel)",
@@ -3199,6 +3202,9 @@ export function AppShell() {
         ref={rightPanelResizer.panelRef}
         id="file-panel"
         className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}${rightPanelFullWidth ? " right-panel-full-width" : ""}${rightPanelResizer.isResizing ? " right-panel-resizing" : ""}`}
+        // Closed, the panel is 0px wide or slid off-screen; keep it out of the
+        // Tab order and the accessibility tree like the sidebar.
+        inert={!rightPanelOpen}
         style={{
           "--right-panel-width": `${rightPanelResizer.width}px`,
           display: "flex",

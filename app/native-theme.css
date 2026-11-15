@@ -2605,6 +2605,38 @@ html.dark .sidebar-view-switcher-thumb {
   }
 }
 
+/* A finger needs about 44px (Apple HIG, WCAG 2.5.5). The sidebar's rows and
+   icon buttons are sized for a pointer (24-30px), so on a touch screen they
+   grow to 44px; the "…" in a session row follows --session-row-height. */
+/* Scoped under .app-sidebar so they outrank the base rules further down. */
+@media (pointer: coarse) {
+  .app-sidebar .session-item { --session-row-height: 44px; }
+  .app-sidebar .sidebar-header-row { height: 44px; }
+  .app-sidebar .sidebar-project-tree-row,
+  .app-sidebar .sidebar-project-tree-row-main,
+  .app-sidebar .sidebar-project-tree-show-more { min-height: 44px; }
+  .app-sidebar .sidebar-project-tree-action,
+  .app-sidebar .sidebar-project-tree-add,
+  .app-sidebar .sidebar-project-tree-menu,
+  .app-sidebar .sidebar-chrome-button {
+    width: 44px;
+    height: 44px;
+  }
+  /* Room for the two 44px project actions that stay visible without hover. */
+  .app-sidebar .sidebar-project-tree-row .sidebar-project-tree-row-main { padding-right: 92px; }
+  .app-topbar .native-toolbar-button { min-width: 44px; min-height: 44px; }
+  /* Fixed over the 48px topbar: 44px tall, still centred on it. */
+  .right-panel-toggle-button {
+    top: 2px;
+    right: 6px;
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
+    height: 44px;
+    min-height: 44px;
+  }
+}
+
 /* Continue the hovered project row beyond the sidebar's clipping edge. */
 .sidebar-project-path-hint {
   position: fixed;
