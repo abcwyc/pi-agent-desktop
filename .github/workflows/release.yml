@@ -143,43 +143,45 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.8.5
+            ## Pi Agent Desktop 0.8.6
 
             ### New
 
-            - **Settings sidebar.** On every desktop platform the Settings sections are now a list on the left, with the page beside it; narrower windows show an icon rail, and phones keep the drill-down. The list takes one Tab stop and moves with the arrow keys.
-            - **Folded subagents.** Subagent runs start folded under their session, behind an "Expand N subagents" toggle; your fold choices are remembered. Forks are now rows of their own beside their source, marked with a fork icon whose tooltip names the source, so they get pin, archive and Fork like any session.
+            - **Task calendar.** The Tasks page can switch between the list and a week or month calendar. Each day shows one entry per session, titled by its name or that day's first prompt, with scheduled runs and planned slots alongside. Click an entry for a preview with a way into the session or task; right-click opens the same actions. Narrow windows show a per-day agenda.
+            - **Themed previews.** HTML and SVG previews pick up the app's colours through `--color-*` variables and ready-made SVG classes, follow light/dark changes without reloading, and keep their colours in saved SVGs. A page is now drawn while it streams, and a button in a preview can call `sendPrompt(text)` to fill the composer (it never sends).
 
             ### Improved
 
-            - Hovering a project in the sidebar shows its full path in a bar beside the row, instead of the system tooltip.
-            - With many projects, the project menu above the composer no longer runs off the top of the window; it scrolls.
+            - A closed sidebar or right panel no longer keeps its controls in the Tab order or the accessibility tree.
+            - On touch screens, session and project rows are 44px tall and the sidebar and toolbar buttons are 44x44.
+            - The file viewer's "open / reveal" buttons name your system's file manager (Finder, Explorer) and are translated; the project picker, model name field and a few other leftover English strings are translated too.
 
             ### Fixed
 
-            - "Import models…" for a custom provider no longer returns a silently cut-off list: when the provider has more than 20 pages, or repeats a page, it now reports an error.
-            - The installer no longer risks carrying the build machine's `.pi/` project settings; packaging now stops if they, or anything that looks like a credential, end up in the payload.
+            - Switching projects while Skills or Plugins is loading no longer lets a slower, older response overwrite the current list or error.
+            - Sending or queueing a message that mentions other sessions while the mentions are still resolving can no longer submit it twice or clear a newer draft.
 
             Bundled components: pi 1.5.2, pi-web 0.15.0.
 
             ---
 
-            ## Pi Agent Desktop 0.8.5
+            ## Pi Agent Desktop 0.8.6
 
             ### 新增
 
-            - **设置左侧导航。** 各桌面平台的设置页统一改为左侧分区列表、右侧内容；窗口较窄时显示为图标栏，手机仍是逐级进入。分区列表只占一个 Tab 位置，可用方向键切换。
-            - **子智能体折叠。** 子智能体默认折叠在所属会话下，点“展开 N 个子智能体”即可展开，折叠状态会被记住。分叉对话不再嵌在源会话下面，而是作为独立的一行，带分叉图标，悬停可看到“分叉自「…」”，也能像普通会话一样置顶、存档和分叉。
+            - **任务日历。** 任务页可在列表与周/月日历之间切换。每天按会话显示一条，标题为会话名称或当天的第一条提示，计划任务的运行和待运行时段一并显示。点击条目可预览并进入对应会话或任务，右键打开同样的操作；窄窗口改为按天的日程列表。
+            - **预览主题。** HTML 和 SVG 预览可通过 `--color-*` 变量和现成的 SVG 样式类使用应用的配色，随浅色/深色切换即时更新而不刷新，保存的 SVG 也保留颜色。页面在生成过程中就会逐步绘出，预览里的按钮可调用 `sendPrompt(text)` 把文字填入输入框（不会自动发送）。
 
             ### 改进
 
-            - 在侧栏中悬停项目时，会在该行旁边显示完整路径，取代系统自带的提示框。
-            - 项目很多时，输入框上方的项目菜单不再超出窗口顶部，改为可滚动。
+            - 关闭的侧栏和右侧面板不再让其中的控件留在 Tab 顺序和无障碍树里。
+            - 触屏设备上，会话行和项目行高 44px，侧栏与工具栏按钮为 44x44。
+            - 文件查看器的“打开 / 在文件夹中显示”按钮会按系统显示为 Finder、资源管理器等，并已翻译；项目选择器、模型名称输入框等处遗漏的英文也已翻译。
 
             ### 修复
 
-            - 自定义 Provider 的“导入模型…”不会再悄悄返回不完整的列表：Provider 超过 20 页或重复返回同一页时，会直接报错。
-            - 安装包不会再意外带上构建机器的 `.pi/` 项目配置；打包时一旦发现这类文件或疑似凭据，会直接中止。
+            - 加载技能或插件时切换项目，较慢的旧响应不会再覆盖当前的列表或错误提示。
+            - 发送或排队一条引用了其他会话的消息时，若引用仍在解析，不会再重复提交，也不会清掉之后新写的草稿。
 
             内置组件版本：pi 1.5.2、pi-web 0.15.0。
           releaseDraft: true
