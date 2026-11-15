@@ -29,6 +29,7 @@ const listeners = new Set<() => void>();
 let activeSessionId: string | null = null;
 let opener: ((request: ArtifactOpenRequest) => void) | null = null;
 let fixHandler: { sessionId: string; send: (text: string) => void } | null = null;
+let promptHandler: { sessionId: string; insert: (text: string) => void } | null = null;
 
 function emit() {
   for (const listener of listeners) listener();
@@ -182,11 +183,45 @@ export function requestArtifactFix(sessionId: string | null | undefined, text: s
   return true;
 }
 
+/**
+ * ChatWindow registers how to put text in the composer of the session it
+ * shows, for `sendPrompt` in a preview. Like a fix request it is accepted only
+ * for that session, and unlike one it never sends: the text waits in the
+ * composer for the user to read and send, because a preview's text can come
+ * from anything the model read.
+ */
+export function setArtifactPromptHandler(sessionId: string, insert: (text: string) => void): () => void {
+  const handler = { sessionId, insert };
+  promptHandler = handler;
+  emit();
+  return () => {
+    if (promptHandler === handler) {
+      promptHandler = null;
+      emit();
+    }
+  };
+}
+
+export function getArtifactPromptSessionId(): string | null {
+  return promptHandler?.sessionId ?? null;
+}
+
+export function useArtifactPromptSessionId(): string | null {
+  return useSyncExternalStore(subscribeArtifacts, getArtifactPromptSessionId, () => null);
+}
+
+export function requestArtifactPrompt(sessionId: string | null | undefined, text: string): boolean {
+  if (!promptHandler || !sessionId || promptHandler.sessionId !== sessionId) return false;
+  promptHandler.insert(text);
+  return true;
+}
+
 /** Test hook: forget every published session and handler. */
 export function resetArtifactStore(): void {
   sessions.clear();
   activeSessionId = null;
   opener = null;
   fixHandler = null;
+  promptHandler = null;
   emit();
 }

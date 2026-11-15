@@ -55,6 +55,7 @@ export function ArtifactCard({ block, isStreaming }: { block: ArtifactBlock; isS
   const generating = !block.complete && Boolean(isStreaming);
   const versionIndex = generating ? -1 : versionIndexOf(entry, block);
   const sawGeneratingRef = useRef(false);
+  const stagedRef = useRef(false);
   const [readyHighlight, setReadyHighlight] = useState(false);
   const readyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cardRef = useRef<HTMLButtonElement>(null);
@@ -69,10 +70,17 @@ export function ArtifactCard({ block, isStreaming }: { block: ArtifactBlock; isS
   useEffect(() => {
     if (generating) {
       sawGeneratingRef.current = true;
+      // A page is drawn in the panel while it is written, so its tab is staged
+      // when the writing starts, not when it ends. Staging never opens a closed panel.
+      if (!stagedRef.current && (block.type === "html" || block.type === "svg")) {
+        stagedRef.current = true;
+        openArtifact({ identifier: block.identifier, title: block.title, auto: true, reveal: false });
+      }
       return;
     }
     if (!sawGeneratingRef.current || !block.complete) return;
     sawGeneratingRef.current = false;
+    stagedRef.current = false;
     setReadyHighlight(true);
     if (readyTimerRef.current) clearTimeout(readyTimerRef.current);
     readyTimerRef.current = setTimeout(() => setReadyHighlight(false), 2600);
@@ -87,7 +95,7 @@ export function ArtifactCard({ block, isStreaming }: { block: ArtifactBlock; isS
       auto: true,
       reveal: false,
     });
-  }, [generating, block.complete, block.identifier, block.title, versionIndex]);
+  }, [generating, block.complete, block.type, block.identifier, block.title, versionIndex]);
 
   useEffect(() => () => {
     if (readyTimerRef.current) clearTimeout(readyTimerRef.current);

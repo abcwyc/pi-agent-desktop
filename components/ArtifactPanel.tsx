@@ -1,7 +1,7 @@
 "use client";
 
 import { useI18n } from "@/hooks/useI18n";
-import { requestArtifactFix, useArtifactFixSessionId, useSessionArtifact } from "@/lib/artifact-store";
+import { requestArtifactFix, requestArtifactPrompt, useArtifactFixSessionId, useArtifactPromptSessionId, useSessionArtifact } from "@/lib/artifact-store";
 import { ArtifactView } from "./ArtifactView";
 
 interface ArtifactPanelProps {
@@ -21,6 +21,7 @@ export function ArtifactPanel({ sessionId, identifier, title, versionRequest }: 
   const { t } = useI18n();
   const entry = useSessionArtifact(sessionId, identifier);
   const fixSessionId = useArtifactFixSessionId();
+  const promptSessionId = useArtifactPromptSessionId();
   return (
     <ArtifactView
       identifier={identifier}
@@ -28,6 +29,7 @@ export function ArtifactPanel({ sessionId, identifier, title, versionRequest }: 
       versions={entry?.versions}
       versionRequest={versionRequest}
       onFix={fixSessionId === sessionId ? (text) => requestArtifactFix(sessionId, text) : undefined}
+      onPrompt={promptSessionId === sessionId ? (text) => requestArtifactPrompt(sessionId, text) : undefined}
       emptyMessage={t("artifacts.unavailable", { title })}
     />
   );

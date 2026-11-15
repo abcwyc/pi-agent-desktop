@@ -5,9 +5,11 @@ import { useI18n } from "@/hooks/useI18n";
 import { copyText } from "@/lib/clipboard";
 import { downloadUrlAsFile } from "@/lib/desktop-native";
 import { artifactFileName, artifactHasActiveContent, type ArtifactVersion } from "@/lib/artifacts";
-import { HTML_PREVIEW_SANDBOX, buildHtmlPreviewDocument, htmlPreviewFollowsTheme } from "@/lib/html-preview";
+import { HTML_PREVIEW_SANDBOX, buildHtmlPreviewDocument, htmlPreviewDownloadSource, htmlPreviewFollowsTheme } from "@/lib/html-preview";
 import { useHtmlPreviewErrors, useHtmlPreviewFrameMessages, useHtmlPreviewOptions } from "@/hooks/useHtmlPreviewFrame";
 import { usePreviewRuntime } from "@/lib/preview-runtime";
+import { canStreamPreview } from "@/lib/html-preview-stream";
+import { StreamingPreviewFrame } from "./StreamingPreviewFrame";
 import { ArtifactTypeIcon, ARTIFACT_TYPE_LABEL } from "./ArtifactCard";
 import { HtmlPreviewErrorBar, formatPreviewErrors } from "./HtmlPreviewErrorBar";
 import { MarkdownBody } from "./MarkdownBody";
@@ -22,6 +24,8 @@ export interface ArtifactViewProps {
   versionRequest?: { version?: number; nonce: number };
   /** Sends a fix request; the error bar offers "Ask to fix" only when given. Returns false when nothing was sent. */
   onFix?: (text: string) => boolean;
+  /** Puts a page's `sendPrompt` text in the composer; the page's request is dropped without it. */
+  onPrompt?: (text: string) => boolean;
   /**
    * Show the source of scripted content until the user picks Preview. For
    * surfaces that open history, which must not run code on their own.
@@ -64,14 +68,13 @@ const ICON = ARTIFACT_TOOLBAR_ICON;
  * FileViewer's (same classes), so it reads like a file tab. Used by the
  * right-panel tab and the Artifacts page.
  */
-export function ArtifactView({ identifier, title, versions, versionRequest, onFix, holdActiveContent = false, versionNote, renderControls, emptyMessage }: ArtifactViewProps) {
+export function ArtifactView({ identifier, title, versions, versionRequest, onFix, onPrompt, holdActiveContent = false, versionNote, renderControls, emptyMessage }: ArtifactViewProps) {
   const { t } = useI18n();
   const [pinnedIndex, setPinnedIndex] = useState<number | null>(null);
   // null: the default for the version (source when held, else preview).
   const [showSource, setShowSource] = useState<boolean | null>(null);
   const [copied, setCopied] = useState(false);
   const frameRef = useRef<HTMLIFrameElement>(null);
-  const options = useHtmlPreviewOptions();
 
   useEffect(() => {
     if (!versionRequest) return;
@@ -85,9 +88,14 @@ export function ArtifactView({ identifier, title, versions, versionRequest, onFi
   const generating = Boolean(version && !version.complete);
   const previewable = Boolean(version && version.type !== "code");
   const held = Boolean(holdActiveContent && version && artifactHasActiveContent(version));
-  const sourceVisible = (showSource ?? held) || generating || !previewable;
   const frameKind = version && (version.type === "html" || version.type === "svg" || version.type === "react") ? version.type : null;
-  const framed = Boolean(frameKind && !sourceVisible);
+  // A page that is still being written is drawn as it grows, unless the user
+  // asked for the source or it cannot be drawn faithfully yet (lib/html-preview-stream.ts).
+  const streamKind = generating && version && (frameKind === "html" || frameKind === "svg") && canStreamPreview(frameKind, version.content) ? frameKind : null;
+  const streaming = Boolean(streamKind) && showSource !== true;
+  const sourceVisible = (showSource ?? held) || (generating && !streaming) || !previewable;
+  const framed = Boolean(frameKind && !sourceVisible && !streaming);
+  const options = useHtmlPreviewOptions(`${identifier}:${index}:${framed ? 1 : 0}:${generating ? "generating" : version?.content.length ?? 0}`);
 
   const runtimeState = usePreviewRuntime(framed && frameKind === "react");
   // React documents inline the bundled runtime, so they wait until it loaded.
@@ -98,7 +106,7 @@ export function ArtifactView({ identifier, title, versions, versionRequest, onFi
   ), [version, framed, frameKind, options, runtimeState.runtime]);
 
   const { errors, addError, dismiss } = useHtmlPreviewErrors(`${identifier}:${index}:${version?.content.length ?? 0}`);
-  useHtmlPreviewFrameMessages(frameRef, { onError: addError }, framed);
+  useHtmlPreviewFrameMessages(frameRef, { onError: addError, onPrompt: onPrompt && ((text) => { onPrompt(text); }) }, framed);
 
   if (!version) {
     return (
@@ -118,7 +126,7 @@ export function ArtifactView({ identifier, title, versions, versionRequest, onFi
   };
 
   const download = () => {
-    const url = URL.createObjectURL(new Blob([version.content], { type: MIME_TYPES[version.type] }));
+    const url = URL.createObjectURL(new Blob([frameKind ? htmlPreviewDownloadSource(frameKind, version.content) : version.content], { type: MIME_TYPES[version.type] }));
     void downloadUrlAsFile(url, artifactFileName(identifier, version))
       .catch(() => {})
       .finally(() => setTimeout(() => URL.revokeObjectURL(url), 0));
@@ -181,14 +189,14 @@ export function ArtifactView({ identifier, title, versions, versionRequest, onFi
           {previewable && (
             <div className="file-viewer-mode-switch" aria-label={t("i18n.fileViewMode")}>
               {([false, true] as const).map((source) => {
-                const active = sourceVisible === source;
+                const active = (sourceVisible && !streaming) === source;
                 return (
                   <button
                     key={String(source)}
                     type="button"
                     className="file-viewer-mode-button"
                     aria-pressed={active}
-                    disabled={generating && !source}
+                    disabled={generating && !source && !streamKind}
                     title={generating && !source ? t("i18n.previewAfterStreaming") : undefined}
                     onClick={() => setShowSource(source)}
                   >
@@ -233,8 +241,18 @@ export function ArtifactView({ identifier, title, versions, versionRequest, onFi
         onFix={fix && !runtimeState.error ? fix : undefined}
         onDismiss={dismiss}
       />
-      <div className={`artifact-panel-body${srcDoc ? " is-frame" : ""}`}>
-        {sourceVisible ? (
+      <div className={`artifact-panel-body${srcDoc || streaming ? " is-frame" : ""}`}>
+        {streaming && streamKind && version ? (
+          <StreamingPreviewFrame
+            key={`${identifier}:${index}`}
+            kind={streamKind}
+            code={version.content}
+            themed={htmlPreviewFollowsTheme(streamKind, version.content)}
+            title={version.title}
+            label={t("artifacts.generating")}
+            className={`artifact-panel-frame${htmlPreviewFollowsTheme(streamKind, version.content) ? " is-themed" : ""}`}
+          />
+        ) : sourceVisible ? (
           <CodeBlock code={version.content} lang={version.lang} isStreaming={generating} />
         ) : srcDoc ? (
           <iframe

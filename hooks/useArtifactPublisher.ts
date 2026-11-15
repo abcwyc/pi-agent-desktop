@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { assistantTexts, collectArtifacts } from "@/lib/artifacts";
-import { publishSessionArtifacts, setActiveArtifactSession, setArtifactFixHandler } from "@/lib/artifact-store";
+import { publishSessionArtifacts, setActiveArtifactSession, setArtifactFixHandler, setArtifactPromptHandler } from "@/lib/artifact-store";
 
 type MessageLike = { role?: unknown; content?: unknown };
 
@@ -15,6 +15,8 @@ export function useArtifactPublisher(
   messages: readonly MessageLike[],
   streamingMessage: MessageLike | null | undefined,
   send?: (text: string) => void,
+  /** Puts text in the composer without sending (a preview's `sendPrompt`). */
+  insertPrompt?: (text: string) => void,
 ): void {
   // The transcript is scanned once per change; while a reply streams only its
   // own text is parsed again on each chunk.
@@ -52,4 +54,12 @@ export function useArtifactPublisher(
     if (!sessionId || !canSend) return;
     return setArtifactFixHandler(sessionId, (text) => sendRef.current?.(text));
   }, [sessionId, canSend]);
+
+  const insertRef = useRef(insertPrompt);
+  insertRef.current = insertPrompt;
+  const canInsert = Boolean(insertPrompt);
+  useEffect(() => {
+    if (!sessionId || !canInsert) return;
+    return setArtifactPromptHandler(sessionId, (text) => insertRef.current?.(text));
+  }, [sessionId, canInsert]);
 }

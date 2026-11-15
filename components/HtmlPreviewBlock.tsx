@@ -9,14 +9,17 @@ import {
   HTML_PREVIEW_SANDBOX,
   buildHtmlPreviewDocument,
   clampHtmlPreviewHeight,
+  htmlPreviewDownloadSource,
   htmlPreviewFileName,
   htmlPreviewFollowsTheme,
   htmlPreviewHasActiveContent,
   type HtmlPreviewKind,
 } from "@/lib/html-preview";
-import { getActiveArtifactSession, requestArtifactFix, useArtifactFixSessionId, useActiveArtifactSession } from "@/lib/artifact-store";
+import { getActiveArtifactSession, requestArtifactFix, requestArtifactPrompt, useArtifactFixSessionId, useArtifactPromptSessionId, useActiveArtifactSession } from "@/lib/artifact-store";
 import { useHtmlPreviewErrors, useHtmlPreviewFrameMessages, useHtmlPreviewOptions } from "@/hooks/useHtmlPreviewFrame";
 import { usePreviewRuntime } from "@/lib/preview-runtime";
+import { canStreamPreview } from "@/lib/html-preview-stream";
+import { StreamingPreviewFrame } from "./StreamingPreviewFrame";
 import { CodeBlock } from "./MermaidBlock";
 import { HtmlPreviewErrorBar, formatPreviewErrors } from "./HtmlPreviewErrorBar";
 
@@ -57,8 +60,11 @@ const KIND_MIME: Record<HtmlPreviewKind, string> = {
 
 /**
  * A complete ```html document or ```svg image rendered in place, with a
- * Source toggle like MermaidBlock. While the message streams it stays source:
- * re-mounting the frame on every chunk would re-run the page's scripts.
+ * Source toggle like MermaidBlock. While the message streams, a page that can
+ * be drawn faithfully is drawn as it grows in a frame of its own (see
+ * lib/html-preview-stream.ts); the rest stay source. Either way the normal
+ * preview, which runs the page, only starts once the message has ended:
+ * re-mounting a frame on every chunk would re-run the page's scripts.
  */
 export function HtmlPreviewBlock({ code, lang, kind, isStreaming, defaultPreview = true, headerAction }: HtmlPreviewBlockProps) {
   const { t } = useI18n();
@@ -70,7 +76,7 @@ export function HtmlPreviewBlock({ code, lang, kind, isStreaming, defaultPreview
   const [height, setHeight] = useState(HTML_PREVIEW_DEFAULT_HEIGHT);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const previewVisible = showPreview && !isStreaming;
-  const options = useHtmlPreviewOptions();
+  const options = useHtmlPreviewOptions(`${previewVisible ? 1 : 0}:${isStreaming ? "streaming" : code.length}`);
   const runtimeState = usePreviewRuntime(kind === "react" && previewVisible);
   // React documents inline the bundled runtime, so they wait until it loaded.
   const srcDoc = useMemo(() => (
@@ -82,31 +88,70 @@ export function HtmlPreviewBlock({ code, lang, kind, isStreaming, defaultPreview
   const { errors, addError, dismiss } = useHtmlPreviewErrors(code);
   const activeSessionId = useActiveArtifactSession();
   const fixSessionId = useArtifactFixSessionId();
+  const promptSessionId = useArtifactPromptSessionId();
+  // `sendPrompt` in the page fills the composer of the conversation this block
+  // is in; elsewhere (no conversation, another one) it does nothing.
+  const onPrompt = activeSessionId && promptSessionId === activeSessionId
+    ? (text: string) => { requestArtifactPrompt(getActiveArtifactSession(), text); }
+    : undefined;
 
   useHtmlPreviewFrameMessages(frameRef, {
     onSize: (value) => setHeight(clampHtmlPreviewHeight(value)),
     onError: addError,
+    onPrompt,
   }, previewVisible && !fullscreen);
 
   const previewLabel = kind === "svg" ? t("i18n.previewSvg") : kind === "react" ? t("i18n.previewReact") : t("i18n.previewHtml");
+  // While it streams, a page that can be drawn faithfully is drawn as it
+  // grows, in a frame of its own; the normal preview takes over when it ends.
+  const streamable = (kind === "html" || kind === "svg") && canStreamPreview(kind, code);
+  const streamPreview = Boolean(isStreaming) && showPreview && streamable;
+  const shown = previewVisible || streamPreview;
+  const previewLocked = Boolean(isStreaming) && !streamable;
   const previewButton = (
     <button
       type="button"
       onClick={() => setShowPreview((v) => !v)}
-      disabled={isStreaming}
-      title={isStreaming ? t("i18n.previewAfterStreaming") : (previewVisible ? t("i18n.source") : previewLabel)}
-      className={["markdown-code-action", previewVisible ? "is-active" : ""].filter(Boolean).join(" ")}
+      disabled={previewLocked}
+      title={previewLocked ? t("i18n.previewAfterStreaming") : (shown ? t("i18n.source") : previewLabel)}
+      className={["markdown-code-action", shown ? "is-active" : ""].filter(Boolean).join(" ")}
     >
-      {previewVisible ? t("i18n.source") : t("i18n.preview")}
+      {shown ? t("i18n.source") : t("i18n.preview")}
     </button>
   );
+
+  if (streamPreview && (kind === "html" || kind === "svg")) {
+    const title = kind === "svg" ? t("i18n.svgPreview") : t("i18n.htmlPreview");
+    const themedNow = htmlPreviewFollowsTheme(kind, code);
+    return (
+      <div className="markdown-code-block html-preview-block">
+        <div className="markdown-code-header">
+          <span className="markdown-code-lang">{lang || kind}</span>
+          <div className="markdown-code-actions">
+            {headerAction}
+            {previewButton}
+          </div>
+        </div>
+        <StreamingPreviewFrame
+          kind={kind}
+          code={code}
+          themed={themedNow}
+          title={title}
+          label={t("artifacts.generating")}
+          className={`html-preview-frame${themedNow ? " is-themed" : ""}`}
+          style={{ height }}
+          onSize={(value) => setHeight(clampHtmlPreviewHeight(value))}
+        />
+      </div>
+    );
+  }
 
   if (!previewVisible) {
     return <CodeBlock code={code} lang={lang} headerAction={previewButton} isStreaming={isStreaming} />;
   }
 
   const download = () => {
-    const url = URL.createObjectURL(new Blob([code], { type: KIND_MIME[kind] }));
+    const url = URL.createObjectURL(new Blob([htmlPreviewDownloadSource(kind, code)], { type: KIND_MIME[kind] }));
     void downloadUrlAsFile(url, htmlPreviewFileName(kind))
       .catch(() => {})
       .finally(() => setTimeout(() => URL.revokeObjectURL(url), 0));
@@ -157,7 +202,14 @@ export function HtmlPreviewBlock({ code, lang, kind, isStreaming, defaultPreview
       ) : fullscreen ? (
         <>
           <div className="html-preview-placeholder" style={{ height }} />
-          <HtmlPreviewDialog title={title} srcDoc={srcDoc} themed={themed} onClose={() => setFullscreen(false)} />
+          <HtmlPreviewDialog
+            title={title}
+            srcDoc={srcDoc}
+            themed={themed}
+            onClose={() => setFullscreen(false)}
+            // The composer is behind the dialog, so the dialog closes to show where the text went.
+            onPrompt={onPrompt && ((text) => { onPrompt(text); setFullscreen(false); })}
+          />
         </>
       ) : (
         <iframe
@@ -179,12 +231,12 @@ export function HtmlPreviewBlock({ code, lang, kind, isStreaming, defaultPreview
   );
 }
 
-function HtmlPreviewDialog({ title, srcDoc, themed, onClose }: { title: string; srcDoc: string; themed: boolean; onClose: () => void }) {
+function HtmlPreviewDialog({ title, srcDoc, themed, onClose, onPrompt }: { title: string; srcDoc: string; themed: boolean; onClose: () => void; onPrompt?: (text: string) => void }) {
   const { t } = useI18n();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
   // Links still need routing here; errors were already reported inline.
-  useHtmlPreviewFrameMessages(frameRef, {});
+  useHtmlPreviewFrameMessages(frameRef, { onPrompt });
 
   useEffect(() => {
     const dialog = dialogRef.current;
