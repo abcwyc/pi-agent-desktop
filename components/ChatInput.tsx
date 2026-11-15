@@ -1399,6 +1399,44 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     }
   }, [attachedImages.length, clearInput, onBuiltinCommand]);
 
+  const submissionPendingRef = useRef(false);
+  const submissionGenerationRef = useRef(0);
+  useEffect(() => () => {
+    submissionGenerationRef.current += 1;
+    submissionPendingRef.current = false;
+  }, [draftKey]);
+
+  // Reference expansion can await network IO. One shared gate covers Send and
+  // both queue actions, and an old request must never clear a newer draft.
+  const submitResolvedMessage = useCallback(async (
+    msg: string,
+    images: AttachedImage[],
+    submit: (message: string, images?: AttachedImage[]) => void,
+    clearBeforeSubmit = false,
+  ) => {
+    if (submissionPendingRef.current || draftKeyRef.current !== draftKey) return;
+    submissionPendingRef.current = true;
+    const generation = submissionGenerationRef.current;
+    const clearVersion = attachmentClearVersionRef.current;
+    const text = valueRef.current;
+    const files = attachedFilesRef.current;
+    const targets = new Map(sessionMentionTargetsRef.current);
+    try {
+      const resolved = await resolveSessionReferences(msg, targets);
+      if (generation !== submissionGenerationRef.current
+        || draftKeyRef.current !== draftKey
+        || clearVersion !== attachmentClearVersionRef.current) return;
+      const unchanged = () => valueRef.current === text && attachedImagesRef.current === images
+        && attachedFilesRef.current === files;
+      // Queue handlers can synchronously restore a rejected submission.
+      if (clearBeforeSubmit && unchanged()) clearInput();
+      submit(composeMessageWithAttachedFiles(resolved, files), images.length ? images : undefined);
+      if (!clearBeforeSubmit && unchanged()) clearInput();
+    } finally {
+      if (generation === submissionGenerationRef.current) submissionPendingRef.current = false;
+    }
+  }, [draftKey, clearInput, sessionMentionTargetsRef]);
+
   const handleSend = useCallback(async () => {
     const msg = value.trim();
     if (!msg && !attachedImages.length && !attachedFilesRef.current.length) return;
@@ -1408,13 +1446,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (isStreaming) return;
     // A run cannot start in a cwd that is gone; keep the draft until it is back or another project is picked.
     if (workspaceUnavailable) return;
-    const resolvedMessage = composeMessageWithAttachedFiles(
-      await resolveSessionReferences(msg, sessionMentionTargetsRef.current),
-      attachedFilesRef.current,
-    );
-    onSend(resolvedMessage, attachedImages.length ? attachedImages : undefined);
-    clearInput();
-  }, [value, attachedImages, workspaceUnavailable, isStreaming, runBuiltinCommand, onSend, clearInput, onAudioUnlock, sessionMentionTargetsRef]);
+    await submitResolvedMessage(msg, attachedImages, onSend);
+  }, [value, attachedImages, workspaceUnavailable, isStreaming, runBuiltinCommand, onSend, onAudioUnlock, submitResolvedMessage]);
 
   const slashQuery = !compact && value.startsWith("/") && !/\s/.test(value.slice(1))
     ? value.slice(1).toLowerCase()
@@ -1658,25 +1691,17 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     const msg = value.trim();
     if (!msg && !attachedImages.length && !attachedFilesRef.current.length) return;
     onAudioUnlock?.();
-    const images = attachedImages.length ? attachedImages : undefined;
-    const queue = async () => {
-      const resolvedMessage = composeMessageWithAttachedFiles(
-        await resolveSessionReferences(msg, sessionMentionTargetsRef.current),
-        attachedFilesRef.current,
-      );
+    const hasFiles = attachedFilesRef.current.length > 0;
+    const queue = () => submitResolvedMessage(msg, attachedImages, (resolvedMessage, images) => {
       const streamingBehavior = mode === "steer" ? "steer" : "followUp";
-      if (mode === "steer" && msg.startsWith("/") && !attachedFilesRef.current.length && onPromptWithStreamingBehavior) {
-        clearInput();
+      if (mode === "steer" && msg.startsWith("/") && !hasFiles && onPromptWithStreamingBehavior) {
         onPromptWithStreamingBehavior(resolvedMessage, streamingBehavior, images);
-        return;
-      }
-      clearInput();
-      if (mode === "steer" && onSteer) {
+      } else if (mode === "steer" && onSteer) {
         onSteer(resolvedMessage, images);
       } else if (mode === "followup" && onFollowUp) {
         onFollowUp(resolvedMessage, images);
       }
-    };
+    }, true);
     if (!attachedImages.length && !attachedFilesRef.current.length && onBuiltinCommand && canRunBuiltinSlashCommandWhileStreaming(msg)) {
       void runBuiltinCommand(msg);
       return;
@@ -1690,7 +1715,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       return;
     }
     void queue();
-  }, [value, attachedImages, onBuiltinCommand, onPromptWithStreamingBehavior, onSteer, onFollowUp, clearInput, onAudioUnlock, runBuiltinCommand, sessionMentionTargetsRef]);
+  }, [value, attachedImages, onBuiltinCommand, onPromptWithStreamingBehavior, onSteer, onFollowUp, onAudioUnlock, runBuiltinCommand, submitResolvedMessage]);
 
   const getNextSlashIndex = useCallback((direction: "up" | "down" | "left" | "right") => {
     const lastIndex = displayedSlashCommands.length - 1;
