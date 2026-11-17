@@ -15,6 +15,7 @@ import {
   setDraft,
   type ChatDraftImage,
 } from "@/lib/draft-store";
+import type { ComposerHistoryEntry } from "@/lib/composer-history";
 import {
   MAX_ATTACHED_IMAGE_BYTES,
   MAX_ATTACHED_IMAGES,
@@ -141,7 +142,8 @@ interface Props {
   }) => void;
   queuedMessages?: QueuedMessages | null;
   onQueuedMessageAction?: (id: string, action: ComposerQueueAction) => Promise<void>;
-  inputHistory?: string[];
+  /** Previous prompts (text only) — the composer restores their images too. */
+  inputHistory?: ComposerHistoryEntry[];
   onRecallQueue?: () => void;
   slashCommands?: SlashCommandInfo[];
   slashCommandsLoading?: boolean;
@@ -1649,21 +1651,37 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     historyItemRefs.current[historyActiveIndex]?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [historyActiveIndex, historyMenuOpen]);
 
-  const applyHistoryInput = useCallback((text: string) => {
-    setValue(text);
+  const applyHistoryInput = useCallback((entry: ComposerHistoryEntry) => {
+    // Same admission as editing history: a restored prompt must not append to
+    // a draft the user is still writing. Their text stays untouched if refused.
+    const ta = textareaRef.current;
+    const current = ta ? ta.value : value;
+    if (!canRestoreUserMessage(current, attachedImagesRef.current.length + attachedFilesRef.current.length, pendingImageCountRef.current)) return;
+    const { text: restoredText, files: restoredFiles } = splitMessageForComposer(entry.text);
+    const restoredImages = draftImagesToAttachedImages(entry.images);
+    attachmentClearVersionRef.current += 1;
+    valueRef.current = restoredText;
+    attachedImagesRef.current = restoredImages;
+    attachedFilesRef.current = restoredFiles;
+    setAttachedFiles(restoredFiles);
+    setValue(restoredText);
+    setAttachedImages((previous) => {
+      previous.forEach(revokeImagePreview);
+      return restoredImages;
+    });
     setHistoryMenuOpen(false);
     setHistoryActiveIndex(0);
     setAtQuery(null);
     setHashQuery(null);
     requestAnimationFrame(() => {
-      const ta = textareaRef.current;
-      if (!ta) return;
-      ta.focus();
-      ta.setSelectionRange(text.length, text.length);
-      ta.style.height = "auto";
-      ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+      const area = textareaRef.current;
+      if (!area) return;
+      area.focus();
+      area.setSelectionRange(restoredText.length, restoredText.length);
+      area.style.height = "auto";
+      area.style.height = `${Math.min(area.scrollHeight, 200)}px`;
     });
-  }, [setHashQuery]);
+  }, [setHashQuery, value]);
 
   const applySlashCommand = useCallback((command: SlashCommandPaletteItem) => {
     const nextValue = `/${command.name} `;
@@ -2465,7 +2483,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   const active = index === historyActiveIndex;
                   return (
                     <button
-                      key={`${index}:${item}`}
+                      key={`${index}:${item.text}:${item.images.length}`}
                       ref={(node) => {
                         historyItemRefs.current[index] = node;
                       }}
@@ -2495,7 +2513,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         {index + 1}
                       </span>
                       <span style={{ minWidth: 0, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden", overflowWrap: "anywhere" }}>
-                        {item}
+                        {item.text || t("chat.historyImageOnly", { count: item.images.length })}
                       </span>
                     </button>
                   );
