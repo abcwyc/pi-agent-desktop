@@ -209,6 +209,21 @@ is read as plain text by `POST /api/chat-attachments/extract` (mammoth, body-onl
 the same 256 KB of text out) and then attached like any text file. PDF and other Office
 files are rejected with a message; a PDF needs a parser dependency.
 
+In the full composer (projects and chats), a single paste of at least 2,000 UTF-16
+code units becomes a `Pasted text.txt` attachment. It keeps the clipboard's plain text
+and the textarea's existing value/selection; repeat names get a numbered suffix.
+The same byte/count limits apply, and rejection leaves the textarea untouched with
+an inline reason. Compact text-only composers keep normal paste behavior. File
+chips can preview their contents or insert them at the textarea selection as text.
+The attachment uses the existing draft/send/restore protocol; it still consumes
+model context. At send admission, `useAgentSession` parses the attached-file
+blocks as well as image attachments before classifying `!` / `!!` shell input:
+a message with a text attachment goes to the model unchanged, even if its typed
+text starts with `!`. Ordinary attachment-free shell commands retain their prior
+behavior. `hooks/useAgentSession.attachment-admission.test.mjs` executes the real
+send-admission prefix to verify that no shell invocation receives file payloads. `PLAYWRIGHT_CHANNEL=chrome node e2e/long-paste.mjs` covers the browser
+flow and writes desktop/narrow light/dark screenshots to `test-results/long-paste/`.
+
 A chat with a folder also keeps a copy of each text attachment in
 `<folder>/attachments/` (`lib/chat-attachment-files.ts`, called from the `prompt` command of
 the wrapper): a file with the same name and content is not saved twice, a taken name gets

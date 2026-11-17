@@ -9699,6 +9699,43 @@ html.native-desktop :is(
   color: var(--text);
 }
 
+.composer-file-action {
+  border: 0;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.composer-file-action:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.composer-file-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.composer-paste-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.message-attached-file-body.composer-file-preview {
+  max-height: 180px;
+  overflow: auto;
+  margin-bottom: 6px;
+}
+
 .message-attached-files {
   display: flex;
   flex-direction: column;

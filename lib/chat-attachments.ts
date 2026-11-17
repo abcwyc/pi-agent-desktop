@@ -168,6 +168,31 @@ export async function readChatTextAttachments(
   return { accepted, rejected };
 }
 
+/** Only a single large paste becomes a file; ordinary typing stays in the textarea. */
+export const LONG_PASTE_MIN_CHARACTERS = 2000;
+
+export function createPastedTextAttachment(
+  text: string,
+  existing: readonly ChatTextAttachment[],
+  baseName = "Pasted text",
+): { file: ChatTextAttachment; rejection?: never } | { file?: never; rejection: ChatAttachmentRejection } {
+  const names = new Set(existing.map((file) => file.name));
+  let name = `${baseName}.txt`;
+  for (let index = 2; names.has(name); index += 1) name = `${baseName}-${index}.txt`;
+  const size = new TextEncoder().encode(text).length;
+  if (existing.length >= CHAT_ATTACHMENT_MAX_FILES) {
+    return { rejection: { name, reason: "too-many", limit: CHAT_ATTACHMENT_MAX_FILES } };
+  }
+  if (size > CHAT_ATTACHMENT_MAX_FILE_BYTES) {
+    return { rejection: { name, reason: "too-large", limit: CHAT_ATTACHMENT_MAX_FILE_BYTES } };
+  }
+  if (existing.reduce((total, file) => total + file.size, size) > CHAT_ATTACHMENT_MAX_TOTAL_BYTES) {
+    return { rejection: { name, reason: "total-too-large", limit: CHAT_ATTACHMENT_MAX_TOTAL_BYTES } };
+  }
+  if (text.includes("\0")) return { rejection: { name, reason: "not-text" } };
+  return { file: { id: crypto.randomUUID(), name, size, text } };
+}
+
 const OPEN_TAG = /<attached_file name="([^"]*)">\n/;
 const CLOSE_TAG = "\n</attached_file>";
 
