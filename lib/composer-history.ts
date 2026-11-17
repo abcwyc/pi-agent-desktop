@@ -52,9 +52,12 @@ export function buildComposerHistory(messages: AgentMessage[], limit = MAX_HISTO
     const images = historyImages(message as UserMessage);
     const text = userImageDisplayText(historyText(message as UserMessage), images.length).trim();
     if (!text && images.length === 0) continue;
-    // Text alone identifies ordinary prompts. An image-only prompt has no text,
-    // so its first image payload distinguishes it from another image-only one.
-    const key = `${text}\u0000${images.length ? images[0].data.slice(0, 64) : ""}`;
+    // Text alone identifies ordinary prompts. Include every image's complete
+    // MIME/data payload so same-text prompts with different screenshots remain
+    // selectable; a short prefix would incorrectly merge visually different
+    // images that share common encoded headers.
+    const imageKey = images.map((image) => `${image.mimeType}:${image.data}`).join("\u0001");
+    const key = `${text}\u0000${imageKey}`;
     if (seen.has(key)) continue;
     seen.add(key);
     history.push({ text, images });
