@@ -101,6 +101,7 @@ import {
 } from "./chat-workspace";
 import { appendChatUnlock, readChatUnlocked } from "./chat-unlock";
 import { saveAttachedFilesToFolder } from "./chat-attachment-files";
+import { splitAttachedFiles } from "./chat-attachments";
 import { deriveSessionPolicy, type SessionPolicy } from "./session-policy";
 import { chatInstructionsSection, readChatSettings, resolveChatStartDefaults } from "./chat-settings";
 import { ChatFileGrants, isNetworkExposedServer } from "./chat-file-access";
@@ -1023,6 +1024,9 @@ export class AgentSessionWrapper {
     try {
       await this.inner.prompt(entry.message, {
         ...(entry.images?.length ? { images: entry.images } : {}),
+        // A parked submission must retain the same literal-text treatment as
+        // initial admission; otherwise compaction could re-enable /commands.
+        ...(splitAttachedFiles(entry.message).files.length > 0 ? { expandPromptTemplates: false } : {}),
         source: "rpc",
         streamingBehavior: entry.streamingBehavior ?? "steer",
         preflightResult: (result) => {
@@ -1589,6 +1593,11 @@ export class AgentSessionWrapper {
             prompt = this.inner.prompt(command.message as string, {
               ...(promptImages?.length ? { images: promptImages } : {}),
               ...(streamingBehavior ? { streamingBehavior } : {}),
+              // Files are serialized as text, but the whole submission is model
+              // input. Use the SDK's option to suppress /extension dispatch and
+              // skill/template expansion, including outbox deliveries. Plain
+              // commands retain the SDK default; input hooks still run normally.
+              ...(splitAttachedFiles(command.message as string).files.length > 0 ? { expandPromptTemplates: false } : {}),
               source: "rpc",
               // Match pi's RPC contract: acknowledge only after synchronous prompt
               // validation and extension preflight have accepted the submission.
@@ -1920,12 +1929,22 @@ export class AgentSessionWrapper {
       }
 
       case "steer": {
+        // Legacy queue commands also use prompt admission for file-bearing
+        // submissions: steer()/followUp() always expand templates in the SDK.
+        if (splitAttachedFiles(command.message as string).files.length > 0) {
+          await this.send({ ...command, type: "prompt", streamingBehavior: "steer" });
+          return null;
+        }
         const steerImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
         await this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined);
         return null;
       }
 
       case "follow_up": {
+        if (splitAttachedFiles(command.message as string).files.length > 0) {
+          await this.send({ ...command, type: "prompt", streamingBehavior: "followUp" });
+          return null;
+        }
         const followImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
         await this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined);
         return null;

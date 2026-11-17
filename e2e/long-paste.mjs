@@ -12,7 +12,7 @@ const css = (await Promise.all(["app/globals.css", "app/settings.css", "app/nati
 const server = createServer((req, res) => {
   if (req.url?.startsWith("/api/")) { res.setHeader("Content-Type", "application/json"); res.end("{}"); return; }
   res.setHeader("Content-Type", req.url === "/fixture.js" ? "text/javascript" : req.url === "/style.css" ? "text/css" : "text/html; charset=utf-8");
-  res.end(req.url === "/fixture.js" ? js : req.url === "/style.css" ? css : '<!doctype html><html><head><link rel="stylesheet" href="/style.css"></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>');
+  res.end(req.url === "/fixture.js" ? js : req.url === "/style.css" ? css : '<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/style.css"></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>');
 });
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}) });
@@ -38,10 +38,27 @@ try {
   assert.deepEqual(await composer.evaluate((element) => [element.selectionStart, element.selectionEnd]), [2, 5]);
   await page.getByRole("button", { name: "Pasted text.txt", exact: true }).click();
   assert.equal(await page.locator(".composer-file-preview").textContent(), text);
+  let darkTextToken;
   for (const theme of ["dark", "light"]) {
-    await page.evaluate((theme) => document.documentElement.setAttribute("data-theme", theme), theme);
-    for (const width of [1200, 390]) {
+    // useTheme/Prism and the app palette key off html.dark; data-theme alone
+    // would leave both screenshots using the same palette.
+    await page.emulateMedia({ colorScheme: theme });
+    await page.evaluate((theme) => {
+      localStorage.setItem("pi-theme", theme);
+      window.dispatchEvent(new StorageEvent("storage", { key: "pi-theme", newValue: theme }));
+      document.documentElement.classList.toggle("dark", theme === "dark");
+    }, theme);
+    assert.equal(await page.evaluate(() => document.documentElement.classList.contains("dark")), theme === "dark");
+    const surface = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--text").trim());
+    if (theme === "dark") darkTextToken = surface;
+    else assert.notEqual(surface, darkTextToken, "the palette must actually change");
+    for (const width of [1200, 390, 320]) {
       await page.setViewportSize({ width, height: 800 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${theme} ${width}px must not overflow horizontally`);
+      for (const control of [page.getByRole("button", { name: "Pasted text.txt", exact: true }), page.getByRole("button", { name: "Insert as text", exact: true }), page.getByRole("button", { name: "Remove Pasted text.txt", exact: true })]) {
+        const box = await control.boundingBox();
+        assert.ok(box && box.width > 0 && box.x >= 0 && box.x + box.width <= width, "attachment actions must stay visible within the viewport");
+      }
       await page.screenshot({ path: `${out}/${theme}-${width}.png`, fullPage: true });
     }
   }

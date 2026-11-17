@@ -220,9 +220,18 @@ model context. At send admission, `useAgentSession` parses the attached-file
 blocks as well as image attachments before classifying `!` / `!!` shell input:
 a message with a text attachment goes to the model unchanged, even if its typed
 text starts with `!`. Ordinary attachment-free shell commands retain their prior
-behavior. `hooks/useAgentSession.attachment-admission.test.mjs` executes the real
-send-admission prefix to verify that no shell invocation receives file payloads. `PLAYWRIGHT_CHANNEL=chrome node e2e/long-paste.mjs` covers the browser
-flow and writes desktop/narrow light/dark screenshots to `test-results/long-paste/`.
+behavior. On the server, file-bearing submissions use the SDK's
+`expandPromptTemplates: false` option, so `/extension`, `/skill:*` and prompt
+templates remain literal model input. This applies to direct prompts, outbox
+send-now/automatic deliveries, legacy steer/follow-up commands and compaction
+replay; attachment-free commands retain normal SDK dispatch. Input hooks still
+run. `hooks/useAgentSession.attachment-admission.test.mjs` executes the real
+send-admission prefix to verify that no shell invocation receives file payloads;
+`lib/rpc-manager-attached-prompts.test.mjs` exercises wrapper admission through
+the actual SDK command dispatcher without contacting a model. `PLAYWRIGHT_CHANNEL=chrome node e2e/long-paste.mjs` covers the browser
+flow, checks real light/dark palette changes, and asserts no horizontal overflow
+or clipped attachment actions at 1200/390/320px. It writes screenshots to
+`test-results/long-paste/`.
 
 A chat with a folder also keeps a copy of each text attachment in
 `<folder>/attachments/` (`lib/chat-attachment-files.ts`, called from the `prompt` command of
