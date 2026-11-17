@@ -48,6 +48,16 @@ export function PluginDiscovery({ cwd, scope, onScopeChange, projectResourcesLoa
       const response = await fetch(`/api/plugins/search?${params}`, { signal: abort.signal });
       if (!response.ok) throw new Error("Search failed");
       const data = await response.json() as PluginSearchResponse;
+      // HTTP success does not guarantee the expected payload (a proxy or test
+      // fixture can return a generic object). Reject before committing state,
+      // otherwise an invalid page can crash the whole Settings dialog at render.
+      if (!data || !Array.isArray(data.packages) ||
+          !(data.nextOffset === null || (Number.isSafeInteger(data.nextOffset) && data.nextOffset > offset)) ||
+          !data.packages.every((pkg) => pkg && typeof pkg.name === "string" &&
+            typeof pkg.description === "string" && typeof pkg.version === "string" &&
+            typeof pkg.publisher === "string" && pkg.url === `https://www.npmjs.com/package/${pkg.name}`)) {
+        throw new Error("Invalid package search response");
+      }
       if (request !== requestRef.current || abort.signal.aborted) return;
       resultQuery.current = q;
       setResults((current) => offset === 0 ? data.packages : [...new Map([...current, ...data.packages].map((p) => [p.name, p])).values()]);

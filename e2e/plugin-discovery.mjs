@@ -29,6 +29,7 @@ try {
       if (url.pathname === '/api/plugins/search') {
         const offset = Number(url.searchParams.get('offset') ?? 0);
         const query = url.searchParams.get('q');
+        if (query === 'malformed') return route.fulfill({ json: {} });
         const names = query === 'empty' ? [] : offset ? ['openwiki'] : ['pi-web-access', '@postman/postman-plugin'];
         return route.fulfill({ json: { packages: names.map(name => ({ name, version: '1.0', publisher: 'fixture', description: 'Community package description.', url: `https://www.npmjs.com/package/${name}` })), nextOffset: query === 'empty' || offset ? null : 2 } });
       }
@@ -73,6 +74,12 @@ try {
     await page.getByRole('button', { name: 'Plugin marketplace', exact: true }).click();
     assert.equal(await page.getByRole('textbox', { name: 'Search plugins…', exact: true }).inputValue(), 'empty');
     await page.getByText('No matching packages.', { exact: true }).waitFor();
+    // A successful HTTP response with the wrong shape must show a local error,
+    // never turn results into undefined and crash Settings during render.
+    await page.getByRole('textbox', { name: 'Search plugins…', exact: true }).fill('malformed');
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await page.getByText('Could not search the package registry.', { exact: false }).waitFor();
+    assert.equal(await page.getByRole('dialog', { name: 'Settings', exact: true }).isVisible(), true);
     await page.getByRole('textbox', { name: 'Search plugins…', exact: true }).fill('browser');
     await page.getByRole('button', { name: 'Search', exact: true }).click();
     await page.locator('.plugin-discovery-card').first().waitFor();
