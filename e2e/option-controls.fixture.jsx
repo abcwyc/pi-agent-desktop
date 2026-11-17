@@ -32,7 +32,7 @@ function Gallery(){
   <ChatInput isStreaming={false} onSend={()=>{}} onAbort={()=>{}} onToolPresetChange={()=>{}}
    thinkingLevel={thinking} onThinkingLevelChange={setThinking} savedDefaultThinkingLevel={defaultThinking} onSetDefaultThinkingLevel={level=>{setDefaultThinking(level);setThinking(level);}}
    model={{provider:'fixture',modelId:'first'}} modelList={[{id:'first',name:'First model',provider:'fixture'},{id:'second',name:'Second model',provider:'fixture'}]}
-   onModelChange={()=>{}} onSetDefaultModel={()=>{}} inputHistory={['First prompt','Second prompt']}
+   onModelChange={()=>{}} onSetDefaultModel={()=>{}} inputHistory={[{text:'First prompt',images:[]},{text:'Second prompt',images:[]}]}
    slashCommands={[{name:'help',source:'builtin',description:'First command'},{name:'status',source:'builtin',description:'Second command'},{name:'clear',source:'builtin',description:'Third command'}]}/>
   <div id="action-samples" style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:16,marginTop:20}}>
    {['app-topbar-more-menu','dom-context-menu'].map(kind=><div key={kind} data-menu-sample={kind} className={'native-popover app-menu '+kind} role="menu" style={{position:'static',width:'auto'}}>
