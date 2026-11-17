@@ -808,6 +808,7 @@ export const enLocale: LocalePlugin = {
     "chat.steerHint": "Deliver after the current response and its tool calls finish (Stop interrupts them)",
     "chat.followUpHint": "Queue this message after the agent finishes",
     "chat.inputHistory": "Input history",
+    "chat.historyImageOnly": "{count} image(s)",
     "chat.modelError": "Model error",
     "chat.cwdMissingTitle": "Project folder not found",
     "chat.cwdMissingBody": "{cwd} no longer exists. If the project was moved or renamed, start a new session in its new location.",

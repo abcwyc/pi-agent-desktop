@@ -9,6 +9,7 @@ import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { isHiddenRelation, SIDE_BOUNDARY_MESSAGE_TYPE } from "@/lib/session-family";
 import { EXTENSION_DIALOG_BASE_WIDTH, fitExtensionDialogWidth } from "@/lib/extension-dialog-fit";
 import { countToolCallBlocks, getAssistantErrorMessage, getDisplayableAssistantBlocks, hasAssistantAnswer, isAssistantTruncated, isMessageGroupAnchor, splitFinalAssistantBlocks } from "@/lib/message-display";
+import { buildComposerHistory } from "@/lib/composer-history";
 import { ConversationFind } from "./ConversationFind";
 import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
 import { buildQuotedSelection } from "@/lib/quoted-selection";
@@ -940,18 +941,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     }
     return map;
   }, [activeToolResults, messages]);
-  const inputHistory = useMemo(() => {
-    const seen = new Set<string>();
-    const history: string[] = [];
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
-      const text = getUserInputText(messages[i]);
-      if (!text || seen.has(text)) continue;
-      seen.add(text);
-      history.push(text);
-      if (history.length >= 50) break;
-    }
-    return history.reverse();
-  }, [messages]);
+  const inputHistory = useMemo(() => buildComposerHistory(messages), [messages]);
 
   const isEmptyNew = isNew && !loading && !error && messages.length === 0 && !streamState.isStreaming && !sessionBusy;
   useScrollbarVisibility(scrollContainerRef, Boolean(session?.id) || !isEmptyNew);
