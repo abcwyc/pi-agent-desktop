@@ -36,7 +36,7 @@ test("a group switch sends one request for its scope's packages", () => {
   assert.match(source, /packages: targets\.map\(\(\{ source \}\) => \(\{ source, scope \}\)\)/);
   assert.match(source, /setBusyKey\(`bulk:\$\{scope\}`\)/);
   // The open package's controls wait for the bulk run like for their own action.
-  assert.match(source, /const busy = \(busyKey\?\.endsWith\(key\) \|\| busyKey\?\.startsWith\("bulk:"\)\) \?\? false;/);
+  assert.match(source, /const busy = \(busyKey\?\.endsWith\(key\) \|\| busyKey\?\.startsWith\("bulk:"\) \|\| busyKey\?\.startsWith\("install:"\)\) \?\? false;/);
   assert.match(source, /disabled=\{footerBusy\}\s+loading=\{busyKey === `bulk:\$\{group\.scope\}`\}/);
 });
 

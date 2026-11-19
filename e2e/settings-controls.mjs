@@ -30,6 +30,7 @@ const data = {
   '/api/models/enabled':{error:'No model calls in UI tests'},
   '/api/skills':{skills:['Review','Design','Test'].map(name=>({name,description:'Test skill',filePath:'D:/fixture/'+name+'/SKILL.md',
     baseDir:'D:/fixture/'+name,disableModelInvocation:false,sourceInfo:{source:'user',scope:'user'}})),diagnostics:[],projectResourcesLoaded:true},
+  '/api/plugins/search':{packages:[],nextOffset:null},
   '/api/plugins':{packages:[],standaloneExtensions:['First extension','Second extension','Third extension'].map(name=>({
     name,kind:'extension',scope:'global',path:'D:/fixture/'+name+'.ts',relativePath:name+'.ts',enabled:true})),
     totals:counts,diagnostics:[],projectResourcesLoaded:true},
@@ -50,7 +51,7 @@ const server = createServer((req,res)=>{
 });
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const base = 'http://127.0.0.1:'+server.address().port;
-const browser = await chromium.launch();
+const browser = await chromium.launch({channel:process.env.E2E_BROWSER_CHANNEL});
 const results = [];
 const near = (actual,expected,label)=>assert.ok(Math.abs(actual-expected)<0.6,`${label}: ${actual}, expected ${expected}`);
 async function segments(page, group) {
