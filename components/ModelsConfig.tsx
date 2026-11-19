@@ -796,6 +796,7 @@ function HeaderListEditor({ headers, onChange }: {
   const [rows, setRows] = useState<HeaderRow[]>(() => Object.entries(headers ?? {}).map(
     ([name, value], id) => ({ id, name, value }),
   ));
+  const { t } = useI18n();
   const nextRowIdRef = useRef(rows.length);
 
   const applyRows = (next: HeaderRow[]): void => {
