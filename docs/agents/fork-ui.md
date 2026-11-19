@@ -56,6 +56,17 @@ optimistic/delivered/history updates, real ChatInput text/attachment admission,
 cancel, edit drafts and resend without a model call.
 This is a MessageView integration replay, not a full authenticated SSE round trip.
 
+## Composer input history (↑)
+
+`lib/composer-history.ts` builds the ↑ menu from the transcript. Each entry keeps
+the prompt text **and** its images, so selecting an earlier image question
+restores the attachments instead of dropping them. It reuses the same image-note
+projection as the message bubble, so an SDK resize note never returns as typed
+text, and image-only prompts appear (labelled by image count). Selection follows
+the same admission rule as history editing: a non-empty draft or pending
+attachment is left untouched. Chat file chips come back through
+`splitMessageForComposer`. Tests: `node --test lib/composer-history.test.mjs`.
+
 ## Composer clearing and history-edit admission
 
 `ChatInput.replaceMessage()` returns whether it actually restored history. A

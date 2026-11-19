@@ -808,6 +808,7 @@ export const zhTWLocale: LocalePlugin = {
     "chat.steerHint": "在目前的回覆及其工具呼叫完成後送達（按「停止」可中斷）",
     "chat.followUpHint": "在 Agent 完成後排入此訊息",
     "chat.inputHistory": "輸入紀錄",
+    "chat.historyImageOnly": "{count} 張圖片",
     "chat.modelError": "模型錯誤",
     "chat.cwdMissingTitle": "找不到專案資料夾",
     "chat.cwdMissingBody": "{cwd} 已不存在。如果專案已移動或重新命名，請在新位置建立新的工作階段。",

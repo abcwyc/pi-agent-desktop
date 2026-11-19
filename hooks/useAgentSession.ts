@@ -13,7 +13,7 @@ import type {
 } from "@/lib/types";
 import { isBlockingExtensionUiRequest } from "@/lib/browser-notifications";
 import { normalizeToolCalls } from "@/lib/normalize";
-import { attachmentAwareTitle } from "@/lib/chat-attachments";
+import { attachmentAwareTitle, splitAttachedFiles } from "@/lib/chat-attachments";
 import { isPromptRejectedError, sendAgentCommand } from "@/lib/agent-client";
 import { mergeComposerQueueSnapshot, type ComposerQueueActionResult, type PendingComposerMessage } from "@/lib/composer-queue-types";
 import { fetchWithRetry } from "@/lib/fetch-timeout";
@@ -1910,9 +1910,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         return;
       }
     }
-    const isSlashCommandPrompt = !images?.length && trimmedMessage.startsWith("/");
+    // The composer serializes text attachments into the message before onSend.
+    // Keep command admission aligned with its attachment-aware UI: otherwise
+    // !text plus a pasted file could be passed to the shell as a script.
+    // Parse the existing attachment format rather than trusting a marker alone.
+    const hasAttachments = Boolean(images?.length) || splitAttachedFiles(message).files.length > 0;
+    const isSlashCommandPrompt = !hasAttachments && trimmedMessage.startsWith("/");
 
-    const isBashCommand = !images?.length && trimmedMessage.startsWith("!");
+    const isBashCommand = !hasAttachments && trimmedMessage.startsWith("!");
     if (isBashCommand) {
       const isExcluded = trimmedMessage.startsWith("!!");
       const bashCmd = (isExcluded ? trimmedMessage.slice(2) : trimmedMessage.slice(1)).trim();

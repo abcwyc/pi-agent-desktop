@@ -129,7 +129,12 @@ try{
   await page.getByRole('button',{name:'Change model',exact:true}).click();await assertRowGaps(page.getByRole('listbox').locator('.app-option-row'),'actual model choices');
   await assertChoiceGeometry(page.getByRole('listbox'),page.getByRole('listbox').locator('.app-option-row'),'actual models');await page.keyboard.press('Escape');
   const input=page.locator('textarea');await input.fill('');await input.press('ArrowUp');
-  const history=page.locator('.app-suggestion-menu');await history.waitFor();await assertRowGaps(history.locator('button'),'actual input history');await input.press('Escape');
+  const history=page.locator('.app-suggestion-menu');await history.waitFor();await assertRowGaps(history.locator('button'),'actual input history');
+  // History now carries text and images. Check actual row text/restoration too:
+  // a stale string fixture throws during render and used to look like a timeout.
+  const secondHistory=history.getByRole('button',{name:/Second prompt/});
+  await secondHistory.click();assert.equal(await input.inputValue(),'Second prompt');
+  await history.waitFor({state:'detached'});await input.fill('');
   await input.fill('/');const commands=page.locator('.app-suggestion-menu .app-menu-items');await commands.waitFor();
   const grid=await commands.evaluate(el=>{const s=getComputedStyle(el);return {row:s.rowGap,column:s.columnGap,rows:[...el.children].map(row=>{const r=row.getBoundingClientRect();return {top:r.top,bottom:r.bottom,margin:getComputedStyle(row).marginTop};})};});
   assert.equal(grid.row,'4px');assert.equal(grid.column,'4px');assert.ok(grid.rows.every(row=>row.margin==='0px'));
