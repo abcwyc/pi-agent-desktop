@@ -1764,11 +1764,10 @@ function ApiKeyDetail({ provider, onRefresh, enabledModels, contextSettings }: {
       </ConfigDetailHeader>
 
       {llama && (
-        <label style={{ display: "grid", gap: 6 }}>
-          {t("models.llamaRouterUrl")}
-          <input type="url" style={inputStyle} value={serverUrl} placeholder={DEFAULT_LLAMA_ROUTER_URL}
+        <Field label={t("models.llamaRouterUrl")}>
+          <input type="url" style={{ ...inputStyle, fontFamily: "var(--font-mono)" }} value={serverUrl} placeholder={DEFAULT_LLAMA_ROUTER_URL}
             onChange={(event) => setServerUrl(event.target.value)} spellCheck={false} />
-        </label>
+        </Field>
       )}
       {!llama && !provider.configured && (
         <p style={{ margin: 0, fontSize: "var(--fs-caption)", color: "var(--text-muted)", lineHeight: 1.5 }}>
