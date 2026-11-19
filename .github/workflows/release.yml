@@ -22,6 +22,10 @@ jobs:
             args: --target aarch64-apple-darwin
             apple_signing_identity: "-"
             mac_arch: arm64
+            # GitHub lists release assets by name. A shared "macOS_" segment
+            # keeps the Apple Silicon and Intel downloads next to each other
+            # instead of split by the Linux amd64 and Windows x64 files.
+            asset_name_pattern: "[name]_[version]_macOS_[arch][ext]"
           # Intel Macs: cross-compiled on the Apple Silicon runner (the only
           # one with the macOS 26 SDK). The bundled server runs the Node that
           # built it (prepare-desktop copies process.execPath), so this job
@@ -34,6 +38,7 @@ jobs:
             apple_signing_identity: "-"
             node_arch: x64
             mac_arch: x86_64
+            asset_name_pattern: "[name]_[version]_macOS_[arch][ext]"
           - runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             args: --target x86_64-unknown-linux-gnu --bundles deb
@@ -143,50 +148,57 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.8.6
+            ## Pi Agent Desktop 0.8.7
 
             ### New
 
-            - **Task calendar.** The Tasks page can switch between the list and a week or month calendar. Each day shows one entry per session, titled by its name or that day's first prompt, with scheduled runs and planned slots alongside. Click an entry for a preview with a way into the session or task; right-click opens the same actions. Narrow windows show a per-day agenda.
-            - **Themed previews.** HTML and SVG previews pick up the app's colours through `--color-*` variables and ready-made SVG classes, follow light/dark changes without reloading, and keep their colours in saved SVGs. A page is now drawn while it streams, and a button in a preview can call `sendPrompt(text)` to fill the composer (it never sends).
+            - **Plugin marketplace.** Settings › Plugins can browse and search community packages on npm that declare `pi-package`, show their details, and install one for all projects or just the current one. A listing is the publisher's own claim, not a compatibility check.
+            - **Long pastes.** Pasting 2,000 or more characters into the composer adds them as a "Pasted text" attachment you can open or turn back into text. A message carrying attachments is never run as a `/command` or `!shell` command.
+            - **llama.cpp.** Settings › Models can add pi's built-in llama.cpp provider pointed at your router server (default `127.0.0.1:8080`), and custom providers get a Display name.
+            - **New icon.** The π. mark replaces the old icon; on macOS it now follows Apple's icon grid and sits the same size as other Dock icons.
 
             ### Improved
 
-            - A closed sidebar or right panel no longer keeps its controls in the Tab order or the accessibility tree.
-            - On touch screens, session and project rows are 44px tall and the sidebar and toolbar buttons are 44x44.
-            - The file viewer's "open / reveal" buttons name your system's file manager (Finder, Explorer) and are translated; the project picker, model name field and a few other leftover English strings are translated too.
+            - Recalling a past prompt from the composer's history brings back its images too, not only the text.
+            - Fetching a provider's models also reads its reasoning levels and image input; the provider key field is labelled Provider ID.
+            - macOS downloads are named `…_macOS_aarch64.dmg` (Apple Silicon) and `…_macOS_x64.dmg` (Intel), so both sit together in the release's file list.
 
             ### Fixed
 
-            - Switching projects while Skills or Plugins is loading no longer lets a slower, older response overwrite the current list or error.
-            - Sending or queueing a message that mentions other sessions while the mentions are still resolving can no longer submit it twice or clear a newer draft.
+            - Testing a model sends a session id, which fixes `400 MissingSessionID` from opencode.ai; a `!command` API key runs once per test.
+            - The enabled-models list respects project trust, and `auth.json` / `settings.json` with a BOM or empty content no longer fail to load.
+            - A sign-in that the page has already closed no longer crashes the server when an extension answers late.
 
             Bundled components: pi 1.5.2, pi-web 0.15.0.
 
             ---
 
-            ## Pi Agent Desktop 0.8.6
+            ## Pi Agent Desktop 0.8.7
 
             ### 新增
 
-            - **任务日历。** 任务页可在列表与周/月日历之间切换。每天按会话显示一条，标题为会话名称或当天的第一条提示，计划任务的运行和待运行时段一并显示。点击条目可预览并进入对应会话或任务，右键打开同样的操作；窄窗口改为按天的日程列表。
-            - **预览主题。** HTML 和 SVG 预览可通过 `--color-*` 变量和现成的 SVG 样式类使用应用的配色，随浅色/深色切换即时更新而不刷新，保存的 SVG 也保留颜色。页面在生成过程中就会逐步绘出，预览里的按钮可调用 `sendPrompt(text)` 把文字填入输入框（不会自动发送）。
+            - **插件市场。** 设置 › 插件可浏览、搜索 npm 上声明了 `pi-package` 的社区包，查看详情，并安装到全局或当前项目。收录仅代表发布者自己的声明，不代表已验证兼容性。
+            - **长文本作附件。** 在输入框粘贴 2,000 个字符以上的文本时，会添加为“粘贴文本”附件，可打开查看或“改为正文”。带附件的消息不会被当作 `/命令` 或 `!shell` 命令执行。
+            - **llama.cpp。** 设置 › 模型可添加 pi 内置的 llama.cpp Provider，指向你的路由服务器（默认 `127.0.0.1:8080`）；自定义 Provider 可设置显示名称。
+            - **新图标。** 应用图标换为新的 π. 标志；macOS 版按苹果图标网格留边，在 Dock 里与其他图标一样大。
 
             ### 改进
 
-            - 关闭的侧栏和右侧面板不再让其中的控件留在 Tab 顺序和无障碍树里。
-            - 触屏设备上，会话行和项目行高 44px，侧栏与工具栏按钮为 44x44。
-            - 文件查看器的“打开 / 在文件夹中显示”按钮会按系统显示为 Finder、资源管理器等，并已翻译；项目选择器、模型名称输入框等处遗漏的英文也已翻译。
+            - 从输入历史中调出以前的提示时，其中的图片也会一并恢复，而不只是文字。
+            - 拉取 Provider 的模型列表时会读取推理等级和图片输入；Provider 的键字段改名为 Provider ID。
+            - macOS 安装包改名为 `…_macOS_aarch64.dmg`（Apple 芯片）和 `…_macOS_x64.dmg`（Intel 芯片），在发布页的文件列表里排在一起。
 
             ### 修复
 
-            - 加载技能或插件时切换项目，较慢的旧响应不会再覆盖当前的列表或错误提示。
-            - 发送或排队一条引用了其他会话的消息时，若引用仍在解析，不会再重复提交，也不会清掉之后新写的草稿。
+            - 测试模型时会带上会话 ID，修复 opencode.ai 返回 `400 MissingSessionID` 的问题；`!command` 形式的 API 密钥每次测试只执行一次。
+            - 已启用模型列表遵循项目信任设置；`auth.json`、`settings.json` 带 BOM 或为空时不再读取失败。
+            - 页面已关闭的登录流程在扩展延迟回应时不再导致服务器崩溃。
 
             内置组件版本：pi 1.5.2、pi-web 0.15.0。
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
+          releaseAssetNamePattern: ${{ matrix.asset_name_pattern }}
           args: ${{ matrix.args }}
 
   manifest:

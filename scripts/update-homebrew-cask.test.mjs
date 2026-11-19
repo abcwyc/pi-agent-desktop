@@ -11,7 +11,7 @@ test("updateCask serves the aarch64 DMG to Apple Silicon and the x64 DMG to Inte
   assert.match(next, /^  arch arm: "aarch64", intel: "x64"$/m);
   assert.match(next, /^  version "9\.8\.7"$/m);
   assert.match(next, new RegExp(`^  sha256 arm:   "${ARM}",\\n         intel: "${INTEL}"$`, "m"));
-  assert.match(next, /releases\/download\/v#\{version\}\/Pi\.Agent_#\{version\}_#\{arch\}\.dmg"$/m);
+  assert.match(next, /releases\/download\/v#\{version\}\/Pi\.Agent_#\{version\}_macOS_#\{arch\}\.dmg"$/m);
   assert.doesNotMatch(next, /depends_on arch:/);
   assert.equal(next.match(/^  sha256 /gm).length, 1);
   assert.equal(next.match(/^  url /gm).length, 1);

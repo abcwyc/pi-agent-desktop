@@ -193,6 +193,10 @@ test("release workflow publishes Apple Silicon, Intel Mac, Linux x64, and Window
   // The Homebrew cask needs both DMGs.
   assert.match(workflow, /endswith\("_aarch64\.dmg"\)/);
   assert.match(workflow, /endswith\("_x64\.dmg"\)/);
+  // Both Mac builds share a "macOS_" name segment so GitHub's by-name asset
+  // list keeps them together; the Homebrew cask url follows the same names.
+  assert.equal(workflow.match(/asset_name_pattern: "\[name\]_\[version\]_macOS_\[arch\]\[ext\]"/g)?.length, 2);
+  assert.match(workflow, /releaseAssetNamePattern: \$\{\{ matrix\.asset_name_pattern \}\}/);
   assert.match(workflow, /update-homebrew-cask\.mjs "\$version" "\$arm_digest" "\$intel_digest"/);
   assert.doesNotMatch(workflow, /macos-15/);
   assert.match(workflow, /uploadUpdaterJson: true/);

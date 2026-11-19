@@ -27,7 +27,7 @@ export function updateCask(source, version, armSha256, intelSha256) {
       `  version "${version}"\n`,
       `  sha256 arm:   "${armSha256}",\n`,
       `         intel: "${intelSha256}"\n\n`,
-      `  url "https://github.com/abcwyc/pi-agent-desktop/releases/download/v#{version}/Pi.Agent_#{version}_#{arch}.dmg"\n`,
+      `  url "https://github.com/abcwyc/pi-agent-desktop/releases/download/v#{version}/Pi.Agent_#{version}_macOS_#{arch}.dmg"\n`,
       name,
     ].join(""))
     .replace(/^  depends_on arch: :arm64\n/m, "");
