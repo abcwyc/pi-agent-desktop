@@ -371,16 +371,19 @@ export function EnabledModelsSection({
   providerId,
   controller,
   contextSettings,
+  emptyCatalogHint,
 }: {
   providerId: string;
   controller: EnabledModelsController;
   /** Built-in providers: each row edits its model's context window (M2). */
   contextSettings?: ModelContextSettings;
+  emptyCatalogHint?: string;
 }) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
   const { view, loading, pending, failure } = controller;
-  const provider = findProviderView(view, providerId);
+  const provider = findProviderView(view, providerId)
+    ?? (emptyCatalogHint && !failure ? { id: providerId, models: [], enabledCount: 0 } : undefined);
   const catalog = useCatalogRefresh(providerId, controller.refresh);
   const noteId = useId();
 
@@ -466,10 +469,10 @@ export function EnabledModelsSection({
           className="enabled-models-filter"
         />
       )}
-      {contextSettings && <div id={contextNoteId} className="enabled-models-note">{t("models.contextOverrideHelp")}</div>}
+      {contextSettings && provider.models.length > 0 && <div id={contextNoteId} className="enabled-models-note">{t("models.contextOverrideHelp")}</div>}
       <div className="enabled-models-list">
         {shown.length === 0 ? (
-          <div className="enabled-models-empty">{t("models.enabledNoMatches")}</div>
+          <div className="enabled-models-empty">{(provider.models.length === 0 && emptyCatalogHint) || t("models.enabledNoMatches")}</div>
         ) : shown.map((model) => {
           const lastOne = isLastEnabledModel(view, model);
           return (

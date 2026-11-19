@@ -11,11 +11,15 @@ const {
   modelCostToDraft,
   modelOverrideSpecs,
   parseCompleteModelCost,
+  providerRuntimeName,
+  providerSidebarLabel,
   renameProviderEntry,
   resolveModelSpecHint,
   savedModelIds,
+  savedProviderNames,
   serializeHeaderRows,
   setCompatBool,
+  setProviderDisplayName,
   trackAddedModels,
   updateHeaderRow,
 } = await jiti.import("./models-config-helpers.ts");
@@ -334,4 +338,47 @@ test("an override wins over the form value and an empty field names pi's fallbac
 test("spec inputs never use a bare number as placeholder (#131)", () => {
   assert.doesNotMatch(source, /placeholder="128000"|placeholder="16384"/);
   assert.match(source, /t\("models\.specNotSet"\)/);
+});
+
+test("the provider's Display name sets or removes its models.json name and keeps the rest of the entry", () => {
+  const models = [{ id: "m1" }];
+  const entry = { baseUrl: "https://api.example.com/v1", api: "openai-completions", apiKey: "KEY", models };
+
+  const named = setProviderDisplayName(entry, "Example API");
+  assert.deepEqual(named, { name: "Example API", ...entry });
+  assert.deepEqual(Object.keys(named), ["name", "baseUrl", "api", "apiKey", "models"]);
+  assert.equal(named.models, models);
+  assert.deepEqual(entry, { baseUrl: "https://api.example.com/v1", api: "openai-completions", apiKey: "KEY", models });
+
+  // An existing name keeps its place; typed spaces stay while editing.
+  const renamed = setProviderDisplayName({ baseUrl: "u", name: "Old" }, "New ");
+  assert.deepEqual(Object.entries(renamed), [["baseUrl", "u"], ["name", "New "]]);
+
+  // Blank input removes the key, so the label falls back to the id.
+  for (const blank of ["", "   "]) {
+    const cleared = setProviderDisplayName({ name: "5-IKUN-Codex-025", baseUrl: "u", models }, blank);
+    assert.deepEqual(cleared, { baseUrl: "u", models });
+    assert.equal("name" in cleared, false);
+    assert.equal(providerSidebarLabel("3-ikun-plus", cleared), "3-ikun-plus");
+  }
+  assert.deepEqual(setProviderDisplayName({ baseUrl: "u" }, ""), { baseUrl: "u" });
+});
+
+test("a cleared provider name is not brought back by the runtime name pi read from it", () => {
+  const saved = savedProviderNames({ providers: {
+    "3-ikun-plus": { name: "5-IKUN-Codex-025", baseUrl: "u" },
+    plain: { baseUrl: "u" },
+    openai: { name: "My OpenAI", baseUrl: "u" },
+  } });
+  assert.deepEqual([...saved], [["3-ikun-plus", "5-IKUN-Codex-025"], ["openai", "My OpenAI"]]);
+  assert.deepEqual([...savedProviderNames({})], []);
+
+  // pi reports the saved name as the runtime name: clearing it falls back to the id.
+  const runtime = providerRuntimeName("5-IKUN-Codex-025", saved.get("3-ikun-plus"));
+  assert.equal(runtime, undefined);
+  assert.equal(providerSidebarLabel("3-ikun-plus", {}, runtime), "3-ikun-plus");
+  // A name of the runtime's own (a built-in's, an extension's) still applies.
+  assert.equal(providerRuntimeName("OpenAI", saved.get("openai")), "OpenAI");
+  assert.equal(providerRuntimeName("TypeSafe", saved.get("typesafe")), "TypeSafe");
+  assert.equal(providerRuntimeName(undefined, undefined), undefined);
 });
