@@ -1,11 +1,11 @@
 cask "pi-agent" do
   arch arm: "aarch64", intel: "x64"
 
-  version "0.8.6"
-  sha256 arm:   "4901add68d5f128b27c4a3bf654f94d6e8125e4df8ca91b55cf79a23ef057109",
-         intel: "914f046f5c308baba0f5f3180ed34b8ac18b8d4770730e396d5eefdafe8c610c"
+  version "0.8.7"
+  sha256 arm:   "50ade76f02f604d695afc24e95497da0e1381728b9102c385a3132cb1d909cf6",
+         intel: "303d0e164fdefbbe7737da17d716cd7d50c224c3fe21b35b03b29cfa061f6e21"
 
-  url "https://github.com/abcwyc/pi-agent-desktop/releases/download/v#{version}/Pi.Agent_#{version}_#{arch}.dmg"
+  url "https://github.com/abcwyc/pi-agent-desktop/releases/download/v#{version}/Pi.Agent_#{version}_macOS_#{arch}.dmg"
   name "Pi Agent"
   desc "Local AI agent desktop app built on pi"
   homepage "https://github.com/abcwyc/pi-agent-desktop"
