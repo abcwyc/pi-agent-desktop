@@ -264,5 +264,5 @@ test("a built-in provider's model rows edit the context window in the Models dra
   assert.match(modelsConfigSource, /setConfig\(withContextWindowOverride\(config, providerId, modelId, value\)\)/);
   // The override lives in models.json under the built-in id; it is not a second, custom provider.
   assert.match(modelsConfigSource, /function isOverridesOnly\(entry: ProviderEntry\): boolean \{\s*return Object\.keys\(entry\)\.length === 1 && Object\.keys\(entry\.modelOverrides \?\? \{\}\)\.length > 0;/);
-  assert.match(modelsConfigSource, /if \(!isOverridesOnly\(entry\)\) return true;[\s\S]*?return authListed && !managed;/);
+  assert.match(modelsConfigSource, /if \(!isOverridesOnly\(entry\) \|\| savedNames\.has\(id\)\) return true;[\s\S]*?return authListed && !managed;/);
 });
