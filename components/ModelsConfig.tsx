@@ -3,6 +3,7 @@
 import type { ModelContextSettings } from "./ModelContextWindow";
 import { withContextWindowOverride } from "@/lib/model-context";
 import { AppSelect } from "./AppSelect";
+import { ThinkingLevelProbe } from "./ThinkingLevelProbe";
 
 import { LLAMA_CPP_PROVIDER_ID } from "@/lib/provider-listing";
 import { useState, useEffect, useCallback, useId, useRef, type ButtonHTMLAttributes, type DragEvent } from "react";
@@ -1401,6 +1402,12 @@ function ModelDetail({
                   <div style={{ fontSize: "var(--fs-micro)", color: "var(--text-dim)", marginBottom: 8 }}>
                     {t("models.thinkingLevelMapHelp")}
                   </div>
+                  <ThinkingLevelProbe
+                    providerName={providerName}
+                    provider={provider}
+                    model={model}
+                    onApply={(v) => set("thinkingLevelMap", v)}
+                  />
                   <ThinkingLevelMapEditor
                     value={model.thinkingLevelMap}
                     onChange={(v) => set("thinkingLevelMap", v)}

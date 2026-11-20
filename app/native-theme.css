@@ -11457,3 +11457,69 @@ html.dark .artifacts-thumb[data-tone="data"] { --tone: #4fc1d6; }
 .plugin-discovery-actions a { color: var(--text-muted); }
 .plugin-discovery-error { color: var(--text); font-size: 12px; overflow-wrap: anywhere; }
 @container (max-width: 520px) { .plugin-discovery-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Settings › Models › thinking level probe (components/ThinkingLevelProbe.tsx) */
+.thinking-probe {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.thinking-probe-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.thinking-probe-row .config-button { flex-shrink: 0; }
+.thinking-probe-hint,
+.thinking-probe-note {
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+  line-height: 1.45;
+}
+.thinking-probe-note[data-tone="danger"] { color: var(--danger); }
+.thinking-probe-note[data-tone="warning"] { color: var(--warning); }
+.thinking-probe-note[data-tone="success"] { color: var(--success); }
+.thinking-probe-results,
+.thinking-probe-changes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.thinking-probe-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-xs);
+  font-size: var(--fs-micro);
+  color: var(--text-muted);
+}
+.thinking-probe-result code,
+.thinking-probe-changes code { font-family: var(--font-mono); }
+.thinking-probe-badge { font-weight: var(--fw-semibold); }
+.thinking-probe-result[data-outcome="accepted"] .thinking-probe-badge { color: var(--success); }
+.thinking-probe-result[data-outcome="rejected"] {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+.thinking-probe-result[data-outcome="rejected"] .thinking-probe-badge { color: var(--danger); }
+.thinking-probe-result[data-outcome="inconclusive"] .thinking-probe-badge { color: var(--warning); }
+.thinking-probe-result[data-outcome="not-sent"] .thinking-probe-badge,
+.thinking-probe-result[data-outcome="skipped"] .thinking-probe-badge { color: var(--text-dim); }
+.thinking-probe-detail { color: var(--text-dim); }
+.thinking-probe-suggestion {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.thinking-probe-changes {
+  flex-direction: column;
+  font-size: var(--fs-micro);
+  color: var(--text-muted);
+}
