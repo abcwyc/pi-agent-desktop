@@ -5909,11 +5909,19 @@ html.dark .chart-block {
   display: block;
   margin: 0 auto;
 }
-.chart-block-title {
+.chart-block-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   margin: 0 0 8px;
-  color: var(--text);
   font-size: var(--fs-small);
+}
+.chart-block-title {
+  color: var(--text);
   font-weight: 600;
+}
+.chart-block-axes {
+  color: var(--text-muted);
 }
 .chart-block-loading {
   min-height: 160px;

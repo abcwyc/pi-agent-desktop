@@ -173,13 +173,15 @@ export function clampHtmlPreviewHeight(height: number): number {
 
 // Inside the bootstrap (uses its `err` and `M`). A page counts as shown when
 // its body has rendered text, a visual element of at least 2×2 px (an SVG
-// only when it holds a shape), or a painted box (background or border).
+// only when it holds a shape), a sized custom element (its content lives in a
+// shadow root, which innerText does not reach), or a painted box (background
+// or border).
 // Assigning `window.__piPreviewSettled` lets the React document start it once
 // the component has mounted; earlier, the loading label would count as content.
 const BLANK_CHECK_SCRIPT = `var PV="svg,canvas,img,video,picture,iframe,object,embed,input,button,select,textarea,progress,meter",PG="path,rect,circle,ellipse,line,polyline,polygon,text,image,use,foreignObject";
 function big(e){var r=e.getBoundingClientRect();return r.width>=2&&r.height>=2}
 function shown(){var b=document.body;if(!b)return false;if((b.innerText||"").trim())return true;var q=b.querySelectorAll(PV),i;for(i=0;i<q.length;i++){if(q[i].localName==="svg"&&!q[i].querySelector(PG))continue;if(big(q[i]))return true}
-var a=b.getElementsByTagName("*");for(i=0;i<a.length&&i<3000;i++){var s=getComputedStyle(a[i]);if(((s.backgroundColor!=="rgba(0, 0, 0, 0)"&&s.backgroundColor!=="transparent")||s.backgroundImage!=="none"||parseFloat(s.borderTopWidth)>0)&&big(a[i]))return true}return false}
+var a=b.getElementsByTagName("*");for(i=0;i<a.length&&i<3000;i++){if((a[i].shadowRoot||a[i].localName.indexOf("-")>0)&&big(a[i]))return true;var s=getComputedStyle(a[i]);if(((s.backgroundColor!=="rgba(0, 0, 0, 0)"&&s.backgroundColor!=="transparent")||s.backgroundImage!=="none"||parseFloat(s.borderTopWidth)>0)&&big(a[i]))return true}return false}
 var settled=0,waits=0;function look(first){setTimeout(function(){if(innerWidth<2||innerHeight<2||document.visibilityState==="hidden"){if(++waits<40)look(first);return}if(shown())return;if(first)look(false);else err(M.blankRender)},first?1500:3000)}
 window.__piPreviewSettled=function(){if(settled)return;settled=1;look(true)};
 `;

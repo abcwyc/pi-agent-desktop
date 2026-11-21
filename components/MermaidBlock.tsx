@@ -97,6 +97,21 @@ export async function renderMermaidSvg(code: string, isDark: boolean): Promise<s
   return (await mermaid.render(id, code)).svg;
 }
 
+const warmedTypes = new Set<string>();
+/**
+ * Loads Mermaid and the chunk of one diagram type (Mermaid fetches it inside
+ * `parse`), once per type, from the first word of a fence that is still
+ * streaming. Measured with 150 ms per request: a flowchart showed 1.4 s after
+ * its message ended without this, 0.66 s with Mermaid alone warmed.
+ */
+function warmMermaid(firstWord: string): void {
+  if (warmedTypes.has(firstWord)) return;
+  warmedTypes.add(firstWord);
+  import("mermaid")
+    .then(({ default: mermaid }) => mermaid.parse(`${firstWord}\n`, { suppressErrors: true }))
+    .catch(() => { warmedTypes.delete(firstWord); });
+}
+
 export function MermaidBlock({ code, isStreaming, defaultPreview = false, fit = false, headerAction, fixable }: MermaidBlockProps) {
   const { isDark } = useTheme();
   const { t } = useI18n();
@@ -134,6 +149,14 @@ export function MermaidBlock({ code, isStreaming, defaultPreview = false, fit = 
     preview.addEventListener("wheel", onWheel, { passive: false });
     return () => preview.removeEventListener("wheel", onWheel);
   }, [previewMounted, updatePreviewZoom]);
+
+  // Warm Mermaid while the fence streams: the finished message is a component
+  // of its own and renders the diagram as soon as it mounts.
+  // Only once the first line is complete: "gra" while it arrives is no type.
+  const diagramType = isStreaming ? /^\s*(\S+)[^\n]*\n/.exec(code)?.[1] ?? null : null;
+  useEffect(() => {
+    if (diagramType) warmMermaid(diagramType);
+  }, [diagramType]);
 
   useEffect(() => {
     if (!previewVisible) return;

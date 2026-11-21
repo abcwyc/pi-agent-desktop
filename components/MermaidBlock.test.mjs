@@ -210,7 +210,10 @@ test("keeps Mermaid's parse error for the block and the fix request", async () =
   // The error has to come from parse itself; suppressing it leaves only "invalid".
   const { readFile } = await import("node:fs/promises");
   const source = await readFile(new URL("./MermaidBlock.tsx", import.meta.url), "utf8");
-  assert.doesNotMatch(source, /mermaid\.parse\([^)]*suppressErrors/);
+  // Only the render path; the streaming warm-up parses a first word and ignores errors.
+  const render = source.slice(source.indexOf("export async function renderMermaidSvg"), source.indexOf("const warmedTypes"));
+  assert.match(render, /await mermaid\.parse\(code\);/);
+  assert.doesNotMatch(render, /suppressErrors: true \}\)/);
 });
 
 test("offers no fix button before a diagram has failed", () => {

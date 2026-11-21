@@ -22,7 +22,7 @@ export type ChartType = (typeof CHART_TYPES)[number];
 export type CleanChartSpec = { type: ChartType; title?: string } & Record<string, unknown>;
 
 export type ChartSpecResult =
-  | { ok: true; spec: CleanChartSpec; title: string | null }
+  | { ok: true; spec: CleanChartSpec; title: string | null; axes: { x: string | null; y: string | null } }
   | { ok: false; error: string };
 
 const MAX_LABEL = 120;
@@ -46,13 +46,15 @@ const WIDE_RE = /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]|[\u{1f300}-
 /**
  * diagrammatic sizes label gutters and truncation as characters × 0.6 em,
  * which fits Latin text but not a CJK glyph (about 1 em): a Chinese category
- * name on a bar chart ran off the left edge. Each wide character gets two
- * thirds of a zero-width space appended, so the estimate matches what is
- * drawn without changing what anyone sees.
+ * name on a bar chart ran off the left edge. Each wide character is followed
+ * by a zero-width space, so it counts as 1.2 em, a little more than it draws.
+ * The space goes right after its character, not at the end of the label:
+ * when a narrow chart cuts a label from the end, the padding must go with
+ * the characters it stands for (padding at the end was cut first, and a
+ * shortened Chinese label overflowed again on a phone).
  */
 export function padWideText(text: string): string {
-  const wide = text.match(WIDE_RE)?.length ?? 0;
-  return wide ? text + "​".repeat(Math.ceil((wide * 2) / 3)) : text;
+  return text.replace(WIDE_RE, "$&\u200b");
 }
 
 function text(value: unknown, path: string, required: true): string;
@@ -155,8 +157,7 @@ const BUILDERS: Record<ChartType, (spec: Record<string, unknown>) => Record<stri
       };
     }),
     trend: bool(spec.trend, "trend"),
-    xLabel: text(spec.xLabel, "xLabel"),
-    yLabel: text(spec.yLabel, "yLabel"),
+    // xLabel / yLabel are checked here but drawn by ChartBlock (see `axes`).
     xTicks: 5,
     yTicks: 5,
   }),
@@ -201,6 +202,10 @@ export function parseChartSpec(source: string): ChartSpecResult {
       return fail("type", `must be one of ${CHART_TYPES.join(", ")}`);
     }
     const title = typeof raw.title === "string" ? raw.title.slice(0, 200) : null;
+    // diagrammatic centres an axis title on the tick row, where it covers the
+    // middle tick (Latin labels too), so ChartBlock prints them under the title.
+    const axisText = (key: "xLabel" | "yLabel") => (text(raw[key], key) ?? "").replace(/\u200b/g, "") || null;
+    const axes = { x: axisText("xLabel"), y: axisText("yLabel") };
     const spec = dropUndefined({
       type,
       // diagrammatic uses the title only as the chart's accessible name; ChartBlock draws it.
@@ -210,7 +215,7 @@ export function parseChartSpec(source: string): ChartSpecResult {
       legend: bool(raw.legend, "legend"),
       ...BUILDERS[type as ChartType](raw),
     }) as CleanChartSpec;
-    return { ok: true, spec, title };
+    return { ok: true, spec, title, axes };
   } catch (error) {
     if (error instanceof SpecError) return { ok: false, error: error.message };
     throw error;
