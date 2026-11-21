@@ -142,6 +142,16 @@ export function ArtifactView({ identifier, title, versions, versionRequest, onFi
     if (onFix(text)) dismiss();
   });
 
+  // A Mermaid artifact has no frame: its parse error goes into the same request.
+  const fixMermaid = onFix && !generating
+    ? (error: string) => onFix(t("preview.fixPromptArtifact", {
+      title: version.title,
+      identifier,
+      version: index + 1,
+      errors: formatPreviewErrors([error]),
+    }))
+    : undefined;
+
   const meta = [
     ARTIFACT_TYPE_LABEL[version.type],
     generating ? t("artifacts.generating") : null,
@@ -268,7 +278,7 @@ export function ArtifactView({ identifier, title, versions, versionRequest, onFi
             {runtimeState.status === "error" ? null : t("preview.loadingComponent")}
           </div>
         ) : version.type === "mermaid" ? (
-          <MermaidBlock key={`${identifier}:${index}`} code={version.content} defaultPreview fit />
+          <MermaidBlock key={`${identifier}:${index}`} code={version.content} defaultPreview fit fixable={fixMermaid} />
         ) : (
           <MarkdownBody className="artifact-panel-markdown">{version.content}</MarkdownBody>
         )}

@@ -133,6 +133,8 @@ export interface HtmlPreviewMessages {
   noDefaultExport: string;
   /** {packages}, {error} */
   packagesNeedNetwork: string;
+  /** The page finished loading but nothing on it can be seen. */
+  blankRender: string;
 }
 
 export const HTML_PREVIEW_MESSAGES: HtmlPreviewMessages = {
@@ -143,7 +145,15 @@ export const HTML_PREVIEW_MESSAGES: HtmlPreviewMessages = {
   compileFailed: "Could not compile the component: {error}",
   noDefaultExport: "The component has no default export.",
   packagesNeedNetwork: "Could not load {packages} from esm.sh — these packages need the network ({error})",
+  blankRender: "The page rendered nothing visible: no text, image, SVG, canvas, form control or painted box a few seconds after it loaded.",
 };
+
+/**
+ * When the blank check runs: after the page's `load` (HTML, SVG), when the
+ * React document says the component mounted ("manual"), or never (the
+ * streaming shell, whose content arrives later).
+ */
+export type BlankCheckMode = "load" | "manual" | "off";
 
 export function previewMessages(options: HtmlPreviewOptions): HtmlPreviewMessages {
   return { ...HTML_PREVIEW_MESSAGES, ...options.messages };
@@ -161,6 +171,21 @@ export function clampHtmlPreviewHeight(height: number): number {
   return Math.min(HTML_PREVIEW_MAX_HEIGHT, Math.max(HTML_PREVIEW_MIN_HEIGHT, Math.ceil(height)));
 }
 
+// Inside the bootstrap (uses its `err` and `M`). A page counts as shown when
+// its body has rendered text, a visual element of at least 2×2 px (an SVG
+// only when it holds a shape), a sized custom element (its content lives in a
+// shadow root, which innerText does not reach), or a painted box (background
+// or border).
+// Assigning `window.__piPreviewSettled` lets the React document start it once
+// the component has mounted; earlier, the loading label would count as content.
+const BLANK_CHECK_SCRIPT = `var PV="svg,canvas,img,video,picture,iframe,object,embed,input,button,select,textarea,progress,meter",PG="path,rect,circle,ellipse,line,polyline,polygon,text,image,use,foreignObject";
+function big(e){var r=e.getBoundingClientRect();return r.width>=2&&r.height>=2}
+function shown(){var b=document.body;if(!b)return false;if((b.innerText||"").trim())return true;var q=b.querySelectorAll(PV),i;for(i=0;i<q.length;i++){if(q[i].localName==="svg"&&!q[i].querySelector(PG))continue;if(big(q[i]))return true}
+var a=b.getElementsByTagName("*");for(i=0;i<a.length&&i<3000;i++){if((a[i].shadowRoot||a[i].localName.indexOf("-")>0)&&big(a[i]))return true;var s=getComputedStyle(a[i]);if(((s.backgroundColor!=="rgba(0, 0, 0, 0)"&&s.backgroundColor!=="transparent")||s.backgroundImage!=="none"||parseFloat(s.borderTopWidth)>0)&&big(a[i]))return true}return false}
+var settled=0,waits=0;function look(first){setTimeout(function(){if(innerWidth<2||innerHeight<2||document.visibilityState==="hidden"){if(++waits<40)look(first);return}if(shown())return;if(first)look(false);else err(M.blankRender)},first?1500:3000)}
+window.__piPreviewSettled=function(){if(settled)return;settled=1;look(true)};
+`;
+
 // Runs first inside the frame:
 // - Opaque-origin documents throw on any localStorage/sessionStorage access,
 //   which breaks most generated apps, so an in-memory stand-in replaces them.
@@ -173,8 +198,14 @@ export function clampHtmlPreviewHeight(height: number): number {
 //   only honoured right after the user acted in the frame (a click or a key),
 //   and the app applies its own limits on top: a page cannot be trusted to.
 // - With ROUTE_LINKS, link clicks and window.open go to the parent.
+// - The blank check reports a page that loaded but shows nothing (a script
+//   that threw before drawing, content positioned off screen, an empty body),
+//   so it reaches the error bar and "Ask to fix" like a thrown error would.
+//   It looks twice, 1.5 s and 4.5 s after the page settled, and only while
+//   the frame has a size: a frame inside a hidden panel measures everything
+//   as 0×0 and would otherwise always look blank.
 /** `nonce` is for documents with a script-src policy of their own (the streaming shell). */
-export function bootstrapScript(routeLinks: boolean, messages: HtmlPreviewMessages, nonce?: string): string {
+export function bootstrapScript(routeLinks: boolean, messages: HtmlPreviewMessages, nonce?: string, blankCheck: BlankCheckMode = "off"): string {
   return `<script${nonce ? ` nonce="${nonce}"` : ""}>(function(){
 var P=function(m){try{parent.postMessage(m,"*")}catch(_){}};
 var M=${scriptJson(messages)};window.__piPreviewMessages=M;
@@ -193,6 +224,7 @@ window.__piPreviewError=err;
 window.sendPrompt=function(t){if(navigator.userActivation&&!navigator.userActivation.isActive)return;t=String(t==null?"":t).trim().slice(0,${HTML_PREVIEW_MAX_PROMPT_LENGTH});if(t)P({type:${JSON.stringify(HTML_PREVIEW_PROMPT_MESSAGE)},text:t})};
 addEventListener("error",function(e){var t=e.target;if(t&&t!==window&&t.tagName){var u=t.src||t.href||"";err(F(M.failedToLoad,{resource:t.tagName.toLowerCase()+(u?" "+u:"")}));return}var m=e.message||(e.error&&e.error.message)||"Script error";err(m+(e.lineno?" (line "+e.lineno+(e.colno?":"+e.colno:"")+")":""))},true);
 addEventListener("unhandledrejection",function(e){var r=e.reason;err(F(M.unhandledRejection,{reason:r&&r.message?r.message:String(r)}))});
+${blankCheck === "off" ? "" : `${BLANK_CHECK_SCRIPT}${blankCheck === "load" ? `addEventListener("load",function(){window.__piPreviewSettled()});` : ""}`}
 ${routeLinks ? `function ext(u){try{var x=new URL(u,location.href);return /^https?:$/.test(x.protocol)?x.href:null}catch(_){return null}}
 document.addEventListener("click",function(e){if(e.defaultPrevented)return;var a=e.target&&e.target.closest?e.target.closest("a[href]"):null;if(!a)return;var h=a.getAttribute("href")||"";if(h.charAt(0)==="#")return;var u=ext(h);if(!u)return;e.preventDefault();P({type:${JSON.stringify(HTML_PREVIEW_OPEN_MESSAGE)},url:u})});
 window.open=function(u){var x=ext(u==null?"":String(u));if(x)P({type:${JSON.stringify(HTML_PREVIEW_OPEN_MESSAGE)},url:x});return null};` : `document.addEventListener("click",function(e){var a=e.target&&e.target.closest?e.target.closest("a[href]"):null;if(!a)return;var h=a.getAttribute("href")||"";if(h.charAt(0)==="#"||/^javascript:/i.test(h))return;if(!a.target||a.target==="_self"){a.target="_blank";a.rel="noopener"}},true);`}
@@ -248,7 +280,7 @@ function injectIntoHtml(source: string, snippet: string): string {
 }
 
 export function buildHtmlPreviewDocument(kind: HtmlPreviewKind, code: string, options: HtmlPreviewOptions = {}): string {
-  const bootstrap = bootstrapScript(Boolean(options.routeLinksToParent), previewMessages(options));
+  const bootstrap = bootstrapScript(Boolean(options.routeLinksToParent), previewMessages(options), undefined, kind === "react" ? "manual" : "load");
   if (kind === "react") return buildReactDocument(code, bootstrap, options);
   const kit = usesThemeKit(code) ? themeKitStyle(options.themeKit ?? defaultThemeKit(options.theme?.scheme ?? "light")) : "";
   if (kind === "svg") {
@@ -378,6 +410,7 @@ if(typeof Component!=="function")throw new Error(M.noDefaultExport);
 const React=await import("react");
 const {createRoot}=await import("react-dom/client");
 createRoot(document.getElementById("root")).render(React.createElement(Component));
+if(window.__piPreviewSettled)window.__piPreviewSettled();
 }catch(e){const m=e&&e.message?e.message:String(e);report(packages.length&&/module script failed|dynamically imported module|error loading|Failed to fetch|NetworkError/i.test(m)?F(M.packagesNeedNetwork,{packages:packages.join(", "),error:m}):m)}
 </script></body></html>`;
 }

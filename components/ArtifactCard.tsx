@@ -161,7 +161,7 @@ function InlineArtifact({
     return <HtmlPreviewBlock code={block.content} lang={block.lang} kind={block.type} isStreaming={streaming} headerAction={action} />;
   }
   if (block.type === "mermaid") {
-    return <MermaidBlock code={block.content} isStreaming={streaming} defaultPreview headerAction={action} />;
+    return <MermaidBlock code={block.content} isStreaming={streaming} defaultPreview headerAction={action} fixable />;
   }
   return <CodeBlock code={block.content} lang={block.lang} isStreaming={streaming} headerAction={action} />;
 }
