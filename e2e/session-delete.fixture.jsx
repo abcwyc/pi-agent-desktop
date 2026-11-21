@@ -4,6 +4,11 @@ import { I18nProvider } from "../hooks/useI18n";
 // Exported by the test bundler only; all row actions are the application's own.
 import { SidebarSessionFixture } from "../components/SessionSidebar";
 
+// Relative to the run, so the sidebar's compact time stays a short label ("3d" / "3天").
+// A fixed date grew into "1个月" a month later, widening the trailing slot the
+// "…" button fills, and the 28px hit-target assertion failed on unchanged code.
+const RECENT = new Date(Date.now() - 3 * 86_400_000).toISOString();
+
 function Fixture() {
   const query = new URLSearchParams(location.search);
   const [removed, setRemoved] = useState(false);
@@ -18,7 +23,7 @@ function Fixture() {
         {!removed && <SidebarSessionFixture
           session={{ id: "fixture-session", path: "/fixture/session.jsonl", cwd: "/fixture/project",
             name: title, firstMessage: "Fixture", messageCount: 4,
-            created: "2026-10-20T12:00:00Z", modified: "2026-10-20T12:00:00Z", chatFolder: query.has("folder") }}
+            created: RECENT, modified: RECENT, chatFolder: query.has("folder") }}
           isSelected onClick={() => setActivated(value => value + 1)} onDeleted={() => setRemoved(true)}
         />}
       </div>
