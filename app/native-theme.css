@@ -11550,3 +11550,26 @@ html.dark .artifacts-thumb[data-tone="data"] { --tone: #4fc1d6; }
 }
 .builtin-match-actions:empty { display: none; }
 
+/* Chat › a provider error that refused the thinking level (components/MessageView.tsx) */
+.thinking-refusal-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+}
+.thinking-refusal-action {
+  padding: 2px 10px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--bg-panel);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.thinking-refusal-action:hover { background: var(--bg-hover); }
+.thinking-refusal-action:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+

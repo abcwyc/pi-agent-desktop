@@ -184,6 +184,12 @@ function readRememberedSelection(): Selection | null {
     if (selection.type === "provider" && typeof selection.name === "string") {
       return { type: "provider", name: selection.name };
     }
+    // A chat error's "Model settings" names the model by id; the load resolves its slot.
+    if (selection.type === "model"
+      && typeof selection.providerName === "string"
+      && typeof selection.modelId === "string") {
+      return { type: "provider", name: selection.providerName };
+    }
     if (selection.type === "model"
       && typeof selection.providerName === "string"
       && typeof selection.index === "number"
@@ -200,6 +206,20 @@ function readRememberedSelection(): Selection | null {
     // Ignore malformed browser state.
   }
   return null;
+}
+
+/** The model a chat error asked to open, by provider and id (see rememberModelSettingsFocus). */
+function readRememberedModelFocus(): { providerName: string; modelId: string } | null {
+  const raw = getLastSettingsSelection("models");
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw) as Record<string, unknown> | null;
+    return value && value.type === "model" && typeof value.providerName === "string" && typeof value.modelId === "string"
+      ? { providerName: value.providerName, modelId: value.modelId }
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function customSelectionExists(config: ModelsJson, selection: Selection): boolean {
@@ -2012,6 +2032,7 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null, onOpenMcp 
   const [loadError, setLoadError] = useState<string | null>(null);
   const [savedOk, setSavedOk] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(readRememberedSelection);
+  const modelFocusRef = useRef(readRememberedModelFocus());
   const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
   const [apiKeyProviders, setApiKeyProviders] = useState<ApiKeyProvider[]>([]);
   /** Runtime display names of every provider, including ones with no chat models. */
@@ -2070,6 +2091,15 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null, onOpenMcp 
         savedModelIdsRef.current = savedModelIds(normalized);
         setSavedNames(savedProviderNames(normalized));
         const keys = Object.keys(normalized.providers ?? {});
+        const focus = modelFocusRef.current;
+        modelFocusRef.current = null;
+        const focusIndex = focus
+          ? normalized.providers?.[focus.providerName]?.models?.findIndex((entry) => entry.id === focus.modelId) ?? -1
+          : -1;
+        if (focus && focusIndex >= 0) {
+          setSelection({ type: "model", providerName: focus.providerName, index: focusIndex });
+          return;
+        }
         setSelection((current) => current && customSelectionExists(normalized, current)
           ? current
           : keys[0]

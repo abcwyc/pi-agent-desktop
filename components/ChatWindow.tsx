@@ -33,7 +33,7 @@ import type { SessionStatsInfo } from "@/lib/pi-types";
 import { importDroppedProjectFiles, partitionChatDroppedFiles } from "@/lib/chat-file-drop";
 import { formatAttachmentSize } from "@/lib/chat-attachments";
 import type { ToolEntry } from "@/lib/tool-presets";
-import type { SettingsSection } from "@/lib/settings-navigation";
+import { rememberModelSettingsFocus, type SettingsSection } from "@/lib/settings-navigation";
 import { findChatScrollAnchor, type ChatScrollPosition } from "@/lib/chat-scroll-position";
 import {
   captureScrollDistance,
@@ -340,6 +340,11 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     onScrollPositionChange,
   });
   const sessionBusy = agentRunning || bashRunning;
+  // A refused thinking level's error opens Settings › Models on that model.
+  const openModelSettings = useCallback((provider: string, modelId: string) => {
+    rememberModelSettingsFocus(provider, modelId);
+    onOpenSettings?.("models");
+  }, [onOpenSettings]);
   // A chat's folder and whether it may use the computer; the server owns both.
   const chatAccess = useChatAccess(session?.id, chatOnly && Boolean(session) && !isNew, handleChatAccessRebuilt);
   const handleToggleChatUnlocked = useCallback((nextUnlocked: boolean) => {
@@ -1468,6 +1473,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                     onCompact={options.recoverTruncation ? handleCompact : undefined}
                     isCompacting={options.recoverTruncation ? isCompacting : undefined}
                     compactError={options.recoverTruncation ? compactError : undefined}
+                    onOpenModelSettings={onOpenSettings ? openModelSettings : undefined}
                   />
                 );
                 if (!isVisible || currentRefIdx === undefined) return view;
