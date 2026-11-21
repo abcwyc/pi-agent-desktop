@@ -13,6 +13,8 @@ type ChartComponent = ComponentType<{ spec: CleanChartSpec; className?: string }
 let chartModule: Promise<ChartComponent> | null = null;
 function loadChart(): Promise<ChartComponent> {
   chartModule ??= import("diagrammatic/spec").then((module) => module.Chart as unknown as ChartComponent);
+  // A failed load is not cached: Retry imports again.
+  chartModule.catch(() => { chartModule = null; });
   return chartModule;
 }
 
@@ -50,6 +52,7 @@ export function ChartBlock({ code, isStreaming, fixable }: ChartBlockProps) {
   const { t } = useI18n();
   const [showChart, setShowChart] = useState(true);
   const [Chart, setChart] = useState<ChartComponent | null>(null);
+  // The library could not be loaded: Retry, never "Ask to fix" (the spec may be fine).
   const [loadError, setLoadError] = useState<string | null>(null);
   const [drawError, setDrawError] = useState<{ code: string; message: string } | null>(null);
   const figureRef = useRef<HTMLDivElement>(null);
@@ -61,6 +64,7 @@ export function ChartBlock({ code, isStreaming, fixable }: ChartBlockProps) {
     let cancelled = false;
     loadChart()
       .then((loaded) => { if (!cancelled) setChart(() => loaded); })
+      // Whatever the import throws, the spec was not the problem.
       .catch((error: unknown) => { if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error)); });
     return () => { cancelled = true; };
   }, [chartVisible, parsed, Chart]);
@@ -99,7 +103,12 @@ export function ChartBlock({ code, isStreaming, fixable }: ChartBlockProps) {
       <div className="markdown-code-header">
         <span className="markdown-code-lang">chart</span>
         <div className="markdown-code-actions">
-          {failure && fixable && <DiagramFixButton error={failure} fixable promptKey="preview.fixPromptChart" />}
+          {failure && loadError && failure === loadError && (
+            <button type="button" className="markdown-code-action" onClick={() => setLoadError(null)}>
+              {t("common.retry")}
+            </button>
+          )}
+          {failure && failure !== loadError && fixable && <DiagramFixButton error={failure} fixable promptKey="preview.fixPromptChart" />}
           {ready && (
             <button type="button" className="markdown-code-action" title={t("chart.download")} aria-label={t("chart.download")} onClick={download}>
               SVG
@@ -110,7 +119,7 @@ export function ChartBlock({ code, isStreaming, fixable }: ChartBlockProps) {
       </div>
       {failure ? (
         <div className="chart-block-body chart-block-error" role="alert">
-          <div className="mermaid-error-title">{t("chart.invalid")}</div>
+          <div className="mermaid-error-title">{failure === loadError ? t("diagram.loadFailed") : t("chart.invalid")}</div>
           <pre className="mermaid-error-detail">{failure}</pre>
         </div>
       ) : !ready ? (

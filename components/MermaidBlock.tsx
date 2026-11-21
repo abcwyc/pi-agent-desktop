@@ -9,6 +9,7 @@ import { copyText } from "@/lib/clipboard";
 import { isImeComposing } from "@/lib/ime";
 import { getActiveArtifactSession, requestArtifactFix, useActiveArtifactSession, useArtifactFixSessionId } from "@/lib/artifact-store";
 import { formatPreviewErrors } from "./HtmlPreviewErrorBar";
+import { isLoadFailure } from "@/lib/chunk-load-error";
 
 interface MermaidBlockProps {
   code: string;
@@ -64,7 +65,7 @@ export function downloadMermaidSvg(svg: SVGSVGElement): void {
 
 type RenderState =
   | { key: string; status: "loading" }
-  | { key: string; status: "error"; message: string }
+  | { key: string; status: "error"; message: string; loadFailed: boolean }
   | { key: string; status: "ready"; svg: string };
 
 const MERMAID_ERROR_MAX_LENGTH = 1000;
@@ -104,6 +105,8 @@ export function MermaidBlock({ code, isStreaming, defaultPreview = false, fit = 
   const [zoomOpen, setZoomOpen] = useState(false);
   const previewRef = useRef<HTMLButtonElement>(null);
   const [previewZoom, setPreviewZoom] = useState(1);
+  // Bumped by Retry after the renderer failed to load.
+  const [attempt, setAttempt] = useState(0);
   const currentKey = `${isDark ? "dark" : "light"}\n${code}`;
   const previewVisible = showPreview && !isStreaming;
 
@@ -141,13 +144,13 @@ export function MermaidBlock({ code, isStreaming, defaultPreview = false, fit = 
     renderMermaidSvg(code, isDark).then((svg) => {
       if (!cancelled) setRenderState({ key: currentKey, status: "ready", svg });
     }).catch((error: unknown) => {
-      if (!cancelled) setRenderState({ key: currentKey, status: "error", message: mermaidErrorText(error) });
+      if (!cancelled) setRenderState({ key: currentKey, status: "error", message: mermaidErrorText(error), loadFailed: isLoadFailure(error) });
     });
 
     return () => {
       cancelled = true;
     };
-  }, [code, currentKey, isDark, previewVisible]);
+  }, [code, currentKey, isDark, previewVisible, attempt]);
 
   const previewButton = useMemo(() => (
     <button
@@ -166,9 +169,10 @@ export function MermaidBlock({ code, isStreaming, defaultPreview = false, fit = 
   }
 
   const failure = renderState?.key === currentKey && renderState.status === "error" ? renderState.message : null;
+  const loadFailed = renderState?.key === currentKey && renderState.status === "error" && renderState.loadFailed;
   const body = failure !== null ? (
       <div className="mermaid-block mermaid-block-error" role="alert">
-        <div className="mermaid-error-title">{t("i18n.invalidMermaid")}</div>
+        <div className="mermaid-error-title">{loadFailed ? t("diagram.loadFailed") : t("i18n.invalidMermaid")}</div>
         {failure && <pre className="mermaid-error-detail">{failure}</pre>}
       </div>
     ) : renderState?.key !== currentKey || renderState.status !== "ready" ? (
@@ -219,7 +223,12 @@ export function MermaidBlock({ code, isStreaming, defaultPreview = false, fit = 
         <span className="markdown-code-lang">mermaid</span>
         <div className="markdown-code-actions">
           {headerAction}
-          {failure !== null && fixable && <DiagramFixButton error={failure || t("i18n.invalidMermaid")} fixable={fixable} promptKey="preview.fixPromptMermaid" />}
+          {loadFailed && (
+            <button type="button" className="markdown-code-action" onClick={() => setAttempt((value) => value + 1)}>
+              {t("common.retry")}
+            </button>
+          )}
+          {failure !== null && !loadFailed && fixable && <DiagramFixButton error={failure || t("i18n.invalidMermaid")} fixable={fixable} promptKey="preview.fixPromptMermaid" />}
           {renderState?.key === currentKey && renderState.status === "ready" && (
             <button
               type="button"

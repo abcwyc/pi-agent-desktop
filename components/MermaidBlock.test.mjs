@@ -217,3 +217,18 @@ test("offers no fix button before a diagram has failed", () => {
   const html = renderMermaid({ code: mermaidSrc, defaultPreview: true, fixable: true });
   assert.doesNotMatch(html, /mermaid-fix/);
 });
+
+test("a chunk that failed to load is not a syntax error", async () => {
+  const { isLoadFailure } = await jiti.import("@/lib/chunk-load-error");
+  // The message the dev server gave when it went away mid-render.
+  assert.equal(isLoadFailure(new Error("Failed to load chunk /_next/static/chunks/node_modules_1rpy-c1dcp_8y._.js from module [project]/node_modules/mermaid/dist/chunks/mermaid.core/flowDiagram-HODETNUW.mjs [app-client] (ecmascript, async loader)")), true);
+  assert.equal(isLoadFailure(Object.assign(new Error("x"), { name: "ChunkLoadError" })), true);
+  assert.equal(isLoadFailure(new TypeError("Failed to fetch dynamically imported module: http://x/a.js")), true);
+  assert.equal(isLoadFailure(new TypeError("Importing a module script failed.")), true);
+  assert.equal(isLoadFailure(new Error("Parse error on line 3:\n...")), false);
+  assert.equal(isLoadFailure("Failed to load chunk"), false);
+  // Only a parse error offers the fix; a load failure offers Retry.
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(new URL("./MermaidBlock.tsx", import.meta.url), "utf8");
+  assert.match(source, /failure !== null && !loadFailed && fixable && <DiagramFixButton/);
+});
