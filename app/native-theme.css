@@ -5871,6 +5871,59 @@ html.dark {
   line-height: 1.5;
 }
 
+/* ```chart fences (components/ChartBlock.tsx), drawn by diagrammatic as SVG
+   in the page. Its colours are the --dg-* tokens; the series follow the
+   preview theme kit's fixed per-scheme palette (lib/preview-theme-kit.ts),
+   because most themes' accents are greys. Text inherits the message's
+   font and colour. */
+.chart-block {
+  --dg-c1: #2f6fdf;
+  --dg-c2: #159a7a;
+  --dg-c3: #d98a10;
+  --dg-c4: #d2453b;
+  --dg-c5: #7a5bd6;
+  --dg-c6: #6b7280;
+  --dg-c7: #0e8fa8;
+  --dg-pos: #2f6fdf;
+  --dg-neg: #d2453b;
+  --dg-ink: var(--text);
+  --dg-font: inherit;
+}
+html.dark .chart-block {
+  --dg-c1: #6ea2ff;
+  --dg-c2: #3cc9a4;
+  --dg-c3: #f0b143;
+  --dg-c4: #f0776d;
+  --dg-c5: #a891f5;
+  --dg-c6: #9ca3af;
+  --dg-c7: #4cc3d9;
+  --dg-pos: #6ea2ff;
+  --dg-neg: #f0776d;
+}
+.chart-block-body {
+  margin: 0;
+  padding: 12px 16px 16px;
+  background: color-mix(in srgb, var(--bg) 92%, var(--bg-panel));
+}
+.chart-block-figure svg {
+  display: block;
+  margin: 0 auto;
+}
+.chart-block-title {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: var(--fs-small);
+  font-weight: 600;
+}
+.chart-block-loading {
+  min-height: 160px;
+}
+.chart-block-error {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+
 /* Inline ```html / ```svg previews (components/HtmlPreviewBlock.tsx). The
    frame stays white unless the page sets no colours of its own (.is-themed),
    because generated pages assume a light canvas. */

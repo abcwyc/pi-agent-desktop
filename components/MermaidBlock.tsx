@@ -219,7 +219,7 @@ export function MermaidBlock({ code, isStreaming, defaultPreview = false, fit = 
         <span className="markdown-code-lang">mermaid</span>
         <div className="markdown-code-actions">
           {headerAction}
-          {failure !== null && fixable && <MermaidFixButton error={failure || t("i18n.invalidMermaid")} fixable={fixable} />}
+          {failure !== null && fixable && <DiagramFixButton error={failure || t("i18n.invalidMermaid")} fixable={fixable} promptKey="preview.fixPromptMermaid" />}
           {renderState?.key === currentKey && renderState.status === "ready" && (
             <button
               type="button"
@@ -243,11 +243,16 @@ export function MermaidBlock({ code, isStreaming, defaultPreview = false, fit = 
 }
 
 /**
- * "Ask to fix" for a diagram that does not render. The generic request goes
- * only to the conversation that registered a fix handler, like an HTML
- * preview's; after one request the button stays away for that error.
+ * "Ask to fix" for a diagram or chart that does not render. The generic
+ * request (`promptKey`, with `{errors}`) goes only to the conversation that
+ * registered a fix handler, like an HTML preview's; after one request the
+ * button stays away for that error. Shared with ChartBlock.
  */
-function MermaidFixButton({ error, fixable }: { error: string; fixable: true | ((error: string) => boolean) }) {
+export function DiagramFixButton({ error, fixable, promptKey }: {
+  error: string;
+  fixable: true | ((error: string) => boolean);
+  promptKey: "preview.fixPromptMermaid" | "preview.fixPromptChart";
+}) {
   const { t } = useI18n();
   const activeSessionId = useActiveArtifactSession();
   const fixSessionId = useArtifactFixSessionId();
@@ -256,7 +261,7 @@ function MermaidFixButton({ error, fixable }: { error: string; fixable: true | (
   if (fixable === true && !(activeSessionId && fixSessionId === activeSessionId)) return null;
   const fix = () => {
     const sent = fixable === true
-      ? requestArtifactFix(getActiveArtifactSession(), t("preview.fixPromptMermaid", { errors: formatPreviewErrors([error]) }))
+      ? requestArtifactFix(getActiveArtifactSession(), t(promptKey, { errors: formatPreviewErrors([error]) }))
       : fixable(error);
     if (sent) setSentFor(error);
   };

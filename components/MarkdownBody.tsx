@@ -15,6 +15,8 @@ import { copyText } from "@/lib/clipboard";
 import { ImagePreview } from "./ImagePreview";
 import { MermaidBlock, CodeBlock } from "./MermaidBlock";
 import { HtmlPreviewBlock } from "./HtmlPreviewBlock";
+import { ChartBlock } from "./ChartBlock";
+import { CHART_FENCE_LANGS } from "@/lib/chart-spec";
 import { htmlPreviewKind } from "@/lib/html-preview";
 import { ArtifactCard } from "./ArtifactCard";
 import { ARTIFACT_FENCE_LANG, decodeArtifactFence, encodeArtifactsForMarkdown } from "@/lib/artifacts";
@@ -225,6 +227,9 @@ function buildComponents(
               fixable={assistantText}
             />
           );
+        }
+        if (CHART_FENCE_LANGS.has(lang)) {
+          return <ChartBlock code={raw.replace(/\n$/, "")} isStreaming={isStreaming} fixable={assistantText} />;
         }
         const previewKind = htmlPreviewKind(lang, raw);
         if (previewKind) {
