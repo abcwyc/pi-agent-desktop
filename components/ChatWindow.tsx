@@ -14,6 +14,8 @@ import { ConversationFind } from "./ConversationFind";
 import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
 import { buildQuotedSelection } from "@/lib/quoted-selection";
 import { MessageView } from "./MessageView";
+import { ToolStepGroup } from "./ToolStepGroup";
+import { groupToolSteps, stepKind, summarizeToolSteps } from "@/lib/tool-step-groups";
 import { useReportDesktopReady } from "./desktop";
 import { MarkdownBody } from "./MarkdownBody";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
@@ -1482,6 +1484,36 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                 );
               };
 
+              // Runs of tool-only steps fold into one row (lib/tool-step-groups.ts).
+              // A folded row also takes the refs of the steps inside, so the
+              // conversation navigator and search still land somewhere visible.
+              const pushToolSteps = (target: ReactNode[], items: Array<{ idx: number; message: AgentMessage; node: () => ReactNode }>, live: boolean) => {
+                for (const segment of groupToolSteps(items, (item) => stepKind(item.message), { keepLastVisible: live })) {
+                  if (segment.kind === "single") {
+                    target.push(segment.item.node());
+                    continue;
+                  }
+                  const first = segment.items[0];
+                  const refIndices = segment.items.map((item) => visibleRefIndexByMessage.get(item.idx)).filter((value): value is number => value !== undefined);
+                  target.push(
+                    <ToolStepGroup
+                      key={`tool-steps-${messageKeys[first.idx] ?? first.idx}`}
+                      summary={summarizeToolSteps(segment.items.map((item) => item.message), toolResultsMap)}
+                      running={live}
+                      reveal={Boolean(pendingSearchScroll && segment.items.some((item) => entryIds[item.idx] === pendingSearchScroll.entryId))}
+                      registerRef={refIndices.length > 0 ? (element) => { for (const refIndex of refIndices) messageRefs.current[refIndex] = element as HTMLDivElement | null; } : undefined}
+                    >
+                      {segment.items.map((item) => item.node())}
+                    </ToolStepGroup>,
+                  );
+                }
+              };
+              const turnItems = (from: number, to: number) => {
+                const items: Array<{ idx: number; message: AgentMessage; node: () => ReactNode }> = [];
+                for (let renderIdx = from; renderIdx < to; renderIdx++) items.push({ idx: renderIdx, message: messages[renderIdx], node: () => renderMessage(renderIdx) });
+                return items;
+              };
+
               const rendered: ReactNode[] = [];
               for (let idx = 0; idx < messages.length;) {
                 const msg = messages[idx];
@@ -1502,19 +1534,9 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
 
                 const finalAssistantIdx = findFinalAssistantIndex(messages, userIdx, endIdx);
 
-                if (finalAssistantIdx === -1) {
-                  for (let renderIdx = groupStartIdx; renderIdx < endIdx; renderIdx++) {
-                    rendered.push(renderMessage(renderIdx));
-                  }
-                  idx = endIdx;
-                  continue;
-                }
-
                 const isLiveTail = (sessionBusy || streamState.isStreaming) && endIdx === messages.length && userIdx === lastAnchorIdx;
-                if (isLiveTail) {
-                  for (let renderIdx = groupStartIdx; renderIdx < endIdx; renderIdx++) {
-                    rendered.push(renderMessage(renderIdx));
-                  }
+                if (finalAssistantIdx === -1 || isLiveTail) {
+                  pushToolSteps(rendered, turnItems(groupStartIdx, endIdx), isLiveTail);
                   idx = endIdx;
                   continue;
                 }
@@ -1524,7 +1546,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                 const finalAssistant = messages[finalAssistantIdx] as AssistantMessage;
                 const { answerMessage: finalAnswerMessage, processMessage: finalProcessMessage } = getFinalSplit(finalAssistant);
 
-                const processViews: ReactNode[] = [];
+                const processItems: Array<{ idx: number; message: AgentMessage; node: () => ReactNode }> = [];
                 let processToolCount = 0;
                 let processRefIdx: number | undefined;
                 let revealProcess = false;
@@ -1533,7 +1555,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                   const processMessage = messages[processIdx];
                   if (processMessage.role === "custom") {
                     revealProcess ||= Boolean(pendingSearchScroll && pendingSearchScroll.entryId === entryIds[processIdx]);
-                    processViews.push(renderMessage(processIdx, { attachRef: false, keyPrefix: "process" }));
+                    processItems.push({ idx: processIdx, message: processMessage, node: () => renderMessage(processIdx, { attachRef: false, keyPrefix: "process" }) });
                     continue;
                   }
                   if (processMessage.role !== "assistant") continue;
@@ -1543,13 +1565,15 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                   processRefIdx ??= visibleRefIndexByMessage.get(processIdx);
                   processToolCount += countToolCallBlocks(blocks);
                   revealProcess ||= Boolean(pendingSearchScroll && entryIds[processIdx] === pendingSearchScroll.entryId && (!searchBlock || blocks.includes(searchBlock)));
-                  processViews.push(renderMessage(processIdx, {
+                  processItems.push({ idx: processIdx, message, node: () => renderMessage(processIdx, {
                     attachRef: false,
                     keyPrefix: "process",
                     messageOverride: message,
                     showTimestamp: false,
-                  }));
+                  }) });
                 }
+                const processViews: ReactNode[] = [];
+                pushToolSteps(processViews, processItems, false);
 
                 if (processViews.length > 0) {
                   rendered.push(
@@ -1562,7 +1586,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                           would otherwise stay open once its answer shows up, e.g. when
                           switching between an answered and an unanswered leaf of the same
                           turn. Manual toggles survive every other re-render. */}
-                      <ProcessDetailsGroup key={finalAnswerMessage ? "answered" : "unanswered"} messageCount={processViews.length} toolCallCount={processToolCount} defaultExpanded={!finalAnswerMessage} reveal={revealProcess} t={t}>
+                      <ProcessDetailsGroup key={finalAnswerMessage ? "answered" : "unanswered"} messageCount={processItems.length} toolCallCount={processToolCount} defaultExpanded={!finalAnswerMessage} reveal={revealProcess} t={t}>
                         {processViews}
                       </ProcessDetailsGroup>
                     </div>,

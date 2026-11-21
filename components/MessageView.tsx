@@ -2144,7 +2144,7 @@ function previewText(text: string): string {
 }
 
 
-function getToolPreview(block: ToolCallContent): string {
+export function getToolPreview(block: ToolCallContent): string {
   const input = block.input;
   if (!input || typeof input !== "object") return "";
   const keys = Object.keys(input);

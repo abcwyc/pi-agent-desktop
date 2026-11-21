@@ -5422,6 +5422,93 @@ html.dark {
   color: var(--text) !important;
 }
 
+/* A run of tool-only steps folded into one row (components/ToolStepGroup.tsx).
+   Same size and radius as a tool card, in neutral colours, so it reads as
+   "several of those" rather than one more call. */
+.tool-step-group {
+  margin: 2px 0 12px;
+}
+.tool-step-group-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 10px;
+  border: var(--hairline) solid var(--separator);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-native),
+    background var(--dur-fast) var(--ease-native),
+    border-color var(--dur-fast) var(--ease-native);
+}
+.tool-step-group-trigger:hover {
+  border-color: var(--border);
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.tool-step-group-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.tool-step-group-chevron {
+  flex-shrink: 0;
+  transition: transform var(--dur-base) var(--ease-native);
+}
+.tool-step-group.is-open .tool-step-group-chevron {
+  transform: rotate(90deg);
+}
+.tool-step-group-tools {
+  flex-shrink: 0;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+}
+.tool-step-group-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+}
+.tool-step-group-meta {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+}
+.tool-step-group-failed {
+  color: var(--danger);
+}
+.tool-step-group-running {
+  color: var(--accent);
+}
+.tool-step-group-content {
+  margin-top: 8px;
+  padding-left: 12px;
+  border-left: var(--hairline) solid var(--separator);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tool-step-group-chevron,
+  .tool-step-group-trigger {
+    transition: none;
+  }
+}
+
 .process-details-content {
   padding: 10px 11px 1px;
   border: var(--hairline) solid var(--separator);
