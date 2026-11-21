@@ -204,6 +204,7 @@ function buildComponents(
   onOpenFile: ((filePath: string, page?: number) => void) | undefined,
   fenceFiles: Map<number, string>,
   onNavigateLink?: (href: string) => void,
+  assistantText?: boolean,
 ): Components {
   return {
     code({ className, children, node, ...props }) {
@@ -221,6 +222,7 @@ function buildComponents(
               code={raw.replace(/\n$/, "")}
               isStreaming={isStreaming}
               defaultPreview
+              fixable={assistantText}
             />
           );
         }
@@ -331,8 +333,8 @@ export const MarkdownBody = memo(function MarkdownBody({ children, className, is
     [normalizedMarkdown, cwd, trackFences],
   );
   const components = useMemo(
-    () => buildComponents(isStreaming, cwd, onOpenFile, fenceFiles, onNavigateLink),
-    [isStreaming, cwd, onOpenFile, fenceFiles, onNavigateLink],
+    () => buildComponents(isStreaming, cwd, onOpenFile, fenceFiles, onNavigateLink, artifacts),
+    [isStreaming, cwd, onOpenFile, fenceFiles, onNavigateLink, artifacts],
   );
   // Reuse the element when a new network delta has not published a snapshot.
   const body = useMemo(() => (

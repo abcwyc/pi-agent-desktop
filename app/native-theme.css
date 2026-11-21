@@ -5859,6 +5859,17 @@ html.dark {
   font-family: var(--font-mono);
   font-size: var(--fs-small);
 }
+/* Mermaid's own parse error under the title (MermaidBlock), so the user and
+   "Ask to fix" both see where and why it failed. */
+.mermaid-error-detail {
+  margin: 8px 0 0;
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre;
+  color: var(--text-dim);
+  font: inherit;
+  line-height: 1.5;
+}
 
 /* Inline ```html / ```svg previews (components/HtmlPreviewBlock.tsx). The
    frame stays white unless the page sets no colours of its own (.is-themed),

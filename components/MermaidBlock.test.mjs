@@ -8,7 +8,7 @@ const jiti = createJiti(import.meta.url, {
 });
 const React = await jiti.import("react");
 const { renderToStaticMarkup } = await jiti.import("react-dom/server");
-const { MermaidBlock, CodeBlock, downloadMermaidSvg, mermaidNaturalWidth } = await jiti.import("./MermaidBlock.tsx");
+const { MermaidBlock, CodeBlock, downloadMermaidSvg, mermaidNaturalWidth, mermaidErrorText } = await jiti.import("./MermaidBlock.tsx");
 const { I18nProvider } = await jiti.import("@/hooks/useI18n");
 
 // Simple sequenceDiagram for testing
@@ -197,4 +197,23 @@ test("reads a Mermaid diagram's natural width from its viewBox", () => {
 test("fit mode stays off unless asked for", () => {
   const plain = renderMermaid({ code: mermaidSrc, defaultPreview: true });
   assert.doesNotMatch(plain, /mermaid-fit/);
+});
+
+test("keeps Mermaid's parse error for the block and the fix request", async () => {
+  const parseError = new Error("Parse error on line 2:\r\n...A -->\r\n-----^\r\n\r\n\r\n\r\nExpecting 'SEMI', got 'EOF'");
+  assert.equal(mermaidErrorText(parseError), "Parse error on line 2:\n...A -->\n-----^\n\nExpecting 'SEMI', got 'EOF'");
+  assert.equal(mermaidErrorText("plain"), "plain");
+  assert.equal(mermaidErrorText(null), "");
+  const long = mermaidErrorText(new Error("x".repeat(5000)));
+  assert.equal(long.length, 1001);
+  assert.ok(long.endsWith("…"));
+  // The error has to come from parse itself; suppressing it leaves only "invalid".
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(new URL("./MermaidBlock.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /mermaid\.parse\([^)]*suppressErrors/);
+});
+
+test("offers no fix button before a diagram has failed", () => {
+  const html = renderMermaid({ code: mermaidSrc, defaultPreview: true, fixable: true });
+  assert.doesNotMatch(html, /mermaid-fix/);
 });
