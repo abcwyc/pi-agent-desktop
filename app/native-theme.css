@@ -11523,3 +11523,30 @@ html.dark .artifacts-thumb[data-tone="data"] { --tone: #4fc1d6; }
   font-size: var(--fs-micro);
   color: var(--text-muted);
 }
+
+/* Settings › Models › "pi ships this endpoint" notices (components/BuiltinMatchNotice.tsx) */
+.builtin-match-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: var(--hairline) solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 7%, var(--bg));
+  color: var(--text);
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+}
+.builtin-match-changes {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+}
+.builtin-match-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.builtin-match-actions:empty { display: none; }
+

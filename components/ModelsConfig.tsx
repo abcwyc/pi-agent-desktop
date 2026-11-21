@@ -4,6 +4,7 @@ import type { ModelContextSettings } from "./ModelContextWindow";
 import { withContextWindowOverride } from "@/lib/model-context";
 import { AppSelect } from "./AppSelect";
 import { ThinkingLevelProbe } from "./ThinkingLevelProbe";
+import { BuiltinModelNotice, BuiltinProviderNotice } from "./BuiltinMatchNotice";
 
 import { LLAMA_CPP_PROVIDER_ID } from "@/lib/provider-listing";
 import { useState, useEffect, useCallback, useId, useRef, type ButtonHTMLAttributes, type DragEvent } from "react";
@@ -339,11 +340,13 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 // ── Provider detail ───────────────────────────────────────────────────────────
 
-function ProviderDetail({ name, editingName, fallbackLabel, provider, onChange, onEditingNameChange, onRename, onDelete, onAddModels, enabledModels }: {
+function ProviderDetail({ name, editingName, fallbackLabel, provider, onChange, onEditingNameChange, onRename, onDelete, onAddModels, enabledModels, builtinProviderIds, onOpenBuiltinProvider }: {
   name: string; editingName: string; fallbackLabel: string; provider: ProviderEntry;
   onChange: (p: ProviderEntry) => void; onEditingNameChange: (n: string) => void;
   onRename: (n: string) => void; onDelete: () => void;
   onAddModels: (models: DiscoveredModel[]) => void; enabledModels: EnabledModelsController;
+  /** Built-in API-key providers the panel can open, for the "same endpoint" notice. */
+  builtinProviderIds: ReadonlySet<string>; onOpenBuiltinProvider: (id: string) => void;
 }) {
   const { t } = useI18n();
   const [discoveryState, setDiscoveryState] = useState<ModelDiscoveryState>({ phase: "idle" });
@@ -465,6 +468,7 @@ function ProviderDetail({ name, editingName, fallbackLabel, provider, onChange, 
         <span style={{ fontSize: "var(--fs-micro)", color: "var(--text-dim)", marginTop: 2 }}>
           Leave empty for a built-in provider to use the endpoint pi ships
         </span>
+        <BuiltinProviderNotice baseUrl={provider.baseUrl} openableIds={builtinProviderIds} onOpen={onOpenBuiltinProvider} />
       </Field>
 
       <Field label="API Key">
@@ -1188,6 +1192,13 @@ function ModelDetail({
           <ConfigButton variant="danger" size="small" onClick={onDelete}>{t("i18n.remove")}</ConfigButton>
         </ConfigDetailActions>
       </ConfigDetailHeader>
+
+      <BuiltinModelNotice
+        baseUrl={effectiveBaseUrl}
+        model={model}
+        effectiveCompat={effectiveCompat(provider, model)}
+        onApply={onChange}
+      />
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <Field label="ID *"><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></Field>
@@ -2347,6 +2358,7 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null, onOpenMcp 
   };
   const activeOAuth = oauthProviders.filter((p) => p.loggedIn);
   const activeApiKey = apiKeyProviders.filter((p) => p.configured);
+  const builtinApiKeyIds = new Set(apiKeyProviders.map((p) => p.id));
 
   // Resolve current detail
   const detailContent = (() => {
@@ -2378,6 +2390,8 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null, onOpenMcp 
           onDelete={() => deleteProvider(selection.name)}
           onAddModels={(models) => addDiscoveredModels(selection.name, models)}
           enabledModels={enabledModels}
+          builtinProviderIds={builtinApiKeyIds}
+          onOpenBuiltinProvider={(id) => setSelection({ type: "apikey", providerId: id })}
         />
       );
     }
