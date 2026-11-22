@@ -809,3 +809,15 @@ test("hideModel leaves out the model name, except while streaming", () => {
   assert.doesNotMatch(renderMessage(message, { hideModel: true }), /message-assistant-model/);
   assert.match(renderMessage(message, { hideModel: true, isStreaming: true }), /message-assistant-model/);
 });
+
+test("a working step hides its thinking unless asked; an answer and a search hit keep it", () => {
+  const thinking = { type: "thinking", thinking: "Planning the next command carefully" };
+  const call = { type: "toolCall", toolCallId: "call-thinking-step", toolName: "bash", input: { command: "ls" } };
+  const base = { role: "assistant", provider: "anthropic", model: "claude-test" };
+  // No stored preference (as on a first visit): working steps leave thinking out.
+  assert.doesNotMatch(renderMessage({ ...base, content: [thinking, call] }), /Planning the next command/);
+  assert.match(renderMessage({ ...base, content: [thinking] }), /Planning the next command/, "thinking alone may be all a cut-off turn has");
+  assert.match(renderMessage({ ...base, content: [thinking, { type: "text", text: "Here is the answer." }] }), /Planning the next command/);
+  assert.match(renderMessage({ ...base, content: [thinking, call] }, { searchBlock: thinking }), /Planning the next command/);
+  assert.match(renderMessage({ ...base, content: [thinking, call] }, { isStreaming: true }), /Planning the next command/);
+});

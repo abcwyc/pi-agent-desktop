@@ -9,8 +9,9 @@ import { copyText } from "@/lib/clipboard";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useDiffViewMode } from "@/hooks/useDiffViewMode";
+import { useProcessThinking } from "@/hooks/useProcessThinking";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
-import { getAssistantErrorMessage, getThinkingPreview, hasAssistantAnswer, isAssistantTruncated, isEmptyThinkingBlock } from "@/lib/message-display";
+import { getAssistantErrorMessage, getThinkingPreview, hasAssistantAnswer, isAssistantTruncated, isEmptyThinkingBlock, showsStepThinking } from "@/lib/message-display";
 import { isThinkingLevelRefusal, refusalAllowedValues } from "@/lib/thinking-level-error";
 import { diffGapLabel, parseUnifiedPatch, type SplitDiffCell, type SplitDiffFile } from "@/lib/patch";
 import { applyPatchPreviewToFiles, applyPatchResultHasFailures, extractApplyPatchPaths, getApplyPatchInputText, parseApplyPatchInput } from "@/lib/apply-patch";
@@ -695,9 +696,15 @@ function AssistantMessageView({
 }) {
   const { t, locale } = useI18n();
   const time = showTimestamp ? formatTime(message.timestamp, locale) : null;
-  const blockItems = useMemo(() => (message.content ?? [])
-    .map((block, originalIndex) => ({ block, originalIndex }))
-    .filter(({ block }) => !isEmptyThinkingBlock(block, { isStreaming })), [message.content, isStreaming]);
+  const { show: showProcessThinking } = useProcessThinking();
+  const blockItems = useMemo(() => {
+    const items = (message.content ?? [])
+      .map((block, originalIndex) => ({ block, originalIndex }))
+      .filter(({ block }) => !isEmptyThinkingBlock(block, { isStreaming }));
+    // A working step's thinking rows only when asked for; a search hit inside one still shows.
+    if (showsStepThinking(items.map(({ block }) => block), { isStreaming, showProcessThinking })) return items;
+    return items.filter(({ block }) => block.type !== "thinking" || block === searchBlock);
+  }, [message.content, isStreaming, showProcessThinking, searchBlock]);
   const blocks = useMemo(() => blockItems.map(({ block }) => block), [blockItems]);
   const providerError = getAssistantErrorMessage(message, { isStreaming });
   const levelRefused = isThinkingLevelRefusal(providerError);

@@ -15,6 +15,7 @@ import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-fi
 import { buildQuotedSelection } from "@/lib/quoted-selection";
 import { MessageView } from "./MessageView";
 import { ToolStepGroup } from "./ToolStepGroup";
+import { useProcessThinking } from "@/hooks/useProcessThinking";
 import { groupToolSteps, stepKind, summarizeToolSteps } from "@/lib/tool-step-groups";
 import { useReportDesktopReady } from "./desktop";
 import { MarkdownBody } from "./MarkdownBody";
@@ -228,6 +229,22 @@ export function getTurnWrittenFiles(finalAssistant: AssistantMessage, turnMessag
   return files;
 }
 
+/** Shows or hides the thinking rows of every turn's working steps (`useProcessThinking`). */
+function ProcessThinkingToggle({ t }: { t: (key: string, params?: Record<string, string | number>) => string }) {
+  const { show, setShow } = useProcessThinking();
+  return (
+    <button
+      type="button"
+      className="process-thinking-toggle"
+      aria-pressed={show}
+      title={t("chat.processThinkingHint")}
+      onClick={() => setShow(!show)}
+    >
+      {show ? t("chat.hideProcessThinking") : t("chat.showProcessThinking")}
+    </button>
+  );
+}
+
 function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = false, reveal = false, children, t }: { messageCount: number; toolCallCount: number; defaultExpanded?: boolean; reveal?: boolean; children: ReactNode; t: (key: string, params?: Record<string, string | number>) => string }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   useLayoutEffect(() => {
@@ -238,6 +255,7 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = fa
 
   return (
     <div className="process-details" style={{ marginBottom: 14 }}>
+      <div className="process-details-header">
       <button
         className="process-details-trigger"
         type="button"
@@ -266,6 +284,8 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = fa
           {parts.join(" · ")}
         </span>
       </button>
+      {(expanded || reveal) && <ProcessThinkingToggle t={t} />}
+      </div>
       {(expanded || reveal) && (
         <div style={{ marginTop: 8 }}>
           {children}

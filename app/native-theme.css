@@ -5422,6 +5422,33 @@ html.dark {
   color: var(--text) !important;
 }
 
+/* Process details header: the trigger, and once open the thinking switch
+   (ProcessThinkingToggle in components/ChatWindow.tsx) on the same line. */
+.process-details-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.process-thinking-toggle {
+  min-height: 24px;
+  padding: 2px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-native), background var(--dur-fast) var(--ease-native);
+}
+.process-thinking-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.process-thinking-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 /* A run of tool-only steps folded into one row (components/ToolStepGroup.tsx).
    Same size and radius as a tool card, in neutral colours, so it reads as
    "several of those" rather than one more call. */

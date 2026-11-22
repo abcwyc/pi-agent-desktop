@@ -47,6 +47,8 @@ export const APP_PREF_KEYS = {
   notifyOnComplete: "pi-desktop-notify-on-complete",
   chatDrafts: "pi-chat-drafts-v1",
   diffViewMode: "pi-diff-view-mode",
+  /** Thinking in a turn's working steps: "show", or hidden (anything else). */
+  processThinking: "pi-web:process-thinking",
   /** Tasks page layout: "calendar" or the list (anything else). */
   tasksMode: "pi-web:tasks-mode",
   /** Tasks calendar range: "week" or "month". */
