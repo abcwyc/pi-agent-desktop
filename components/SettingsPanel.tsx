@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { useDiffViewMode } from "@/hooks/useDiffViewMode";
+import { useProcessThinking } from "@/hooks/useProcessThinking";
 import { PRODUCT_NAME } from "@/lib/branding";
 import {
   CHAT_CONTENT_WIDTH_DEFAULT,
@@ -103,6 +104,7 @@ function GeneralSettings({
 }) {
   const { locale, setLocale, supportedLocales, t } = useI18n();
   const { mode: diffViewMode, setMode: setDiffViewMode } = useDiffViewMode();
+  const { show: showProcessThinking, setShow: setShowProcessThinking } = useProcessThinking();
   const { width: chatContentWidth, setWidth: setChatContentWidth, fontSize, setFontSize } = useChatAppearance();
   const enterSendMode = useEnterSendMode();
   const [shellSettings, setShellSettings] = useState<ToolSettingsResponse | null>(null);
@@ -342,6 +344,29 @@ function GeneralSettings({
                     onClick={() => setDiffViewMode("unified")}
                   >
                     {t("appSettings.diffViewModeUnified")}
+                  </button>
+                </div>
+              </div>
+              <div className="settings-chat-option settings-chat-choice-option">
+                <span title={t("appSettings.processThinkingHint")}>{t("appSettings.processThinking")}</span>
+                <div className="settings-choice-group" role="radiogroup" aria-label={t("appSettings.processThinking")}>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={!showProcessThinking}
+                    className="settings-choice-option"
+                    onClick={() => setShowProcessThinking(false)}
+                  >
+                    {t("appSettings.processThinkingHide")}
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={showProcessThinking}
+                    className="settings-choice-option"
+                    onClick={() => setShowProcessThinking(true)}
+                  >
+                    {t("appSettings.processThinkingShow")}
                   </button>
                 </div>
               </div>

@@ -87,9 +87,10 @@ export function useHtmlPreviewOptions(documentKey = ""): HtmlPreviewOptions {
   const compileFailed = t("preview.msg.compileFailed", { error: token("error") });
   const noDefaultExport = t("preview.msg.noDefaultExport");
   const packagesNeedNetwork = t("preview.msg.packagesNeedNetwork", { packages: token("packages"), error: token("error") });
+  const blankRender = t("preview.msg.blankRender");
   const messages = useMemo<HtmlPreviewMessages>(
-    () => ({ scriptErrorHidden, failedToLoad, unhandledRejection, runtimeMissing, compileFailed, noDefaultExport, packagesNeedNetwork }),
-    [scriptErrorHidden, failedToLoad, unhandledRejection, runtimeMissing, compileFailed, noDefaultExport, packagesNeedNetwork],
+    () => ({ scriptErrorHidden, failedToLoad, unhandledRejection, runtimeMissing, compileFailed, noDefaultExport, packagesNeedNetwork, blankRender }),
+    [scriptErrorHidden, failedToLoad, unhandledRejection, runtimeMissing, compileFailed, noDefaultExport, packagesNeedNetwork, blankRender],
   );
   return useMemo(
     () => ({ theme, themeKit, routeLinksToParent, loadingLabel, messages }),

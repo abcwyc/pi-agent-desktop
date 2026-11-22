@@ -154,3 +154,21 @@ export function collapsesProcessDetails(answer: AssistantMessage | null): boolea
     block.type === "image" || (block.type === "text" && block.text.trim().length > 0)
   ));
 }
+
+/**
+ * A working step: it calls a tool. A step with thinking alone is not one: it
+ * may be all a turn has (cut off by the output limit), and hiding its
+ * thinking would hide what happened.
+ */
+export function isWorkingStep(blocks: readonly AssistantContentBlock[]): boolean {
+  return blocks.some((block) => block.type === "toolCall");
+}
+
+/**
+ * Whether a step draws its thinking blocks: always while streaming, in an
+ * answer, or for the block a search landed on; in a working step only when
+ * the user asked for thinking (`useProcessThinking`).
+ */
+export function showsStepThinking(blocks: readonly AssistantContentBlock[], options: { isStreaming?: boolean; showProcessThinking: boolean }): boolean {
+  return Boolean(options.isStreaming) || options.showProcessThinking || !isWorkingStep(blocks);
+}

@@ -5422,6 +5422,120 @@ html.dark {
   color: var(--text) !important;
 }
 
+/* Process details header: the trigger, and once open the thinking switch
+   (ProcessThinkingToggle in components/ChatWindow.tsx) on the same line. */
+.process-details-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.process-thinking-toggle {
+  min-height: 24px;
+  padding: 2px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-native), background var(--dur-fast) var(--ease-native);
+}
+.process-thinking-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.process-thinking-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* A run of tool-only steps folded into one row (components/ToolStepGroup.tsx).
+   Same size and radius as a tool card, in neutral colours, so it reads as
+   "several of those" rather than one more call. */
+.tool-step-group {
+  margin: 2px 0 12px;
+}
+.tool-step-group-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 10px;
+  border: var(--hairline) solid var(--separator);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-native),
+    background var(--dur-fast) var(--ease-native),
+    border-color var(--dur-fast) var(--ease-native);
+}
+.tool-step-group-trigger:hover {
+  border-color: var(--border);
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.tool-step-group-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.tool-step-group-chevron {
+  flex-shrink: 0;
+  transition: transform var(--dur-base) var(--ease-native);
+}
+.tool-step-group.is-open .tool-step-group-chevron {
+  transform: rotate(90deg);
+}
+.tool-step-group-tools {
+  flex-shrink: 0;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+}
+.tool-step-group-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+}
+.tool-step-group-meta {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+}
+.tool-step-group-failed {
+  color: var(--danger);
+}
+.tool-step-group-running {
+  color: var(--accent);
+}
+.tool-step-group-content {
+  margin-top: 8px;
+  padding-left: 12px;
+  border-left: var(--hairline) solid var(--separator);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tool-step-group-chevron,
+  .tool-step-group-trigger {
+    transition: none;
+  }
+}
+
 .process-details-content {
   padding: 10px 11px 1px;
   border: var(--hairline) solid var(--separator);
@@ -5855,6 +5969,141 @@ html.dark {
   min-height: 120px;
 }
 .mermaid-block-error {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+/* Mermaid's own parse error under the title (MermaidBlock), so the user and
+   "Ask to fix" both see where and why it failed. */
+.mermaid-error-detail {
+  margin: 8px 0 0;
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre;
+  color: var(--text-dim);
+  font: inherit;
+  line-height: 1.5;
+}
+
+/* ```chart fences (components/ChartBlock.tsx), drawn by diagrammatic as SVG
+   in the page. Its colours are the --dg-* tokens; the series follow the
+   preview theme kit's fixed per-scheme palette (lib/preview-theme-kit.ts),
+   because most themes' accents are greys. Text inherits the message's
+   font and colour. */
+.chart-block {
+  --dg-c1: #2f6fdf;
+  --dg-c2: #159a7a;
+  --dg-c3: #d98a10;
+  --dg-c4: #d2453b;
+  --dg-c5: #7a5bd6;
+  --dg-c6: #6b7280;
+  --dg-c7: #0e8fa8;
+  --dg-pos: #2f6fdf;
+  --dg-neg: #d2453b;
+  --dg-ink: var(--text);
+  --dg-font: inherit;
+}
+html.dark .chart-block {
+  --dg-c1: #6ea2ff;
+  --dg-c2: #3cc9a4;
+  --dg-c3: #f0b143;
+  --dg-c4: #f0776d;
+  --dg-c5: #a891f5;
+  --dg-c6: #9ca3af;
+  --dg-c7: #4cc3d9;
+  --dg-pos: #6ea2ff;
+  --dg-neg: #f0776d;
+}
+.chart-block-body {
+  margin: 0;
+  padding: 12px 16px 16px;
+  background: color-mix(in srgb, var(--bg) 92%, var(--bg-panel));
+}
+.chart-block-figure svg {
+  display: block;
+  margin: 0 auto;
+}
+.chart-block-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 8px;
+  font-size: var(--fs-small);
+}
+.chart-block-title {
+  color: var(--text);
+  font-weight: 600;
+}
+.chart-block-axes {
+  color: var(--text-muted);
+}
+/* Hover layer (diagrammatic/interactive Root + Tooltip): the card uses the
+   menu surface tokens; the Tooltip only positions it and never takes the
+   pointer. Other marks fade while one index is hovered. */
+.chart-block-interactive {
+  position: relative;
+}
+.chart-block [data-part="mark"] {
+  transition: opacity var(--dur-fast) var(--ease-native);
+}
+.chart-block [data-part="mark"][data-dg-muted] {
+  opacity: 0.25;
+}
+.chart-tooltip {
+  min-width: 96px;
+  max-width: 260px;
+  padding: 6px 9px;
+  border: 1px solid var(--separator);
+  border-radius: var(--menu-radius);
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-popover);
+  color: var(--text);
+  font-size: var(--fs-micro);
+  line-height: 1.45;
+  pointer-events: none;
+}
+.chart-tooltip-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-weight: var(--fw-medium);
+}
+.chart-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chart-tooltip-row.is-active {
+  font-weight: var(--fw-semibold);
+}
+.chart-tooltip-swatch {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.chart-tooltip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+.chart-tooltip-value {
+  margin-left: auto;
+  padding-left: 10px;
+  font-variant-numeric: tabular-nums;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chart-block [data-part="mark"] {
+    transition: none;
+  }
+}
+.chart-block-loading {
+  min-height: 160px;
+}
+.chart-block-error {
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: var(--fs-small);
