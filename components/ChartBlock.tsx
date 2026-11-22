@@ -4,19 +4,33 @@ import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type 
 import { useI18n } from "@/hooks/useI18n";
 import { downloadUrlAsFile } from "@/lib/desktop-native";
 import { parseChartSpec, type CleanChartSpec } from "@/lib/chart-spec";
+import { describeChartMark } from "@/lib/chart-tooltip";
 import { CodeBlock, DiagramFixButton } from "./MermaidBlock";
 
-type ChartComponent = ComponentType<{ spec: CleanChartSpec; className?: string }>;
+type MarkDatum = { index: number | undefined; index2: number | undefined; series: string | undefined; element: Element };
+interface ChartKit {
+  Chart: ComponentType<{ spec: CleanChartSpec; className?: string }>;
+  /** Delegates pointer events to the marks; feeds the Tooltip and the hover highlight. */
+  Root: ComponentType<{ className?: string; highlightOnHover?: boolean | "index" | "series"; children: ReactNode }>;
+  Tooltip: ComponentType<{ side?: "top" | "bottom" | "left" | "right"; sideOffset?: number; className?: string; children: (props: { datum: MarkDatum }) => ReactNode }>;
+  getSeriesColor: (from: Element, series: string) => string | undefined;
+}
 
 // diagrammatic's spec entry holds all of its chart forms (about 36 KB gzipped,
-// its own chunk), so it loads on the first chart, once per page. A fence that
-// is still streaming starts the load, so the finished message (a component of
-// its own) can draw on its first render instead of flashing a placeholder.
-let chartModule: Promise<ChartComponent> | null = null;
-let loadedChart: ChartComponent | null = null;
-function loadChart(): Promise<ChartComponent> {
-  chartModule ??= import("diagrammatic/spec").then((module) => {
-    loadedChart = module.Chart as unknown as ChartComponent;
+// its own chunk) and its interactive entry the hover layer, so both load on
+// the first chart, once per page. A fence that is still streaming starts the
+// load, so the finished message (a component of its own) can draw on its
+// first render instead of flashing a placeholder.
+let chartModule: Promise<ChartKit> | null = null;
+let loadedChart: ChartKit | null = null;
+function loadChart(): Promise<ChartKit> {
+  chartModule ??= Promise.all([import("diagrammatic/spec"), import("diagrammatic/interactive")]).then(([spec, interactive]) => {
+    loadedChart = {
+      Chart: spec.Chart as unknown as ChartKit["Chart"],
+      Root: interactive.Root as unknown as ChartKit["Root"],
+      Tooltip: interactive.Tooltip as unknown as ChartKit["Tooltip"],
+      getSeriesColor: interactive.getSeriesColor,
+    };
     return loadedChart;
   });
   // A failed load is not cached: Retry imports again.
@@ -80,6 +94,40 @@ class ChartBoundary extends Component<{ onError: (message: string) => void; chil
   }
 }
 
+// Forms whose marks are items fade the rest while one is hovered. Lines and
+// areas do not: their drawn path carries no index, so the whole line faded
+// under the pointer; a heatmap would fade everything but one column.
+const HIGHLIGHT_ON_HOVER = new Set(["bar", "column", "pie", "funnel", "waterfall", "stacked-bar", "grouped-bar", "scatter"]);
+
+/**
+ * The hover card: the mark's category and its exact values (lib/chart-tooltip.ts),
+ * one row per series with that series' own colour when there are several.
+ * Nothing for an address that names no value (a whole line, a frame).
+ */
+function ChartTooltipCard({ spec, datum, locale, getSeriesColor }: {
+  spec: CleanChartSpec;
+  datum: MarkDatum;
+  locale: string;
+  getSeriesColor: ChartKit["getSeriesColor"];
+}) {
+  const content = describeChartMark(spec, { index: datum.index, index2: datum.index2, series: datum.series }, locale);
+  if (!content) return null;
+  return (
+    <div className="chart-tooltip" role="status">
+      <div className="chart-tooltip-title">{content.title}</div>
+      {content.rows.map((row, index) => (
+        <div key={index} className={`chart-tooltip-row${row.active ? " is-active" : ""}`}>
+          {row.series !== undefined && (
+            <span className="chart-tooltip-swatch" style={{ background: getSeriesColor(datum.element, row.series) ?? "currentColor" }} aria-hidden="true" />
+          )}
+          {row.label && <span className="chart-tooltip-label">{row.label}</span>}
+          <span className="chart-tooltip-value">{row.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface ChartBlockProps {
   code: string;
   isStreaming?: boolean;
@@ -94,9 +142,9 @@ interface ChartBlockProps {
  * is incomplete), then the chart, with a Source toggle and SVG download.
  */
 export function ChartBlock({ code, isStreaming, fixable }: ChartBlockProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [showChart, setShowChart] = useState(true);
-  const [Chart, setChart] = useState<ChartComponent | null>(() => loadedChart);
+  const [Chart, setChart] = useState<ChartKit | null>(() => loadedChart);
   // The library could not be loaded: Retry, never "Ask to fix" (the spec may be fine).
   const [loadError, setLoadError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -210,7 +258,12 @@ export function ChartBlock({ code, isStreaming, fixable }: ChartBlockProps) {
           )}
           {sizedSpec && Chart && (
             <ChartBoundary key={code} onError={(message) => setDrawError({ code, message })}>
-              <Chart spec={sizedSpec} />
+              <Chart.Root className="chart-block-interactive" highlightOnHover={HIGHLIGHT_ON_HOVER.has(sizedSpec.type) ? "index" : false}>
+                <Chart.Chart spec={sizedSpec} />
+                <Chart.Tooltip side="top" sideOffset={10}>
+                  {({ datum }) => <ChartTooltipCard spec={sizedSpec} datum={datum} locale={locale} getSeriesColor={Chart.getSeriesColor} />}
+                </Chart.Tooltip>
+              </Chart.Root>
             </ChartBoundary>
           )}
         </figure>

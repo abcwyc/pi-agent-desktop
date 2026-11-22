@@ -6037,6 +6037,69 @@ html.dark .chart-block {
 .chart-block-axes {
   color: var(--text-muted);
 }
+/* Hover layer (diagrammatic/interactive Root + Tooltip): the card uses the
+   menu surface tokens; the Tooltip only positions it and never takes the
+   pointer. Other marks fade while one index is hovered. */
+.chart-block-interactive {
+  position: relative;
+}
+.chart-block [data-part="mark"] {
+  transition: opacity var(--dur-fast) var(--ease-native);
+}
+.chart-block [data-part="mark"][data-dg-muted] {
+  opacity: 0.25;
+}
+.chart-tooltip {
+  min-width: 96px;
+  max-width: 260px;
+  padding: 6px 9px;
+  border: 1px solid var(--separator);
+  border-radius: var(--menu-radius);
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-popover);
+  color: var(--text);
+  font-size: var(--fs-micro);
+  line-height: 1.45;
+  pointer-events: none;
+}
+.chart-tooltip-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-weight: var(--fw-medium);
+}
+.chart-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chart-tooltip-row.is-active {
+  font-weight: var(--fw-semibold);
+}
+.chart-tooltip-swatch {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.chart-tooltip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+.chart-tooltip-value {
+  margin-left: auto;
+  padding-left: 10px;
+  font-variant-numeric: tabular-nums;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chart-block [data-part="mark"] {
+    transition: none;
+  }
+}
 .chart-block-loading {
   min-height: 160px;
 }
