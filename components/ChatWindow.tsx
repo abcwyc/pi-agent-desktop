@@ -1424,7 +1424,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                 if (idx === lastUserIdx) { (lastUserMsgRef as { current: HTMLDivElement | null }).current = el; }
               };
 
-              const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; writtenFiles?: WrittenFile[]; recoverTruncation?: boolean } = {}): ReactNode => {
+              const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; writtenFiles?: WrittenFile[]; recoverTruncation?: boolean; keepModel?: boolean } = {}): ReactNode => {
                 const msg = options.messageOverride ?? messages[idx];
                 // C1: a side chat's hidden boundary message is drawn as the line where it starts.
                 if (msg.role === "custom" && msg.customType === SIDE_BOUNDARY_MESSAGE_TYPE) return <SideChatDivider key="side-chat-divider" />;
@@ -1446,6 +1446,18 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                   }
                 }
                 if (options.showTimestamp !== undefined) showTimestamp = options.showTimestamp;
+                // The model name once per run of steps from one model: a 47-step turn
+                // repeated it 47 times (13% of the open turn). The answer keeps it.
+                let hideModel = false;
+                if (msg.role === "assistant" && !options.keepModel) {
+                  const current = messages[idx] as AssistantMessage;
+                  for (let j = idx - 1; j >= 0 && !isMessageGroupAnchor(messages[j]); j--) {
+                    if (messages[j].role !== "assistant") continue;
+                    const previous = messages[j] as AssistantMessage;
+                    hideModel = previous.provider === current.provider && previous.model === current.model;
+                    break;
+                  }
+                }
                 const view = (
                   <MessageView
                     key={`${keyPrefix}-view-${messageKey}`}
@@ -1464,6 +1476,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                     onCancelEdit={cancelEdit}
                     isEditing={editEntryId === entryIds[idx]}
                     showTimestamp={showTimestamp}
+                    hideModel={hideModel}
                     prevTimestamp={idx > 0 ? (messages[idx - 1] as AgentMessage & { timestamp?: number }).timestamp : undefined}
                     sessionId={session?.id ?? sessionIdRef.current ?? undefined}
                     writtenFiles={options.writtenFiles}
@@ -1601,6 +1614,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                   const writtenFiles = getTurnWrittenFiles(finalAssistant, messages.slice(userIdx + 1, finalAssistantIdx + 1), toolResultsMap, messageCwd);
                   rendered.push(renderMessage(finalAssistantIdx, {
                     messageOverride: finalAnswerMessage,
+                    keepModel: true,
                     writtenFiles,
                     recoverTruncation: endIdx === messages.length && !streamState.isStreaming && !hasAssistantAnswer(finalAnswerMessage),
                   }));

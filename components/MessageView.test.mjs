@@ -791,3 +791,21 @@ test("keeps the registered name where no result names the server and tool", (t) 
   });
   assert.match(textOf(html), /mcp__docs_v2__search_pages\{\}/);
 });
+
+test("a step that calls a tool has no Copy row; an answer keeps it", () => {
+  const step = renderMessage({
+    role: "assistant", provider: "anthropic", model: "claude-test",
+    content: [{ type: "text", text: "Let me check the config." }, { type: "toolCall", toolCallId: "call-copy-step", toolName: "bash", input: { command: "ls" } }],
+  });
+  assert.doesNotMatch(step, /message-copy-action/);
+  assert.doesNotMatch(step, /message-assistant-footer/, "an empty footer leaves no gap");
+  const answer = renderMessage({ role: "assistant", provider: "anthropic", model: "claude-test", content: [{ type: "text", text: "Done." }] });
+  assert.match(answer, /message-copy-action/);
+});
+
+test("hideModel leaves out the model name, except while streaming", () => {
+  const message = { role: "assistant", provider: "anthropic", model: "claude-test", content: [{ type: "text", text: "Hi" }] };
+  assert.match(renderMessage(message), /message-assistant-model/);
+  assert.doesNotMatch(renderMessage(message, { hideModel: true }), /message-assistant-model/);
+  assert.match(renderMessage(message, { hideModel: true, isStreaming: true }), /message-assistant-model/);
+});

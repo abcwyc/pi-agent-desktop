@@ -211,6 +211,11 @@ interface Props {
   onCancelEdit?: () => void;
   isEditing?: boolean;
   showTimestamp?: boolean;
+  /**
+   * Leave out the model name: the turn's step before this one came from the
+   * same model (ChatWindow decides; the final answer always keeps it).
+   */
+  hideModel?: boolean;
   prevTimestamp?: number;
   sessionId?: string;
   /**
@@ -292,12 +297,12 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, onOpenSession, entryId, searchBlock, onFork, forking, onEditContent, editDisabled, onCancelEdit, isEditing, showTimestamp, prevTimestamp, sessionId, writtenFiles, onCompact, isCompacting, compactError }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, onOpenSession, entryId, searchBlock, onFork, forking, onEditContent, editDisabled, onCancelEdit, isEditing, showTimestamp, hideModel, prevTimestamp, sessionId, writtenFiles, onCompact, isCompacting, compactError }: Props) {
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onEditContent={onEditContent} editDisabled={editDisabled} onCancelEdit={onCancelEdit} isEditing={isEditing} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} searchBlock={searchBlock} writtenFiles={writtenFiles} onCompact={onCompact} isCompacting={isCompacting} compactError={compactError} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} hideModel={hideModel} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} searchBlock={searchBlock} writtenFiles={writtenFiles} onCompact={onCompact} isCompacting={isCompacting} compactError={compactError} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -332,6 +337,7 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     && prev.onCancelEdit === next.onCancelEdit
     && prev.isEditing === next.isEditing
     && prev.showTimestamp === next.showTimestamp
+    && prev.hideModel === next.hideModel
     && prev.prevTimestamp === next.prevTimestamp
     && prev.writtenFiles === next.writtenFiles
     && prev.sessionId === next.sessionId
@@ -653,6 +659,7 @@ function AssistantMessageView({
   onOpenFile,
   onOpenSession,
   showTimestamp,
+  hideModel = false,
   prevTimestamp,
   sessionId,
   entryId,
@@ -670,6 +677,7 @@ function AssistantMessageView({
   onOpenFile?: (filePath: string, page?: number) => void;
   onOpenSession?: (sessionId: string) => void;
   showTimestamp?: boolean;
+  hideModel?: boolean;
   prevTimestamp?: number;
   sessionId?: string;
   entryId?: string;
@@ -752,6 +760,10 @@ function AssistantMessageView({
       setTimeout(() => setCopied(false), 1500);
     });
   };
+  // A step that calls a tool is part of the work, not an answer: its text is a
+  // line like "let me check the config", and a Copy row under each of a turn's
+  // steps took 8% of an open 47-step turn. Answers keep it.
+  const showCopy = Boolean(textContent) && !isStreaming && !blocks.some((block) => block.type === "toolCall");
 
   useEffect(() => {
     if (!isStreaming) {
@@ -813,8 +825,8 @@ function AssistantMessageView({
       data-entry-id={entryId}
       style={{ marginBottom: 16 }}
     >
-      {/* Model label */}
-      <div
+      {/* Model label: once per run of steps from one model; while streaming it also carries the live token rate. */}
+      {(!hideModel || isStreaming) && <div
         className="message-assistant-model"
         style={{
           fontSize: "var(--fs-micro)",
@@ -854,7 +866,7 @@ function AssistantMessageView({
             </>
           );
         })()}
-      </div>
+      </div>}
 
       <div className="message-assistant-content" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {blockItems.map(({ block, originalIndex }) => (
@@ -931,10 +943,10 @@ function AssistantMessageView({
         <TurnWrittenFiles files={writtenFiles} onOpenFile={onOpenFile} sessionId={sessionId} />
       )}
 
-      <div className="message-assistant-footer" style={{
+      {(showCopy || (time && !isStreaming)) && <div className="message-assistant-footer" style={{
         display: "flex", alignItems: "center", gap: 8, marginTop: 4,
       }}>
-        {textContent && !isStreaming && (
+        {showCopy && (
           <button
             onClick={copyContent}
              title={t("i18n.copyMessage")}
@@ -970,7 +982,7 @@ function AssistantMessageView({
         {time && !isStreaming && (
           <span className="message-meta" style={{ fontSize: "var(--fs-micro)", color: "var(--text-dim)", marginLeft: "auto" }}>{time}</span>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
