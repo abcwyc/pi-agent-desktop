@@ -41,7 +41,21 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 // Full-width characters: CJK, kana, Hangul, full-width forms, emoji.
-const WIDE_RE = /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]|[\u{1f300}-\u{1faff}]/gu;
+// Built from code points, never written as characters or \\u escapes: a
+// bundle served without a charset reads literal CJK as Latin-1 bytes and the
+// class throws "Range out of order" when the module loads (PR #256 e2e), and
+// an editor here rewrote printable escapes back into characters.
+const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
+  [0x1100, 0x115f], // Hangul Jamo
+  [0x2e80, 0xa4cf], // CJK radicals through Yi
+  [0xac00, 0xd7a3], // Hangul syllables
+  [0xf900, 0xfaff], // CJK compatibility ideographs
+  [0xfe30, 0xfe4f], // CJK compatibility forms
+  [0xff00, 0xff60], // full-width forms
+  [0xffe0, 0xffe6], // full-width signs
+  [0x1f300, 0x1faff], // emoji
+];
+const WIDE_RE = new RegExp(`[${WIDE_RANGES.map(([from, to]) => `\\u{${from.toString(16)}}-\\u{${to.toString(16)}}`).join("")}]`, "gu");
 
 /**
  * diagrammatic sizes label gutters and truncation as characters × 0.6 em,
