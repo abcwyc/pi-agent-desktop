@@ -5,10 +5,15 @@ import { I18nProvider, useI18n } from "../hooks/useI18n";
 import { SidebarSessionFixture } from "../components/SessionSidebar";
 import { ProjectContextMenuPanel } from "../components/ProjectContextMenu";
 
+// Relative to the run, so the sidebar's compact time stays a short label ("3d" / "3天").
+// A fixed date grew into "1个月" a month later, widening the trailing slot the
+// "…" button fills, and the 28px hit-target assertion failed on unchanged code.
+const RECENT = new Date(Date.now() - 3 * 86_400_000).toISOString();
+
 const session = {
   id: "fixture-session", path: "/fixture/session.jsonl", cwd: "/fixture/project",
   name: "菜单定位回归", firstMessage: "Fixture", messageCount: 4,
-  created: "2026-10-20T12:00:00Z", modified: "2026-10-20T12:00:00Z",
+  created: RECENT, modified: RECENT,
 };
 
 function Fixture() {

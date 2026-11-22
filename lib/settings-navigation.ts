@@ -134,3 +134,19 @@ export function setLastSettingsSelection(
     // Browser storage is best-effort.
   }
 }
+
+/**
+ * Opens Settings › Models on a model named by provider and id, as a chat error's
+ * "Model settings" button does: the panel resolves the id to its models.json slot
+ * once the file is loaded, and falls back to the provider (or its first one).
+ */
+export function rememberModelSettingsFocus(
+  providerName: string,
+  modelId: string,
+  storage: StorageLike | null = getBrowserStorage(),
+): void {
+  if (!providerName || !modelId) return;
+  setLastSettingsSection("models", storage);
+  setLastSettingsSelection("models", JSON.stringify({ type: "model", providerName, modelId }), null, storage);
+}
+
