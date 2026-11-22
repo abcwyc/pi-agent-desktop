@@ -386,6 +386,8 @@ try {
     page.on("request", (request) => {
       if (new URL(request.url()).pathname.endsWith("/thinking")) thinkingRequests.push(request.url());
     });
+    // Every viewport starts from the default: thinking hidden in tool steps.
+    await page.evaluate(() => localStorage.removeItem("pi-web:process-thinking"));
     await page.goto(`${base}/?session=${RICH}`, { waitUntil: "domcontentloaded" });
     await page.locator("strong").filter({ hasText: "E2E markdown" }).waitFor();
     await page.locator("pre").filter({ hasText: "console.log('E2E code');" }).waitFor();
@@ -399,6 +401,10 @@ try {
     assert.equal(await finalMessage.getByText("test/E2E Model", { exact: true }).count(), 1);
     assert.equal(thinkingRequests.length, 0);
     await processDetails.click();
+    // The step that calls bash hides its thinking until asked; the answer's two stay.
+    assert.equal(await thinking.count(), 2, "A tool step's thinking is hidden by default");
+    assert.equal(await page.getByText("E2E intermediate reasoning", { exact: true }).count(), 0);
+    await page.getByRole("button", { name: "Show thinking", exact: true }).click();
     assert.equal(await thinking.count(), 3);
     assert.equal(await thinking.last().innerText(), "E2E final reasoning");
     assert.equal(thinkingRequests.length, 0);
@@ -407,7 +413,8 @@ try {
       await page.getByText(text, { exact: false }).waitFor();
     }
     assert.equal(thinkingRequests.length, 3);
-    const processText = await processDetails.locator("..").innerText();
+    // The whole Process details block (its header row now also holds the thinking switch).
+    const processText = await page.locator(".process-details").filter({ has: processDetails }).innerText();
     assert.ok(processText.indexOf("E2E intermediate reasoning") < processText.indexOf("echo E2E tool output"));
     assert.ok(processText.indexOf("echo E2E tool output") < processText.indexOf("E2E follow-up reasoning"));
     assert.ok(processText.indexOf("E2E follow-up reasoning") < processText.indexOf("E2E process note"));
