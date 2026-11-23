@@ -33,6 +33,8 @@ import { keepDocumentTitle } from "@/lib/document-title";
 import { ProjectTrustDialog, type ProjectTrustFailure } from "./ProjectTrustDialog";
 import { BranchNavigator, hasSessionBranches } from "./BranchNavigator";
 import { UpdateReminder } from "./UpdateReminder";
+import { StarPrompt } from "./StarPrompt";
+import { loadStarPromptState, shouldShowStarPrompt } from "@/lib/star-prompt";
 import { useTheme } from "@/hooks/useTheme";
 import { useFonts } from "@/hooks/useFonts";
 import { useI18n } from "@/hooks/useI18n";
@@ -1495,9 +1497,23 @@ export function AppShell() {
     }
   }, [handleSelectSession, locale]);
 
+  const [starPromptOpen, setStarPromptOpen] = useState(false);
+  // Record the first-seen time on the first launch so the 7-day clock starts.
+  useEffect(() => { loadStarPromptState(); }, []);
+
   const handleAgentEnd = useCallback((end?: AgentEndInfo) => {
     setRefreshKey((k) => k + 1);
     setExplorerRefreshKey((k) => k + 1);
+    // Ask for a GitHub star once: after 7 days of use, right after a run that did real work.
+    // An open update reminder holds the same corner; the next complex run tries again.
+    if (
+      end
+      && !isHiddenRelation(selectedSession?.relation)
+      && !document.querySelector(".native-update-reminder")
+      && shouldShowStarPrompt(loadStarPromptState(), end, Date.now())
+    ) {
+      setStarPromptOpen(true);
+    }
     if (selectedSession) hydrateSelectedSession(selectedSession.id);
 
     // A stopped run did not finish a task: refresh, but announce nothing.
@@ -3543,6 +3559,7 @@ export function AppShell() {
       />
     )}
     <UpdateReminder onOpenSettings={() => setSettingsSection("general")} />
+    {starPromptOpen && <StarPrompt onClose={() => setStarPromptOpen(false)} />}
     <DomContextMenuHost />
     <AppNoticeShelf />
     </div>

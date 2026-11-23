@@ -7542,6 +7542,79 @@ span.linenumber {
   font-size: var(--fs-caption) !important;
 }
 
+/* One-time "star us on GitHub" card (components/StarPrompt.tsx). */
+.native-star-prompt {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: var(--z-toast);
+  width: min(360px, calc(100vw - 32px));
+  padding: 14px 16px 14px;
+  border: var(--hairline) solid var(--separator);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface-elevated) 94%, transparent);
+  box-shadow: var(--shadow-popover);
+  color: var(--text);
+  -webkit-backdrop-filter: blur(22px) saturate(130%);
+  backdrop-filter: blur(22px) saturate(130%);
+  animation: native-toast-in var(--dur-base) var(--ease-native) both;
+}
+
+.native-star-prompt-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-native), color var(--dur-fast) var(--ease-native);
+}
+
+.native-star-prompt-close:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.native-star-prompt-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 28px;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+}
+
+.native-star-prompt-icon {
+  flex-shrink: 0;
+  color: #d97706;
+}
+
+.native-star-prompt-body {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+  line-height: 1.5;
+}
+
+.native-star-prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.native-star-prompt-actions a.native-button {
+  text-decoration: none;
+}
+
 @keyframes notice-shelf-in {
   from {
     opacity: 0;
@@ -7692,6 +7765,12 @@ span.linenumber {
     right: 10px !important;
     bottom: 10px !important;
     width: calc(100vw - 20px) !important;
+  }
+
+  .native-star-prompt {
+    right: 10px;
+    bottom: 10px;
+    width: calc(100vw - 20px);
   }
 
   .sidebar-container {

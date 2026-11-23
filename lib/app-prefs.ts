@@ -43,6 +43,8 @@ export const APP_PREF_KEYS = {
   /** Project session ids hidden from their project until "Show archived" (#200). */
   archivedSessions: "pi-web:archived-sessions",
   updateSnooze: "pi-web:update-snooze",
+  /** First-seen time and outcome of the one-time "star us on GitHub" prompt. */
+  starPrompt: "pi-web:star-prompt",
   closeQuits: "pi-desktop-close-quits",
   notifyOnComplete: "pi-desktop-notify-on-complete",
   chatDrafts: "pi-chat-drafts-v1",
