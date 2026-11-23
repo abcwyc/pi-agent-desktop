@@ -34,7 +34,7 @@ interface UpdateCheckState {
 type UpdateProject = (typeof APP_UPDATE_PROJECTS)[number];
 
 declare global {
-  var __piWebAppUpdateCheck: Promise<AppUpdatesResponse> | undefined;
+  var __piWebAppUpdateCheck: { promise: Promise<AppUpdatesResponse>; forced: boolean } | undefined;
 }
 
 function statePath(): string {
@@ -143,11 +143,21 @@ async function writeState(state: UpdateCheckState): Promise<void> {
   }
 }
 
+function isCachedReleaseBehindInstalled(release: AppComponentReleaseInfo | undefined): boolean {
+  return release?.releaseStatus === "available"
+    && typeof release.latestVersion === "string"
+    && compareAppVersions(release.latestVersion, release.currentVersion) < 0;
+}
+
 async function performUpdateCheck(forceRefresh = false): Promise<AppUpdatesResponse> {
   const now = Date.now();
   const state = await readState();
   const dueProjects = APP_UPDATE_PROJECTS.filter((project) => (
-    forceRefresh || isAppUpdateDue(state.lastCheckedAt[project.id], now)
+    forceRefresh
+    || isAppUpdateDue(state.lastCheckedAt[project.id], now)
+    // A cached "latest" older than the running app means the app was updated
+    // by hand since that check: the cache can only be stale (#257).
+    || isCachedReleaseBehindInstalled(state.releases[project.id])
   ));
 
   const settled = await Promise.allSettled(dueProjects.map(async (project) => ({
@@ -201,15 +211,25 @@ async function performUpdateCheck(forceRefresh = false): Promise<AppUpdatesRespo
 
 export async function GET(request: Request) {
   const forceRefresh = new URL(request.url).searchParams.get("refresh") === "1";
-  if (!globalThis.__piWebAppUpdateCheck) {
-    globalThis.__piWebAppUpdateCheck = performUpdateCheck(forceRefresh)
-      .finally(() => {
-        globalThis.__piWebAppUpdateCheck = undefined;
-      });
+  // A forced check (Settings) must not settle for a background check that
+  // may answer from the cache; it waits for that one and then asks GitHub.
+  let check = globalThis.__piWebAppUpdateCheck;
+  if (!check || (forceRefresh && !check.forced)) {
+    const previous = check?.promise.catch(() => undefined);
+    const started = {
+      forced: forceRefresh,
+      promise: (previous ?? Promise.resolve())
+        .then(() => performUpdateCheck(forceRefresh))
+        .finally(() => {
+          if (globalThis.__piWebAppUpdateCheck === started) globalThis.__piWebAppUpdateCheck = undefined;
+        }),
+    };
+    globalThis.__piWebAppUpdateCheck = started;
+    check = started;
   }
 
   try {
-    return Response.json(await globalThis.__piWebAppUpdateCheck);
+    return Response.json(await check.promise);
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : String(error) },

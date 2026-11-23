@@ -43,7 +43,10 @@ export function AppUpdatesSection({ onBusyChange }: Props) {
       })
       .then((data) => {
         setComponents(Array.isArray(data.components) ? data.components : []);
-        setLoadError(null);
+        // The route still answers from its cache when GitHub fails; saying
+        // "up to date" from that cache hid a newer release (#257).
+        const failed = data.errors?.some((entry) => entry.project === "pi-agent-desktop");
+        setLoadError(failed ? "checkFailed" : null);
       })
       .catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
