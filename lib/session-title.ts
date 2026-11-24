@@ -65,6 +65,20 @@ export interface TitleRequest {
 }
 
 /**
+ * The provider effort pi-ai puts on the wire for a level, or null when the
+ * model cannot send it: a mapped level sends its mapped value, an unmapped
+ * one sends its own name, except "off" (only a mapping disables thinking).
+ * Some providers reject "none" (the SDK's unmapped-"off" default, or a map
+ * entry copied from a model that can disable thinking), so it does not count.
+ */
+function titleEffort(model: Model<Api>, level: ThinkingLevel): string | null {
+  const mapped = model.thinkingLevelMap?.[level];
+  if (mapped === null) return null;
+  if (typeof mapped === "string") return mapped === "none" && level !== "off" ? null : mapped;
+  return level === "off" ? null : level;
+}
+
+/**
  * Naming is a short classification task, so thinking only adds latency and
  * tokens: use the cheapest level the model actually supports. Gemini rejects
  * "minimal" and its SDK emits that level when thinking is disabled, so it
@@ -76,6 +90,12 @@ export function resolveTitleThinkingLevel(model: Model<Api>): ThinkingLevel {
   const supported = getSupportedThinkingLevels(model);
   const rejectsMinimal = model.api === "google-generative-ai" || /gemini/i.test(model.id);
   const usable = rejectsMinimal ? supported.filter((level) => level !== "off" && level !== "minimal") : supported;
+  if (model.thinkingLevelMap) {
+    // Use the cheapest real effort the map names instead of the "none" the SDK
+    // would otherwise send, so a strict provider does not reject the request.
+    const cheapest = usable.find((level) => titleEffort(model, level) !== null);
+    if (cheapest) return cheapest;
+  }
   return usable[0] ?? supported[0] ?? "off";
 }
 
