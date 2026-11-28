@@ -138,6 +138,8 @@ test("Probe thinking levels: a refused level becomes null, an accepted xhigh/max
 
   const outcomes = Object.fromEntries(result.thinking.results.map((r) => [r.level, r.outcome]));
   assert.deepEqual(outcomes, {
+    // Plain chat-completions sends no effort for off.
+    off: "not-sent",
     minimal: "rejected",
     low: "accepted",
     medium: "rejected",
@@ -195,6 +197,29 @@ test("Probe thinking levels keeps the map when every sent level is refused", asy
   assert.equal(result.thinking.allRejected, true);
   assert.equal(result.thinking.changed, false);
   assert.equal(result.thinking.suggestedMap, undefined);
+});
+
+test("Probe thinking levels tests off's literal effort none and nulls it when refused (#260)", async (t) => {
+  const efforts = [];
+  t.mock.method(globalThis, "fetch", async (input, init) => {
+    const body = JSON.parse(await new Request(input, init).text());
+    const effort = body.reasoning?.effort;
+    efforts.push(effort ?? "(none)");
+    if (effort && !["low", "medium", "high"].includes(effort)) return rejectEffort(effort);
+    return completionStream();
+  });
+
+  const result = await (await POST(probeRequest({
+    id: "gpt-6.2-sol",
+    compat: { thinkingFormat: "openrouter" },
+  }))).json();
+  // The connection itself works: only off's "none" was refused, so the test retries without it.
+  assert.equal(result.ok, true, result.error);
+  assert.deepEqual(efforts.slice(0, 2), ["none", "(none)"]);
+  const off = result.thinking.results.find((r) => r.level === "off");
+  assert.deepEqual([off.value, off.outcome], ["none", "rejected"]);
+  assert.equal(result.thinking.suggestedMap.off, null);
+  assert.equal(result.thinking.suggestedMap.minimal, null);
 });
 
 test("Probe thinking levels stops at a failing connection", async (t) => {

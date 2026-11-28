@@ -12,9 +12,14 @@
  * with one). Everything it cannot tell apart stays as configured.
  */
 
-/** Levels the probe sends. `off` sends no effort, so the plain connection test covers it. */
+/**
+ * Levels the probe sends with an explicit thinking level. `off` is the plain
+ * connection request itself (see offProbeValue).
+ */
 export const PROBE_LEVELS = ["minimal", "low", "medium", "high", "xhigh", "max"] as const;
 export type ProbeLevel = typeof PROBE_LEVELS[number];
+/** A result row's level: every probed level, plus `off` read from the connection request. */
+export type ProbeResultLevel = "off" | ProbeLevel;
 
 export type ThinkingLevelMap = Record<string, string | null>;
 
@@ -30,7 +35,7 @@ export type ThinkingLevelMap = Record<string, string | null>;
 export type ProbeOutcome = "accepted" | "rejected" | "not-sent" | "inconclusive" | "skipped";
 
 export interface LevelProbeResult {
-  level: ProbeLevel;
+  level: ProbeResultLevel;
   /** The effort value sent for this level, or null when skipped. */
   value: string | null;
   outcome: ProbeOutcome;
@@ -56,6 +61,36 @@ export function probeValueFor(level: ProbeLevel, map: ThinkingLevelMap | undefin
   if (entry === null) return null;
   if (typeof entry === "string" && entry.trim()) return entry;
   return level;
+}
+
+/**
+ * The effort a request without a thinking level carries, or null when the map
+ * disables `off`. OpenAI-style APIs (Responses, OpenRouter, string thinking) send
+ * `thinkingLevelMap.off`, falling back to the literal "none", which some
+ * endpoints refuse (#260). APIs that send nothing for `off` show up as not-sent.
+ */
+export function offProbeValue(map: ThinkingLevelMap | undefined): string | null {
+  const entry = map?.off;
+  if (entry === null) return null;
+  if (typeof entry === "string" && entry.trim()) return entry;
+  return "none";
+}
+
+/**
+ * Whether the payload carries `value` under a reasoning / effort / thinking key.
+ * Narrower than payloadCarriesValue: "none" also appears in unrelated fields.
+ */
+export function payloadCarriesEffort(payload: unknown, value: string): boolean {
+  const seen = new Set<unknown>();
+  const visit = (node: unknown, underEffortKey: boolean): boolean => {
+    if (typeof node === "string") return underEffortKey && node === value;
+    if (!node || typeof node !== "object" || seen.has(node)) return false;
+    seen.add(node);
+    if (Array.isArray(node)) return node.some((item) => visit(item, underEffortKey));
+    return Object.entries(node as Record<string, unknown>).some(([key, child]) =>
+      visit(child, underEffortKey || /reason|effort|thinking/i.test(key)));
+  };
+  return visit(payload, false);
 }
 
 /**
