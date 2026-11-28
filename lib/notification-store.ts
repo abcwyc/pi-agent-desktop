@@ -35,6 +35,9 @@ const EMPTY_SERVER_NOTICES: readonly AppNotice[] = [];
 const listeners = new Set<() => void>();
 let notices: readonly AppNotice[] = [];
 let expiryTimer: ReturnType<typeof setTimeout> | null = null;
+// Entering or updating another notice can reschedule expiry, but must not
+// cancel the removal of a row that already started its exit animation.
+const exitTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function emit(): void {
   for (const listener of listeners) listener();
@@ -63,36 +66,49 @@ function clearExpiryTimer(): void {
 }
 
 function removeNotice(id: string): void {
+  const exitTimer = exitTimers.get(id);
+  if (exitTimer !== undefined) clearTimeout(exitTimer);
+  exitTimers.delete(id);
   if (!notices.some((notice) => notice.id === id)) return;
   notices = notices.filter((notice) => notice.id !== id);
   emit();
   scheduleExpiry();
 }
 
+function startNoticeExit(ids: readonly string[]): void {
+  const exitingIds = new Set(ids);
+  notices = notices.map((notice) => {
+    if (notice.exiting || !exitingIds.has(notice.id)) return notice;
+    if (!exitTimers.has(notice.id)) {
+      exitTimers.set(notice.id, setTimeout(() => removeNotice(notice.id), NOTICE_EXIT_ANIMATION_MS));
+    }
+    return { ...notice, exiting: true };
+  });
+}
+
+function autoExpires(notice: AppNotice): boolean {
+  return !notice.exiting && !notice.action && !notice.persistent;
+}
+
 function scheduleExpiry(): void {
   clearExpiryTimer();
   const now = Date.now();
   const deadlines = notices
-    .filter((notice) => !notice.exiting && !notice.action && !notice.persistent)
+    .filter(autoExpires)
     .map((notice) => notice.createdAt + NOTICE_VISIBLE_MS)
     .filter((deadline) => deadline > now);
   if (deadlines.length === 0) return;
   expiryTimer = setTimeout(() => {
+    expiryTimer = null;
     const current = Date.now();
     const expiredIds = notices
-      .filter((notice) => !notice.exiting && !notice.action && !notice.persistent && notice.createdAt + NOTICE_VISIBLE_MS <= current)
+      .filter((notice) => autoExpires(notice) && notice.createdAt + NOTICE_VISIBLE_MS <= current)
       .map((notice) => notice.id);
-    if (expiredIds.length === 0) {
-      scheduleExpiry();
-      return;
-    }
-    notices = notices.map((notice) => expiredIds.includes(notice.id) ? { ...notice, exiting: true } : notice);
-    emit();
-    expiryTimer = setTimeout(() => {
-      notices = notices.filter((notice) => !expiredIds.includes(notice.id));
+    if (expiredIds.length > 0) {
+      startNoticeExit(expiredIds);
       emit();
-      scheduleExpiry();
-    }, NOTICE_EXIT_ANIMATION_MS);
+    }
+    scheduleExpiry();
   }, Math.min(...deadlines) - now);
 }
 
@@ -106,26 +122,13 @@ function addNotice(input: AppNoticeInput): string {
     type: input.type ?? "info",
     createdAt: Date.now(),
   };
-  let next = [...notices, notice];
-  if (next.length > MAX_NOTICES) {
-    const oldest = next.find((item) => !item.exiting);
-    next = oldest
-      ? next.map((item) => item.id === oldest.id ? { ...item, exiting: true } : item)
-      : next.slice(next.length - MAX_NOTICES);
+  notices = [...notices, notice];
+  if (notices.length > MAX_NOTICES) {
+    const oldest = notices.find((item) => !item.exiting);
+    if (oldest) startNoticeExit([oldest.id]);
   }
-  const exitingIds = next.filter((item) => item.exiting).map((item) => item.id);
-  const overflowing = next.length > MAX_NOTICES;
-  notices = next;
   emit();
-  if (overflowing && exitingIds.length > 0) {
-    expiryTimer = setTimeout(() => {
-      notices = notices.filter((item) => !exitingIds.includes(item.id));
-      emit();
-      scheduleExpiry();
-    }, NOTICE_EXIT_ANIMATION_MS);
-  } else {
-    scheduleExpiry();
-  }
+  scheduleExpiry();
   return notice.id;
 }
 
@@ -136,10 +139,9 @@ export function dismissAppNotice(id: string): void {
     removeNotice(id);
     return;
   }
-  clearExpiryTimer();
-  notices = notices.map((item) => item.id === id ? { ...item, exiting: true } : item);
+  startNoticeExit([id]);
   emit();
-  expiryTimer = setTimeout(() => removeNotice(id), NOTICE_EXIT_ANIMATION_MS);
+  scheduleExpiry();
 }
 
 /** Replace progress with its result in place. Never resurrect a dismissed notice. */
@@ -176,6 +178,8 @@ export function useAppNotices(): readonly AppNotice[] {
 /** Test hook; also useful if a future route needs to clear transient toasts. */
 export function resetAppNoticeStore(): void {
   clearExpiryTimer();
+  for (const timer of exitTimers.values()) clearTimeout(timer);
+  exitTimers.clear();
   notices = [];
   emit();
 }
