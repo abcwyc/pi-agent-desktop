@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Agent, AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import {
+  clampThinkingLevel,
   getSupportedThinkingLevels,
   normalizeContext,
   type Api,
@@ -80,14 +81,43 @@ export function resolveTitleThinkingLevel(model: Model<Api>): ThinkingLevel {
 }
 
 /**
+ * The cheapest level can still be one the endpoint refuses. A model without an
+ * `off` entry in its thinkingLevelMap sends "off" on OpenAI-style APIs as the
+ * literal effort "none", and some endpoints accept only low..max (#260). Nothing
+ * in the model config says so, so the title request finds out from the 400 and
+ * retries once: with the session's own level, which its chat turns already send,
+ * or else the next supported level above the one that failed.
+ */
+export function fallbackTitleThinkingLevel(
+  model: Model<Api>,
+  attempted: ThinkingLevel,
+  sessionLevel: ThinkingLevel | undefined,
+): ThinkingLevel | undefined {
+  if (!model.reasoning) return undefined;
+  const supported = getSupportedThinkingLevels(model);
+  const candidates: ThinkingLevel[] = [];
+  if (sessionLevel) candidates.push(clampThinkingLevel(model, sessionLevel));
+  candidates.push(...supported.slice(supported.indexOf(attempted) + 1));
+  return candidates.find((level) => level !== "off" && level !== attempted);
+}
+
+/** A 400/422 that names the reasoning effort: the level was refused, not the request. */
+export function isThinkingLevelRejection(message: string): boolean {
+  return /\b(?:400|422)\b/.test(message) && /reasoning|effort|thinking/i.test(message);
+}
+
+/**
  * One-shot stream options for a title request. Same idea as compact's
  * summarization path: a short system prompt, one user turn, no tools, a fresh
  * session id, and cacheRetention "none". The request is too small and too
  * unique to reuse the live session's prefix or write a cache nobody will read.
  */
-export function buildTitleRequest(source: Agent, transcript: string): TitleRequest {
+export function buildTitleRequest(
+  source: Agent,
+  transcript: string,
+  thinkingLevel: ThinkingLevel = resolveTitleThinkingLevel(source.state.model),
+): TitleRequest {
   const model = source.state.model;
-  const thinkingLevel = resolveTitleThinkingLevel(model);
   return {
     model,
     context: {
@@ -288,21 +318,33 @@ export async function generateSessionTitle(source: AgentSession): Promise<Genera
     throw new Error("The session has no usable text to name");
   }
 
-  const { model, context, options } = buildTitleRequest(sourceAgent, transcript);
-  const apiKey = await sourceAgent.getApiKey?.(model.provider);
+  const firstLevel = resolveTitleThinkingLevel(sourceAgent.state.model);
+  const apiKey = await sourceAgent.getApiKey?.(sourceAgent.state.model.provider);
   const controller = new AbortController();
-  const requestOptions: SimpleStreamOptions = {
-    ...options,
-    signal: controller.signal,
-    ...(apiKey ? { apiKey } : {}),
-  };
-
   const timeout = setTimeout(() => controller.abort(), TITLE_TIMEOUT_MS);
 
-  try {
+  const attempt = async (thinkingLevel: ThinkingLevel): Promise<GeneratedSessionTitle> => {
+    const { model, context, options } = buildTitleRequest(sourceAgent, transcript, thinkingLevel);
+    const requestOptions: SimpleStreamOptions = {
+      ...options,
+      signal: controller.signal,
+      ...(apiKey ? { apiKey } : {}),
+    };
     // Providers read the prompt from the transcript's leading system message.
     const stream = await sourceAgent.streamFunction(model, normalizeContext(context), requestOptions);
     return titleFromAssistant(await stream.result());
+  };
+
+  try {
+    try {
+      return await attempt(firstLevel);
+    } catch (error) {
+      const fallback = controller.signal.aborted
+        ? undefined
+        : fallbackTitleThinkingLevel(sourceAgent.state.model, firstLevel, sourceAgent.state.thinkingLevel);
+      if (!fallback || !isThinkingLevelRejection(error instanceof Error ? error.message : String(error))) throw error;
+      return await attempt(fallback);
+    }
   } catch (error) {
     if (controller.signal.aborted) {
       throw new Error("Session title generation timed out");

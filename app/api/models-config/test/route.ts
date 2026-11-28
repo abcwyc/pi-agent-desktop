@@ -11,6 +11,8 @@ import {
   classifyProbeFailure,
   mapWithConcurrency,
   payloadCarriesValue,
+  offProbeValue,
+  payloadCarriesEffort,
   probeModelFor,
   probeFailureStatus,
   probeValueFor,
@@ -176,8 +178,45 @@ export async function POST(req: Request) {
     }
 
     // The plain request first: it is the connection test, and the baseline that lets a
-    // level's 400 count as that level being refused.
-    const baseline = await sendProbe(modelRuntime, model);
+    // level's 400 count as that level being refused. On a reasoning model it is also
+    // the `off` probe, because a request without a level carries off's effort.
+    const draftMap = draftThinkingLevelMap(body.model.thinkingLevelMap);
+    const offValue = probeThinking ? offProbeValue(draftMap) : null;
+    let offCarried = false;
+    let baseline = await sendProbe(modelRuntime, model, offValue === null ? {} : {
+      onPayload: (payload) => { offCarried = offCarried || payloadCarriesEffort(payload, offValue); },
+    });
+    let offResult: LevelProbeResult | undefined;
+    if (probeThinking) {
+      const baselineFailed = baseline.message.stopReason === "error" || baseline.message.stopReason === "aborted";
+      if (offValue === null) {
+        offResult = { level: "off", value: null, outcome: "skipped" };
+      } else if (!offCarried) {
+        offResult = { level: "off", value: offValue, outcome: "not-sent", status: baseline.status };
+      } else if (!baselineFailed) {
+        offResult = { level: "off", value: offValue, outcome: "accepted", status: baseline.status };
+      } else {
+        const status = probeFailureStatus(baseline.status, baseline.message.errorMessage);
+        const error = baseline.message.errorMessage ?? (baseline.aborted ? "Test timed out" : "Model returned an error");
+        offResult = {
+          level: "off",
+          value: offValue,
+          outcome: baseline.aborted ? "inconclusive" : classifyProbeFailure(status),
+          status,
+          error,
+        };
+        if (offResult.outcome === "rejected") {
+          // Only off's effort may be at fault: the same request without it decides.
+          const withoutOff = await sendProbe(modelRuntime, {
+            ...model,
+            thinkingLevelMap: { ...(model.thinkingLevelMap ?? {}), off: null },
+          });
+          const retryFailed = withoutOff.message.stopReason === "error" || withoutOff.message.stopReason === "aborted";
+          if (retryFailed) offResult = { ...offResult, outcome: "inconclusive" };
+          else baseline = withoutOff;
+        }
+      }
+    }
     if (baseline.message.stopReason === "error" || baseline.message.stopReason === "aborted") {
       return NextResponse.json({
         ok: false,
@@ -196,8 +235,8 @@ export async function POST(req: Request) {
         ? {
           // The draft's own map, not the runtime's: the suggestion replaces what the editor shows.
           thinking: summarizeThinkingProbe(
-            draftThinkingLevelMap(body.model.thinkingLevelMap),
-            await probeLevels(modelRuntime, model, draftThinkingLevelMap(body.model.thinkingLevelMap)),
+            draftMap,
+            [...(offResult ? [offResult] : []), ...await probeLevels(modelRuntime, model, draftMap)],
           ),
         }
         : {}),
